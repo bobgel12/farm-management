@@ -4,7 +4,6 @@ Health check endpoints for production monitoring
 from django.http import JsonResponse
 from django.db import connection
 from django.utils import timezone
-import psutil
 import os
 
 
@@ -39,16 +38,12 @@ def detailed_health_check(request):
     except Exception as e:
         db_status = f'unhealthy: {str(e)}'
     
-    # System metrics
+    # System metrics (simplified without psutil)
     try:
-        disk_usage = psutil.disk_usage('/')
-        memory = psutil.virtual_memory()
-        
+        # Basic system info without psutil
         system_metrics = {
-            'disk_usage_percent': round(disk_usage.percent, 2),
-            'memory_usage_percent': round(memory.percent, 2),
-            'memory_available_mb': round(memory.available / 1024 / 1024, 2),
-            'cpu_percent': round(psutil.cpu_percent(), 2)
+            'status': 'basic_metrics_only',
+            'note': 'psutil disabled for compatibility'
         }
     except Exception as e:
         system_metrics = {'error': str(e)}

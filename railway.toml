@@ -3,7 +3,7 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT"
-healthcheckPath = "/api/"
+healthcheckPath = "/api/health/"
 healthcheckTimeout = 100
 
 [cron.daily-tasks]
