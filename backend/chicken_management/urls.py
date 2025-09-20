@@ -22,7 +22,19 @@ urlpatterns = [
         'static_root': str(settings.STATIC_ROOT),
         'staticfiles_dirs': [str(d) for d in settings.STATICFILES_DIRS],
     })),
-    # Custom static file serving - MUST be before catch-all routes
+    # Test static file serving
+    path('test-static/', lambda request: JsonResponse({
+        'message': 'Static file serving test',
+        'test_url': '/static/js/main.52f69ca9.js'
+    })),
+]
+
+# Custom static file serving - MUST be before catch-all routes
+urlpatterns += [
+    # Serve static files with specific patterns
+    path('static/js/<path:path>', static_views.serve_static_file),
+    path('static/css/<path:path>', static_views.serve_static_file),
+    path('static/media/<path:path>', static_views.serve_static_file),
     path('static/<path:path>', static_views.serve_static_file),
 ]
 
