@@ -16,6 +16,14 @@ if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL)
     }
+    # Add connection settings for Railway PostgreSQL
+    DATABASES['default']['CONN_MAX_AGE'] = 60
+    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+    DATABASES['default']['OPTIONS'] = {
+        'connect_timeout': 30,
+        'options': '-c default_transaction_isolation=read_committed'
+    }
+    print(f"✅ Using Railway PostgreSQL database: {DATABASE_URL[:20]}...")
 else:
     # For Railway, we should always have DATABASE_URL
     # If not, use SQLite as fallback for development
@@ -25,6 +33,7 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+    print("⚠️  No DATABASE_URL found, using SQLite fallback")
 
 # Static files
 STATIC_URL = '/static/'

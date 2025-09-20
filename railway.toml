@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:$PORT"
+startCommand = "python railway_startup.py"
 healthcheckPath = "/api/health/"
 healthcheckTimeout = 100
 
