@@ -7,3 +7,4 @@ RUN npm ci
 COPY frontend/ ./
 RUN ls -la public/
 RUN npm run build
+

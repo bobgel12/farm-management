@@ -82,9 +82,7 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 # CORS settings
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else [
     'http://localhost:3000',  # Local development
-    'https://*.railway.app',  # Railway frontend deployments
-    'https://*.vercel.app',   # Vercel deployments
-    'https://*.netlify.app',  # Netlify deployments
+    'https://*.vercel.app',   # Vercel frontend deployments
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = False  # More secure than True

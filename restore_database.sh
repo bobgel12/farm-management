@@ -57,3 +57,4 @@ echo "   - Farms: $(docker-compose exec -T backend python manage.py shell -c "fr
 echo "   - Houses: $(docker-compose exec -T backend python manage.py shell -c "from houses.models import House; print(House.objects.count())")"
 echo "   - Tasks: $(docker-compose exec -T backend python manage.py shell -c "from tasks.models import Task; print(Task.objects.count())")"
 echo "   - Workers: $(docker-compose exec -T backend python manage.py shell -c "from farms.models import Worker; print(Worker.objects.count())")"
+

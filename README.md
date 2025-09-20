@@ -83,23 +83,26 @@ A comprehensive web application for managing multiple chicken farms with automat
 
 ## 🌐 Production Deployment
 
-### Option 1: Railway (Recommended)
+### Backend: Railway + Frontend: Vercel
+
+**Backend Deployment:**
 ```bash
-# Deploy to Railway
+# Deploy backend to Railway
 ./deploy_railway.sh
 ```
 
-### Option 2: Render
-```bash
-# Deploy to Render
-./deploy_render.sh
-```
-
-### Option 3: Manual Deployment
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+**Frontend Deployment:**
+1. Go to [vercel.com](https://vercel.com)
+2. Connect your GitHub repository
+3. Set **Root Directory** to `frontend/`
+4. Add environment variable: `REACT_APP_API_URL=https://your-backend.railway.app/api`
+5. Deploy
 
 ### Quick Deploy
 For a quick production deployment, see [QUICK_DEPLOY.md](QUICK_DEPLOY.md).
+
+### Detailed Guide
+For detailed deployment instructions, see [DEPLOYMENT_SIMPLE.md](DEPLOYMENT_SIMPLE.md).
 
 ## 🔧 Troubleshooting
 

@@ -50,3 +50,4 @@ echo "4. Run migrations: railway run python manage.py migrate"
 echo "5. Create superuser: railway run python manage.py createsuperuser"
 echo ""
 echo "📚 For troubleshooting, see RAILWAY_TROUBLESHOOTING.md"
+

@@ -2,7 +2,7 @@
 
 ## 🚀 Deploy in 5 Minutes
 
-### Option 1: Railway (Recommended)
+### Backend: Railway
 ```bash
 # 1. Install Railway CLI
 npm install -g @railway/cli
@@ -10,33 +10,28 @@ npm install -g @railway/cli
 # 2. Login to Railway
 railway login
 
-# 3. Deploy
+# 3. Deploy backend
 ./deploy_railway.sh
 ```
 
-### Option 2: Render
-```bash
-# 1. Install Render CLI
-curl -fsSL https://cli.render.com/install | sh
-
-# 2. Login to Render
-render auth login
-
-# 3. Deploy
-./deploy_render.sh
-```
+### Frontend: Vercel
+1. Go to [vercel.com](https://vercel.com)
+2. Connect GitHub repository
+3. Set **Root Directory** to `frontend/`
+4. Add `REACT_APP_API_URL=https://your-backend.railway.app/api`
+5. Deploy
 
 ## 📋 Pre-Deployment Checklist
 
 - [ ] Push code to GitHub
 - [ ] Set up email credentials (Gmail app password)
-- [ ] Choose deployment platform
-- [ ] Run deployment script
+- [ ] Deploy backend to Railway
+- [ ] Deploy frontend to Vercel
 
 ## ⚙️ Post-Deployment Setup
 
-### 1. Configure Environment Variables
-In your hosting platform dashboard, add:
+### 1. Configure Backend Environment Variables
+In Railway dashboard, add:
 ```bash
 # Required
 SECRET_KEY=your-super-secret-key
@@ -50,31 +45,29 @@ ADMIN_PASSWORD=your-secure-password
 DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 ```
 
-### 2. Run Database Migrations
+### 2. Configure Frontend Environment Variables
+In Vercel dashboard, add:
 ```bash
-# Railway
+REACT_APP_API_URL=https://your-backend.railway.app/api
+```
+
+### 3. Run Database Migrations
+```bash
 railway run python manage.py migrate
-
-# Render
-render run python manage.py migrate
 ```
 
-### 3. Create Admin User
+### 4. Create Admin User
 ```bash
-# Railway
 railway run python manage.py createsuperuser
-
-# Render
-render run python manage.py createsuperuser
 ```
 
-### 4. Test Your Deployment
+### 5. Test Your Deployment
 ```bash
-# Health check
-curl https://your-app.railway.app/api/
+# Backend health check
+curl https://your-backend.railway.app/api/health/
 
 # Test email
-curl -X POST https://your-app.railway.app/api/tasks/send-test-email/ \
+curl -X POST https://your-backend.railway.app/api/tasks/send-test-email/ \
   -H "Content-Type: application/json" \
   -d '{"farm_id": 1, "test_email": "your-email@example.com"}'
 ```

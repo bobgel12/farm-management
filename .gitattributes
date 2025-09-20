@@ -84,3 +84,4 @@ Pipfile.lock text eol=lf
 # Git files
 .gitignore text eol=lf
 .gitattributes text eol=lf
+

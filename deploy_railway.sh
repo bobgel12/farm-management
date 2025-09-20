@@ -21,26 +21,9 @@ if [ ! -f ".railway/project.json" ]; then
     railway link
 fi
 
-# Choose deployment method
-echo "🔧 Choose deployment method:"
-echo "1. Docker (recommended for complex builds)"
-echo "2. Nixpacks (simpler, faster)"
-read -p "Enter choice (1 or 2): " choice
-
-case $choice in
-    1)
-        echo "🐳 Using Docker deployment..."
-        cp railway.json .railway.json
-        ;;
-    2)
-        echo "📦 Using Nixpacks deployment..."
-        cp railway-build.json .railway.json
-        ;;
-    *)
-        echo "❌ Invalid choice. Using Nixpacks by default..."
-        cp railway-build.json .railway.json
-        ;;
-esac
+# Use Docker deployment (simplified)
+echo "🐳 Using Docker deployment..."
+cp railway.json .railway.json
 
 # Set production environment
 echo "⚙️  Setting production environment..."

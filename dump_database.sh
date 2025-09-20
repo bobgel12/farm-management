@@ -35,3 +35,4 @@ else
     echo "❌ Failed to create database dump"
     exit 1
 fi
+
