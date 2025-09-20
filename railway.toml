@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python railway_startup.py"
+startCommand = "python simple_startup.py"
 healthcheckPath = "/api/health/"
 healthcheckTimeout = 100
 

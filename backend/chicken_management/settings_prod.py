@@ -20,8 +20,7 @@ if DATABASE_URL:
     DATABASES['default']['CONN_MAX_AGE'] = 60
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
     DATABASES['default']['OPTIONS'] = {
-        'connect_timeout': 30,
-        'options': '-c default_transaction_isolation=read_committed'
+        'connect_timeout': 30
     }
     print(f"✅ Using Railway PostgreSQL database: {DATABASE_URL[:20]}...")
 else:
@@ -31,6 +30,9 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 30,
+            }
         }
     }
     print("⚠️  No DATABASE_URL found, using SQLite fallback")
@@ -149,10 +151,7 @@ if 'DATABASE_URL' in os.environ:
     # Additional database settings for production
     DATABASES['default']['CONN_MAX_AGE'] = 60
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
-    DATABASES['default']['OPTIONS'] = {
-        'connect_timeout': 10,
-        'options': '-c default_transaction_isolation=read_committed'
-    }
+    # Note: Removed problematic transaction isolation setting
 
 # Health check endpoint
 HEALTH_CHECK = {

@@ -81,11 +81,14 @@ def test_database_connection():
                 cursor.execute("SELECT 1 as test")
                 result = cursor.fetchone()
                 print(f"✅ Database connection successful! Result: {result}")
-            
-            # Test a more complex query
-            cursor.execute("SELECT version()")
-            version = cursor.fetchone()[0]
-            print(f"📊 PostgreSQL Version: {version}")
+                
+                # Test a more complex query (only for PostgreSQL)
+                if db_config['ENGINE'] == 'django.db.backends.postgresql':
+                    cursor.execute("SELECT version()")
+                    version = cursor.fetchone()[0]
+                    print(f"📊 PostgreSQL Version: {version}")
+                else:
+                    print(f"📊 Using SQLite database")
             
             return True
             
