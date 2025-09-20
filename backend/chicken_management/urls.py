@@ -7,6 +7,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
 from django.views.generic import TemplateView
+from . import static_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -21,9 +22,11 @@ urlpatterns = [
         'static_root': str(settings.STATIC_ROOT),
         'staticfiles_dirs': [str(d) for d in settings.STATICFILES_DIRS],
     })),
+    # Custom static file serving - MUST be before catch-all routes
+    path('static/<path:path>', static_views.serve_static_file),
 ]
 
-# React app routes
+# React app routes - MUST be after static files
 urlpatterns += [
     # Serve React app for all non-API routes
     path('', TemplateView.as_view(template_name='index.html')),
