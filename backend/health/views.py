@@ -98,3 +98,12 @@ def readiness_check(request):
 def liveness_check(request):
     """Kubernetes liveness probe"""
     return JsonResponse({'status': 'alive', 'timestamp': timezone.now().isoformat()})
+
+def simple_health_check(request):
+    """Simple health check without database dependency"""
+    return JsonResponse({
+        'status': 'ok',
+        'service': 'chicken-house-management',
+        'timestamp': timezone.now().isoformat(),
+        'message': 'Service is running'
+    })

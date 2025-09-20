@@ -5,8 +5,8 @@ import os
 from .settings import *
 
 # Security
-DEBUG = False
-SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here')
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here-change-in-production')
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED_HOSTS') else ['*']
 
 # Database - Railway PostgreSQL Service

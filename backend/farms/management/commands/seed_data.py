@@ -89,10 +89,10 @@ class Command(BaseCommand):
             farm = Farm.objects.create(
                 name=name,
                 location=f"Location {i + 1}",
-                contact_name=f"Farmer {i + 1}",
+                contact_person=f"Farmer {i + 1}",
                 contact_email=f"farmer{i + 1}@example.com",
                 contact_phone=f"+1-555-{1000 + i:04d}",
-                description=f"Sample farm {i + 1} for testing purposes"
+                is_active=True
             )
             farms.append(farm)
             self.stdout.write(f'Created farm: {farm.name}')
@@ -130,13 +130,15 @@ class Command(BaseCommand):
         houses = []
         
         for i in range(num_houses):
+            # Random start date between 1-30 days ago
+            start_date = timezone.now().date() - timedelta(days=random.randint(1, 30))
+            
             house = House.objects.create(
                 farm=farm,
                 house_number=i + 1,
-                capacity=random.randint(100, 500),
-                current_population=random.randint(50, 400),
-                start_date=timezone.now().date() - timedelta(days=random.randint(1, 30)),
-                description=f"House {i + 1} for {farm.name}"
+                chicken_in_date=start_date,
+                chicken_out_day=random.randint(35, 45),  # Random out day between 35-45 days
+                is_active=True
             )
             houses.append(house)
             self.stdout.write(f'Created house: {house.house_number} for {farm.name}')

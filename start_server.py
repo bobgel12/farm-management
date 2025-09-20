@@ -5,7 +5,6 @@ This script helps debug startup issues
 """
 import os
 import sys
-import django
 from pathlib import Path
 
 # Add the backend directory to Python path
@@ -50,6 +49,7 @@ def check_database():
     print("=" * 50)
     
     try:
+        import django
         # Setup Django
         django.setup()
         
@@ -75,6 +75,8 @@ def check_database():
         
     except Exception as e:
         print(f"❌ Database connection failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def run_migrations():
@@ -83,12 +85,16 @@ def run_migrations():
     print("=" * 50)
     
     try:
+        import django
+        django.setup()
         from django.core.management import execute_from_command_line
         execute_from_command_line(['manage.py', 'migrate', '--noinput'])
         print("✅ Migrations completed successfully!")
         return True
     except Exception as e:
         print(f"❌ Migrations failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def start_server():
@@ -97,6 +103,8 @@ def start_server():
     print("=" * 50)
     
     try:
+        import django
+        django.setup()
         from django.core.management import execute_from_command_line
         
         port = os.getenv('PORT', '8000')
@@ -110,6 +118,8 @@ def start_server():
         ])
     except Exception as e:
         print(f"❌ Server startup failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":
