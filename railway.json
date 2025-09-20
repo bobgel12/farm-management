@@ -15,5 +15,10 @@
       "schedule": "0 21 * * *",
       "command": "python manage.py send_daily_tasks"
     }
+  },
+  "services": {
+    "postgres": {
+      "type": "postgresql"
+    }
   }
 }

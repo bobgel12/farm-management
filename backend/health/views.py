@@ -18,13 +18,16 @@ def health_check(request):
             'status': 'healthy',
             'timestamp': timezone.now().isoformat(),
             'service': 'chicken-house-management',
-            'version': '1.0.0'
+            'version': '1.0.0',
+            'database': 'connected',
+            'endpoint': '/api/health/'
         })
     except Exception as e:
         return JsonResponse({
             'status': 'unhealthy',
             'error': str(e),
-            'timestamp': timezone.now().isoformat()
+            'timestamp': timezone.now().isoformat(),
+            'endpoint': '/api/health/'
         }, status=500)
 
 

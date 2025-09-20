@@ -9,12 +9,24 @@ DEBUG = False
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here')
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED_HOSTS') else ['*']
 
-# Database
+# Database - Railway PostgreSQL Service
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     import dj_database_url
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL)
+    }
+else:
+    # Fallback to individual environment variables if DATABASE_URL is not set
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'chicken_management'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
 
 # Static files
@@ -125,6 +137,16 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
 
 # Performance settings
 CONN_MAX_AGE = 60
+
+# Database connection settings for Railway PostgreSQL
+if 'DATABASE_URL' in os.environ:
+    # Additional database settings for production
+    DATABASES['default']['CONN_MAX_AGE'] = 60
+    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+    DATABASES['default']['OPTIONS'] = {
+        'connect_timeout': 10,
+        'options': '-c default_transaction_isolation=read_committed'
+    }
 
 # Health check endpoint
 HEALTH_CHECK = {
