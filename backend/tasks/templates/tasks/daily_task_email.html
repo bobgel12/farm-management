@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Task Reminder - {{ farm_name }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #2c5aa0;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            font-size: 16px;
+        }
+        .summary {
+            background-color: #e8f4fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #2c5aa0;
+        }
+        .summary h2 {
+            margin: 0 0 15px 0;
+            color: #2c5aa0;
+            font-size: 20px;
+        }
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .stat {
+            text-align: center;
+            margin: 10px;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c5aa0;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .house-section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .house-header {
+            background-color: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .house-title {
+            margin: 0;
+            color: #2c5aa0;
+            font-size: 18px;
+        }
+        .house-info {
+            margin: 5px 0 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .tasks-container {
+            padding: 20px;
+        }
+        .task-category {
+            margin-bottom: 25px;
+        }
+        .task-category h3 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            padding: 10px 15px;
+            border-radius: 5px;
+        }
+        .today-tasks h3 {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .tomorrow-tasks h3 {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .task-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .task-item {
+            background-color: #f8f9fa;
+            margin: 8px 0;
+            padding: 12px 15px;
+            border-radius: 5px;
+            border-left: 4px solid #2c5aa0;
+        }
+        .task-name {
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 5px;
+        }
+        .task-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .task-type {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .no-tasks {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+        @media (max-width: 600px) {
+            .summary-stats {
+                flex-direction: column;
+            }
+            .stat {
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐔 Daily Task Reminder</h1>
+            <p>{{ farm_name }} - {{ date|date:"F d, Y" }}</p>
+        </div>
+
+        <div class="summary">
+            <h2>📊 Today's Summary</h2>
+            <div class="summary-stats">
+                <div class="stat">
+                    <div class="stat-number">{{ houses|length }}</div>
+                    <div class="stat-label">Active Houses</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">{{ total_tasks }}</div>
+                    <div class="stat-label">Total Tasks</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">
+                        {% for house in houses %}
+                            {{ house.today_tasks|length }}{% if not forloop.last %} + {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="stat-label">Today's Tasks</div>
+                </div>
+            </div>
+        </div>
+
+        {% if houses %}
+            {% for house in houses %}
+                <div class="house-section">
+                    <div class="house-header">
+                        <h2 class="house-title">House {{ house.house_number }}</h2>
+                        <p class="house-info">
+                            Day {{ house.current_day }} • {{ house.status|title }} • 
+                            In: {{ house.chicken_in_date|date:"M d, Y" }}
+                        </p>
+                    </div>
+                    
+                    <div class="tasks-container">
+                        {% if house.today_tasks or house.tomorrow_tasks %}
+                            {% if house.today_tasks %}
+                                <div class="task-category today-tasks">
+                                    <h3>🔥 Today's Tasks ({{ house.today_tasks|length }})</h3>
+                                    <ul class="task-list">
+                                        {% for task in house.today_tasks %}
+                                            <li class="task-item">
+                                                <div class="task-name">{{ task.name }}</div>
+                                                <div class="task-description">{{ task.description }}</div>
+                                                <span class="task-type">{{ task.type|title }}</span>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+
+                            {% if house.tomorrow_tasks %}
+                                <div class="task-category tomorrow-tasks">
+                                    <h3>📅 Tomorrow's Tasks ({{ house.tomorrow_tasks|length }})</h3>
+                                    <ul class="task-list">
+                                        {% for task in house.tomorrow_tasks %}
+                                            <li class="task-item">
+                                                <div class="task-name">{{ task.name }}</div>
+                                                <div class="task-description">{{ task.description }}</div>
+                                                <span class="task-type">{{ task.type|title }}</span>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="no-tasks">
+                                <p>✅ No pending tasks for this house today.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-tasks">
+                <h3>🎉 All Caught Up!</h3>
+                <p>No active houses with pending tasks for today.</p>
+            </div>
+        {% endif %}
+
+        <div class="footer">
+            <p><strong>Chicken House Management System</strong></p>
+            <p>This is an automated daily reminder. Please check the system for the most up-to-date task information.</p>
+            <p>Sent to: {{ recipient_names|join:", " }}</p>
+        </div>
+    </div>
+</body>
+</html>

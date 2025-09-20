@@ -1,0 +1,19 @@
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "./build.sh"
+  },
+  "deploy": {
+    "startCommand": "cd backend && python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT",
+    "healthcheckPath": "/api/",
+    "healthcheckTimeout": 100,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "cron": {
+    "daily-tasks": {
+      "schedule": "0 21 * * *",
+      "command": "cd backend && python manage.py send_daily_tasks"
+    }
+  }
+}

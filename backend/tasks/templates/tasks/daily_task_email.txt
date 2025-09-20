@@ -1,0 +1,59 @@
+DAILY TASK REMINDER - {{ farm_name }}
+{{ date|date:"F d, Y" }}
+
+========================================
+
+TODAY'S SUMMARY
+================
+Active Houses: {{ houses|length }}
+Total Tasks: {{ total_tasks }}
+Today's Tasks: {% for house in houses %}{{ house.today_tasks|length }}{% if not forloop.last %} + {% endif %}{% endfor %}
+
+{% if houses %}
+{% for house in houses %}
+========================================
+HOUSE {{ house.house_number }}
+========================================
+Day: {{ house.current_day }}
+Status: {{ house.status|title }}
+Chicken In Date: {{ house.chicken_in_date|date:"M d, Y" }}
+
+{% if house.today_tasks %}
+TODAY'S TASKS ({{ house.today_tasks|length }})
+----------------------------------------
+{% for task in house.today_tasks %}
+• {{ task.name }}
+  {{ task.description }}
+  Type: {{ task.type|title }}
+
+{% endfor %}
+{% endif %}
+
+{% if house.tomorrow_tasks %}
+TOMORROW'S TASKS ({{ house.tomorrow_tasks|length }})
+--------------------------------------------
+{% for task in house.tomorrow_tasks %}
+• {{ task.name }}
+  {{ task.description }}
+  Type: {{ task.type|title }}
+
+{% endfor %}
+{% endif %}
+
+{% if not house.today_tasks and not house.tomorrow_tasks %}
+✅ No pending tasks for this house today.
+{% endif %}
+
+{% endfor %}
+{% else %}
+========================================
+🎉 ALL CAUGHT UP!
+========================================
+No active houses with pending tasks for today.
+{% endif %}
+
+========================================
+Chicken House Management System
+This is an automated daily reminder. Please check the system for the most up-to-date task information.
+
+Sent to: {{ recipient_names|join:", " }}

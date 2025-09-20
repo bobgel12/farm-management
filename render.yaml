@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: chicken-house-management
+    env: python
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT
+    healthCheckPath: /api/
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: chicken_management.settings_prod
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: ALLOWED_HOSTS
+        value: your-app.onrender.com
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USE_TLS
+        value: True
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        value: noreply@chickenmanagement.com
+    disk:
+      name: chicken-house-storage
+      mountPath: /app/logs
+      sizeGB: 1
+
+  - type: pserv
+    name: chicken-house-db
+    env: postgresql
+    plan: free
+    databaseName: chicken_management
+    databaseUser: chicken_user
+    region: oregon
+
+cronJobs:
+  - name: daily-task-emails
+    env: python
+    schedule: "0 21 * * *"
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && python manage.py send_daily_tasks
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: chicken_management.settings_prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chicken-house-db
+          property: connectionString

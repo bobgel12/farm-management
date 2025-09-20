@@ -1,0 +1,86 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force Unix line endings for shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Force Windows line endings for batch files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Force Unix line endings for Python files
+*.py text eol=lf
+
+# Force Unix line endings for JavaScript/TypeScript files
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+
+# Force Unix line endings for CSS files
+*.css text eol=lf
+
+# Force Unix line endings for HTML files
+*.html text eol=lf
+
+# Force Unix line endings for Markdown files
+*.md text eol=lf
+
+# Force Unix line endings for YAML files
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Force Unix line endings for Docker files
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+
+# Force Unix line endings for configuration files
+*.conf text eol=lf
+*.config text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
+*.zip binary
+*.tar.gz binary
+*.rar binary
+*.7z binary
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+
+# Database files
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Log files
+*.log text eol=lf
+
+# Environment files
+.env text eol=lf
+.env.* text eol=lf
+
+# Lock files
+package-lock.json text eol=lf
+yarn.lock text eol=lf
+Pipfile.lock text eol=lf
+
+# Git files
+.gitignore text eol=lf
+.gitattributes text eol=lf
