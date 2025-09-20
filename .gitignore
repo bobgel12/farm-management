@@ -332,7 +332,7 @@ settings.local.py
 *.cache
 
 # Lock files
-package-lock.json
+# package-lock.json - Keep this file for consistent deployments
 yarn.lock
 Pipfile.lock
 
