@@ -34,14 +34,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY backend/ .
 
-# Copy frontend build
-COPY --from=frontend-build /app/frontend/build ./static/
-
 # Create necessary directories
 RUN mkdir -p logs staticfiles
 
-# Collect static files
+# Copy frontend build
+COPY --from=frontend-build /app/frontend/build ./static/
+
+# Collect static files (this will copy from static/ to staticfiles/)
 RUN python manage.py collectstatic --noinput
+
+# Verify static files were collected
+RUN ls -la staticfiles/
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser

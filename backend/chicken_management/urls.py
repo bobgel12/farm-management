@@ -15,6 +15,12 @@ urlpatterns = [
     path('api/', include('tasks.urls')),
     path('api/', include('authentication.urls')),
     path('api/', include('health.urls')),
+    # Debug endpoint
+    path('debug/static/', lambda request: JsonResponse({
+        'static_url': settings.STATIC_URL,
+        'static_root': str(settings.STATIC_ROOT),
+        'staticfiles_dirs': [str(d) for d in settings.STATICFILES_DIRS],
+    })),
     # Serve React app for all non-API routes
     path('', TemplateView.as_view(template_name='index.html')),
     # Catch-all for React Router (must be last)
