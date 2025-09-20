@@ -1,0 +1,9 @@
+FROM node:18-alpine as frontend-build
+
+# Build frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN ls -la public/
+RUN npm run build

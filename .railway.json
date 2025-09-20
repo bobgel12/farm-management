@@ -1,7 +1,7 @@
 {
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "./build.sh"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.prod"
   },
   "deploy": {
     "startCommand": "cd backend && python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT",

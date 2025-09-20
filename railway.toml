@@ -2,10 +2,10 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cd backend && python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT"
+startCommand = "python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT"
 healthcheckPath = "/api/"
 healthcheckTimeout = 100
 
 [cron.daily-tasks]
 schedule = "0 21 * * *"
-command = "cd backend && python manage.py send_daily_tasks"
+command = "python manage.py send_daily_tasks"
