@@ -1,6 +1,7 @@
 """
 URL configuration for chicken_management project.
 """
+import os
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -27,19 +28,27 @@ urlpatterns = [
         'message': 'Static file serving test',
         'test_url': '/static/js/main.52f69ca9.js'
     })),
-]
-
-# Custom static file serving - MUST be before catch-all routes
-urlpatterns += [
-    # Serve static files with specific patterns
+    # Test if static file exists
+    path('test-static-file/', lambda request: JsonResponse({
+        'message': 'Testing static file existence',
+        'js_file': '/static/js/main.52f69ca9.js',
+        'css_file': '/static/css/main.233b3b67.css'
+    })),
+    # Debug file existence
+    path('debug-files/', lambda request: JsonResponse({
+        'message': 'Checking if static files exist',
+        'static_root': str(settings.STATIC_ROOT),
+        'static_dirs': [str(d) for d in settings.STATICFILES_DIRS],
+        'files_exist': {
+            'js_file': str(os.path.exists(os.path.join(settings.STATIC_ROOT, 'js', 'main.52f69ca9.js'))),
+            'css_file': str(os.path.exists(os.path.join(settings.STATIC_ROOT, 'css', 'main.233b3b67.css'))),
+        }
+    })),
+    # Static file serving - MUST be before catch-all routes
     path('static/js/<path:path>', static_views.serve_static_file),
     path('static/css/<path:path>', static_views.serve_static_file),
     path('static/media/<path:path>', static_views.serve_static_file),
     path('static/<path:path>', static_views.serve_static_file),
-]
-
-# React app routes - MUST be after static files
-urlpatterns += [
     # Serve React app for all non-API routes
     path('', TemplateView.as_view(template_name='index.html')),
     # Catch-all for React Router (must be last)
