@@ -21,12 +21,16 @@ urlpatterns = [
         'static_root': str(settings.STATIC_ROOT),
         'staticfiles_dirs': [str(d) for d in settings.STATICFILES_DIRS],
     })),
+]
+
+# Serve static files (including React app) - MUST be before catch-all routes
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# React app routes - MUST be after static files
+urlpatterns += [
     # Serve React app for all non-API routes
     path('', TemplateView.as_view(template_name='index.html')),
     # Catch-all for React Router (must be last)
     path('<path:path>', TemplateView.as_view(template_name='index.html')),
 ]
-
-# Serve static files (including React app)
-urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
