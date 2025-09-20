@@ -20,14 +20,26 @@ def health_check(request):
             'service': 'chicken-house-management',
             'version': '1.0.0',
             'database': 'connected',
-            'endpoint': '/api/health/'
+            'endpoint': '/api/health/',
+            'debug': {
+                'django_loaded': True,
+                'database_engine': connection.vendor,
+                'request_method': request.method,
+                'request_path': request.path
+            }
         })
     except Exception as e:
         return JsonResponse({
             'status': 'unhealthy',
             'error': str(e),
             'timestamp': timezone.now().isoformat(),
-            'endpoint': '/api/health/'
+            'endpoint': '/api/health/',
+            'debug': {
+                'django_loaded': True,
+                'error_type': type(e).__name__,
+                'request_method': request.method,
+                'request_path': request.path
+            }
         }, status=500)
 
 
