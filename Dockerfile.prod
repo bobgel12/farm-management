@@ -37,20 +37,22 @@ COPY backend/ .
 # Create necessary directories
 RUN mkdir -p logs staticfiles
 
-# Copy frontend build
-COPY --from=frontend-build /app/frontend/build ./static/
+# Copy frontend build directly to staticfiles directory
+COPY --from=frontend-build /app/frontend/build ./staticfiles/
 
-# Debug: Show what's in the static directory
-RUN echo "=== Contents of static/ directory ===" && ls -la static/
-RUN echo "=== Contents of static/js/ directory ===" && ls -la static/js/ || echo "No js directory found"
-RUN echo "=== Contents of static/css/ directory ===" && ls -la static/css/ || echo "No css directory found"
+# Debug: Show what's in the staticfiles directory
+RUN echo "=== Contents of staticfiles/ directory ===" && ls -la staticfiles/
+RUN echo "=== Contents of staticfiles/js/ directory ===" && ls -la staticfiles/js/ || echo "No js directory found"
+RUN echo "=== Contents of staticfiles/css/ directory ===" && ls -la staticfiles/css/ || echo "No css directory found"
+
+# Also copy to static/ for Django's collectstatic
+COPY --from=frontend-build /app/frontend/build ./static/
 
 # Collect static files (this will copy from static/ to staticfiles/)
 RUN python manage.py collectstatic --noinput
 
 # Debug: Show what was collected
 RUN echo "=== Contents of staticfiles/ directory after collectstatic ===" && ls -la staticfiles/
-RUN echo "=== Contents of staticfiles/static/ directory ===" && ls -la staticfiles/static/ || echo "No staticfiles/static directory found"
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser
