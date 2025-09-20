@@ -1,6 +1,22 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+// Determine API URL based on environment
+const getApiUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // Production detection
+  if (process.env.NODE_ENV === 'production') {
+    // Update this URL to your actual backend deployment
+    return 'https://farm-management-production-54e4.up.railway.app/api';
+  }
+  
+  // Development
+  return 'http://localhost:8000/api';
+};
+
+const API_BASE_URL = getApiUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
