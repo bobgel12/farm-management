@@ -23,11 +23,7 @@ urlpatterns = [
     })),
 ]
 
-# Serve static files (including React app) - MUST be before catch-all routes
-urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-# React app routes - MUST be after static files
+# React app routes
 urlpatterns += [
     # Serve React app for all non-API routes
     path('', TemplateView.as_view(template_name='index.html')),
