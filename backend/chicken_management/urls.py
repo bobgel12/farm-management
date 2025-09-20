@@ -7,6 +7,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
 from django.views.generic import TemplateView
+from . import static_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -21,6 +22,8 @@ urlpatterns = [
         'static_root': str(settings.STATIC_ROOT),
         'staticfiles_dirs': [str(d) for d in settings.STATICFILES_DIRS],
     })),
+    # Custom static file serving for debugging
+    path('debug-static/<path:path>', static_views.serve_static_file),
 ]
 
 # Serve static files (including React app) - MUST be before catch-all routes

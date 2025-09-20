@@ -40,11 +40,17 @@ RUN mkdir -p logs staticfiles
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/build ./static/
 
+# Debug: Show what's in the static directory
+RUN echo "=== Contents of static/ directory ===" && ls -la static/
+RUN echo "=== Contents of static/js/ directory ===" && ls -la static/js/ || echo "No js directory found"
+RUN echo "=== Contents of static/css/ directory ===" && ls -la static/css/ || echo "No css directory found"
+
 # Collect static files (this will copy from static/ to staticfiles/)
 RUN python manage.py collectstatic --noinput
 
-# Verify static files were collected
-RUN ls -la staticfiles/
+# Debug: Show what was collected
+RUN echo "=== Contents of staticfiles/ directory after collectstatic ===" && ls -la staticfiles/
+RUN echo "=== Contents of staticfiles/static/ directory ===" && ls -la staticfiles/static/ || echo "No staticfiles/static directory found"
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser
