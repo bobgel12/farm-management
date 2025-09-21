@@ -1,0 +1,17 @@
+{
+  "name": "Database Specialist",
+  "focus": "Database Design, Optimization, Data Management",
+  "files": [
+    "backend/**/migrations/*.py",
+    "backend/**/models.py",
+    "database_dump.sql",
+    "scripts/dump_database.sh",
+    "scripts/restore_database.sh"
+  ],
+  "tools": ["django-migrations", "psql", "pg_dump", "pg_restore"],
+  "context": [
+    "backend/farms/models.py",
+    "backend/houses/models.py",
+    "backend/tasks/models.py"
+  ]
+}

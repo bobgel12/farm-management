@@ -1,0 +1,18 @@
+{
+  "name": "Testing Specialist",
+  "focus": "Test Automation, Quality Assurance, Test Coverage",
+  "files": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/test_*.py",
+    "**/tests.py"
+  ],
+  "tools": ["jest", "react-testing-library", "pytest", "coverage"],
+  "context": [
+    "frontend/src/components/__tests__/",
+    "backend/farms/tests.py",
+    "backend/houses/tests.py"
+  ]
+}

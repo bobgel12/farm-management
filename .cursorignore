@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+venv/
+env/
+__pycache__/
+
+# Build outputs
+build/
+dist/
+staticfiles/
+media/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Coverage reports
+coverage/
+htmlcov/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# Docker
+.dockerignore
+
+# Git
+.git/

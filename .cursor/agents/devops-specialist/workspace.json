@@ -1,0 +1,19 @@
+{
+  "name": "DevOps Specialist",
+  "focus": "Docker, Deployment, CI/CD, Infrastructure",
+  "files": [
+    "Dockerfile*",
+    "docker-compose*.yml",
+    "railway.json",
+    "vercel.json",
+    "nginx.conf",
+    "scripts/*.sh"
+  ],
+  "tools": ["docker", "docker-compose", "nginx", "git", "bash"],
+  "context": [
+    "docker-compose.yml",
+    "docker-compose.prod.yml",
+    "scripts/dev-setup.sh",
+    "scripts/start-dev.sh"
+  ]
+}

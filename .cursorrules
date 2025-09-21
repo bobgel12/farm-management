@@ -1,0 +1,191 @@
+# Chicken House Management System - Cursor AI Rules
+
+## Project Overview
+This is a full-stack chicken house management system with:
+- **Backend**: Django REST API with PostgreSQL
+- **Frontend**: React TypeScript with Material-UI
+- **Deployment**: Docker, Railway, Vercel
+- **Features**: Farm management, house tracking, task scheduling, authentication
+
+## Multi-Agent Development
+This project uses a multi-agent development approach with specialized agents:
+- **Frontend Specialist**: React, TypeScript, Material-UI, frontend architecture
+- **Backend Specialist**: Django, Django REST Framework, Python, API design
+- **DevOps Specialist**: Docker, deployment, CI/CD, infrastructure
+- **Testing Specialist**: Test automation, quality assurance, test coverage
+- **Security Specialist**: Application security, authentication, data protection
+- **Database Specialist**: Database design, optimization, data management
+- **UI/UX Specialist**: User interface design, user experience, accessibility
+- **Performance Specialist**: Application performance, optimization, monitoring
+
+## Agent Coordination
+- Work in parallel when possible on different files/features
+- Coordinate on shared interfaces and dependencies
+- Use clear communication and change notifications
+- Follow established workflows and best practices
+- Maintain code quality and security standards
+
+## Code Style & Standards
+
+### General Principles
+- Write clean, readable, and maintainable code
+- Follow SOLID principles and DRY (Don't Repeat Yourself)
+- Use meaningful variable and function names
+- Add comprehensive comments for complex logic
+- Write tests for new features
+- Follow existing code patterns in the project
+
+### TypeScript/React Frontend
+- Use TypeScript strict mode
+- Prefer functional components with hooks
+- Use Material-UI components consistently
+- Follow React best practices (proper key props, avoid direct DOM manipulation)
+- Use proper TypeScript interfaces for API responses
+- Implement proper error handling and loading states
+- Use React Router for navigation
+- Follow the existing context pattern for state management
+
+### Python/Django Backend
+- Follow PEP 8 style guidelines
+- Use Django REST Framework patterns
+- Write comprehensive docstrings for functions and classes
+- Use Django's built-in features (models, serializers, viewsets)
+- Implement proper error handling and validation
+- Use Django's authentication and permissions system
+- Follow the existing app structure (farms, houses, tasks, authentication)
+
+### Database
+- Use meaningful model field names
+- Add proper indexes for performance
+- Use foreign keys and relationships appropriately
+- Write migrations for schema changes
+- Use Django's ORM instead of raw SQL when possible
+
+## File Organization
+
+### Frontend Structure
+```
+src/
+├── components/     # Reusable UI components
+├── contexts/       # React context providers
+├── services/       # API service functions
+├── types/          # TypeScript type definitions
+└── utils/          # Utility functions
+```
+
+### Backend Structure
+```
+backend/
+├── apps/           # Django apps (farms, houses, tasks, auth)
+├── chicken_management/  # Main Django project settings
+└── requirements.txt
+```
+
+## API Design
+- Use RESTful conventions
+- Return consistent JSON responses
+- Implement proper HTTP status codes
+- Use pagination for list endpoints
+- Include proper error messages
+- Use Django REST Framework serializers
+
+## Security
+- Validate all inputs
+- Use Django's CSRF protection
+- Implement proper authentication (JWT tokens)
+- Sanitize user inputs
+- Use environment variables for secrets
+- Follow OWASP security guidelines
+
+## Performance
+- Use database queries efficiently (avoid N+1 problems)
+- Implement caching where appropriate
+- Optimize frontend bundle size
+- Use lazy loading for components
+- Implement proper error boundaries
+
+## Testing
+- Write unit tests for business logic
+- Write integration tests for API endpoints
+- Test error scenarios
+- Use meaningful test descriptions
+- Maintain good test coverage
+
+## Git Workflow
+- Use descriptive commit messages
+- Create feature branches for new features
+- Use pull requests for code review
+- Keep commits atomic and focused
+- Use conventional commit format when possible
+
+## Environment Configuration
+- Use environment variables for configuration
+- Never commit secrets or API keys
+- Use different settings for different environments
+- Document all required environment variables
+
+## Docker & Deployment
+- Use multi-stage builds for production
+- Keep images as small as possible
+- Use proper health checks
+- Follow 12-factor app principles
+- Use docker-compose for local development
+
+## Common Patterns
+
+### API Response Format
+```typescript
+interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  status: 'success' | 'error';
+}
+```
+
+### Error Handling
+```typescript
+try {
+  const response = await api.get('/endpoint');
+  return response.data;
+} catch (error) {
+  console.error('API Error:', error);
+  throw new Error('Failed to fetch data');
+}
+```
+
+### Django Model Example
+```python
+class Farm(models.Model):
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+```
+
+## When Making Changes
+1. Understand the existing codebase structure
+2. Follow established patterns
+3. Update tests if needed
+4. Update documentation if needed
+5. Test changes thoroughly
+6. Consider backward compatibility
+7. Update API documentation if endpoints change
+
+## Code Review Checklist
+- [ ] Code follows project style guidelines
+- [ ] Tests are included and passing
+- [ ] Error handling is implemented
+- [ ] Security considerations are addressed
+- [ ] Performance implications are considered
+- [ ] Documentation is updated if needed
+- [ ] No hardcoded values or secrets
+- [ ] Proper logging is implemented
+
+## Common Commands
+- Frontend: `npm start`, `npm run build`, `npm test`
+- Backend: `python manage.py runserver`, `python manage.py migrate`
+- Docker: `docker-compose up`, `docker-compose down`
+- Database: `python manage.py makemigrations`, `python manage.py migrate`
+
+Remember: Always prioritize code quality, security, and maintainability over speed of development.

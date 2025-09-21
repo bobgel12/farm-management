@@ -1,0 +1,15 @@
+{
+  "name": "UI/UX Specialist",
+  "focus": "User Interface Design, User Experience, Accessibility",
+  "files": [
+    "frontend/src/components/**/*.tsx",
+    "frontend/src/index.css",
+    "frontend/public/**/*"
+  ],
+  "tools": ["axe-core", "lighthouse", "storybook", "chromatic"],
+  "context": [
+    "frontend/src/components/Layout.tsx",
+    "frontend/src/components/Dashboard.tsx",
+    "frontend/src/index.css"
+  ]
+}
