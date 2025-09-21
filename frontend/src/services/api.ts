@@ -20,7 +20,7 @@ const getApiUrl = () => {
 const API_BASE_URL = getApiUrl();
 
 // Debug logging
-console.log('API Configuration:', {
+console.log('API Configurationa:', {
   NODE_ENV: process.env.NODE_ENV,
   REACT_APP_API_URL: process.env.REACT_APP_API_URL,
   API_BASE_URL: API_BASE_URL
