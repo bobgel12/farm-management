@@ -59,6 +59,46 @@ class TaskEmailService:
         return sent_count
     
     @staticmethod
+    def send_farm_task_reminders(farm):
+        """Send daily task reminders for a specific farm"""
+        try:
+            # Check if email was already sent today
+            if EmailTask.objects.filter(farm=farm, sent_date=timezone.now().date()).exists():
+                logger.info(f"Email already sent today for farm {farm.name}")
+                return 0
+            
+            # Get active workers who want to receive daily tasks
+            workers = farm.workers.filter(
+                is_active=True, 
+                receive_daily_tasks=True
+            )
+            
+            if not workers.exists():
+                logger.info(f"No active workers found for farm {farm.name}")
+                return 0
+            
+            # Get today's and tomorrow's tasks for all active houses
+            task_data = TaskEmailService._get_farm_task_data(farm)
+            
+            if not task_data['houses']:
+                logger.info(f"No active houses with tasks found for farm {farm.name}")
+                return 0
+            
+            # Send email to all workers
+            success = TaskEmailService._send_farm_task_email(farm, workers, task_data)
+            
+            if success:
+                logger.info(f"Successfully sent task email for farm {farm.name}")
+                return 1
+            else:
+                logger.error(f"Failed to send task email for farm {farm.name}")
+                return 0
+                
+        except Exception as e:
+            logger.error(f"Error sending task email for farm {farm.name}: {str(e)}")
+            return 0
+    
+    @staticmethod
     def _get_farm_task_data(farm):
         """Get task data for a farm's active houses"""
         today = timezone.now().date()

@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { Assignment as TaskIcon } from '@mui/icons-material';
 import { useTask } from '../contexts/TaskContext';
+import EmailManager from './EmailManager';
 import api from '../services/api';
 
 const HouseDetail: React.FC = () => {
@@ -220,6 +221,11 @@ const HouseDetail: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
+      </Box>
+
+      {/* Email Management for this house */}
+      <Box mb={4}>
+        <EmailManager farmId={house?.farm_id} farmName={house?.farm_name} />
       </Box>
 
       <Box 

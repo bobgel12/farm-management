@@ -26,6 +26,7 @@ import {
 } from '@mui/icons-material';
 import { useFarm } from '../contexts/FarmContext';
 import { useTask } from '../contexts/TaskContext';
+import EmailManager from './EmailManager';
 import api from '../services/api';
 
 interface DashboardData {
@@ -430,6 +431,11 @@ const Dashboard: React.FC = () => {
               )}
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Email Management */}
+        <Grid item xs={12}>
+          <EmailManager />
         </Grid>
 
         {/* Quick Actions */}
