@@ -333,7 +333,7 @@ const FarmDetail: React.FC = () => {
                                 <Box mb={2}>
                                   <Box display="flex" alignItems="center" gap={1} mb={1}>
                                     <Typography variant="subtitle1" color="warning.main">
-                                      Today's Tasks ({todayTasks.length})
+                                      Today&apos;s Tasks ({todayTasks.length})
                                     </Typography>
                                     <ClickIcon fontSize="small" color="action" />
                                     <Typography variant="caption" color="textSecondary">
@@ -394,7 +394,7 @@ const FarmDetail: React.FC = () => {
                                 <Box mb={2}>
                                   <Box display="flex" alignItems="center" gap={1} mb={1}>
                                     <Typography variant="subtitle1" color="info.main">
-                                      Tomorrow's Tasks ({tomorrowTasks.length})
+                                      Tomorrow&apos;s Tasks ({tomorrowTasks.length})
                                     </Typography>
                                     <ClickIcon fontSize="small" color="action" />
                                     <Typography variant="caption" color="textSecondary">

@@ -232,7 +232,7 @@ const FarmList: React.FC = () => {
             No farms found
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Click "Add Farm" to create your first farm
+            Click &quot;Add Farm&quot; to create your first farm
           </Typography>
         </Box>
       )}

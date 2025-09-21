@@ -98,7 +98,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     try {
       const response = await api.post(`/tasks/${taskId}/complete/`, {
         completed_by: completedBy,
-        notes: notes
+        notes
       });
       
       // Update the task in all relevant state arrays
