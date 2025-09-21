@@ -27,6 +27,28 @@ class HouseListCreateView(generics.ListCreateAPIView):
         house = serializer.save()
         # Automatically generate tasks for the new house
         TaskScheduler.generate_tasks_for_house(house)
+        
+        # Auto-complete past tasks if the house has a chicken_in_date in the past
+        if house.chicken_in_date:
+            current_day = house.current_day
+            if current_day is not None and current_day > 0:
+                from tasks.models import Task
+                from django.utils import timezone
+                
+                past_tasks = Task.objects.filter(
+                    house=house,
+                    day_offset__lt=current_day,
+                    is_completed=False
+                )
+                
+                if past_tasks.exists():
+                    past_tasks.update(
+                        is_completed=True,
+                        completed_at=timezone.now(),
+                        completed_by='system_auto_complete',
+                        notes='Automatically marked as completed - past task after house creation'
+                    )
+        
         return house
 
 
