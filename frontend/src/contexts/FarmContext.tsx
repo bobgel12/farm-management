@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api from '../services/api.ts';
+import api from '../services/api';
 
 interface Farm {
   id: number;
@@ -17,6 +17,7 @@ interface Farm {
 
 interface House {
   id: number;
+  farm_id: number;
   farm_name: string;
   house_number: number;
   chicken_in_date: string;
@@ -157,10 +158,7 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
         notes: notes || ''
       });
       
-      // Refresh the farm task summary to update the UI
-      if (farmTaskSummary) {
-        await fetchFarmTaskSummary(farmTaskSummary.farm_name);
-      }
+      // Note: Farm task summary will be refreshed when the user navigates back to the farm detail page
       
       return true;
     } catch (err) {

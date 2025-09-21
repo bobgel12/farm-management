@@ -1,6 +1,10 @@
 // Utility functions for the Chicken House Management system
 
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+// Extend dayjs with relative time plugin
+dayjs.extend(relativeTime);
 
 /**
  * Format a date string for display

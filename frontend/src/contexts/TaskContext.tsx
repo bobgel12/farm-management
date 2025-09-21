@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api from '../services/api.ts';
+import api from '../services/api';
 
 interface Task {
   id: number;

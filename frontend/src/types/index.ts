@@ -23,10 +23,10 @@ export interface Farm {
 
 export interface House {
   id: number;
+  farm_id: number;
   name: string;
   capacity: number;
   current_population: number;
-  farm: number;
   created_at: string;
   updated_at: string;
 }

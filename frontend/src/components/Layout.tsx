@@ -13,6 +13,10 @@ import {
   IconButton,
   Box,
   Divider,
+  useTheme,
+  useMediaQuery,
+  SwipeableDrawer,
+  Badge,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -21,8 +25,9 @@ import {
   Home as HomeIcon,
   Assignment as TaskIcon,
   Logout as LogoutIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext.tsx';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -33,6 +38,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleLogout = async () => {
     await logout();
@@ -56,17 +63,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const drawer = (
-    <Box sx={{ width: 250 }}>
-      <Box sx={{ p: 2 }}>
-        <Typography variant="h6" noWrap component="div">
-          Chicken Management
-        </Typography>
-        <Typography variant="body2" color="textSecondary">
-          Welcome, {user?.username}
-        </Typography>
+    <Box sx={{ width: { xs: 280, sm: 250 }, height: '100%' }}>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h6" noWrap component="div" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
+            Chicken Management
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            Welcome, {user?.username}
+          </Typography>
+        </Box>
+        {isMobile && (
+          <IconButton onClick={() => setDrawerOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        )}
       </Box>
       <Divider />
-      <List>
+      <List sx={{ py: 1 }}>
         {menuItems.map((item) => (
           <ListItem
             button
@@ -76,17 +90,45 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               setDrawerOpen(false);
             }}
             selected={location.pathname === item.path}
+            sx={{
+              py: 1.5,
+              '&.Mui-selected': {
+                backgroundColor: 'primary.main',
+                color: 'primary.contrastText',
+                '&:hover': {
+                  backgroundColor: 'primary.dark',
+                },
+                '& .MuiListItemIcon-root': {
+                  color: 'primary.contrastText',
+                },
+              },
+            }}
           >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
+            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
+            <ListItemText 
+              primary={item.text} 
+              primaryTypographyProps={{ 
+                fontSize: { xs: '0.9rem', sm: '1rem' },
+                fontWeight: location.pathname === item.path ? 600 : 400
+              }} 
+            />
           </ListItem>
         ))}
         <Divider sx={{ my: 1 }} />
-        <ListItem button onClick={handleLogout}>
-          <ListItemIcon>
+        <ListItem 
+          button 
+          onClick={handleLogout}
+          sx={{ py: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
             <LogoutIcon />
           </ListItemIcon>
-          <ListItemText primary="Logout" />
+          <ListItemText 
+            primary="Logout" 
+            primaryTypographyProps={{ 
+              fontSize: { xs: '0.9rem', sm: '1rem' }
+            }} 
+          />
         </ListItem>
       </List>
     </Box>
@@ -94,50 +136,85 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar>
+      <AppBar 
+        position="fixed" 
+        sx={{ 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          backgroundColor: 'primary.main',
+        }}
+      >
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
             onClick={toggleDrawer(true)}
             edge="start"
             sx={{ mr: 2 }}
+            size="large"
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Chicken House Management System
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              fontSize: { xs: '1rem', sm: '1.25rem' },
+              fontWeight: 500
+            }}
+          >
+            {isMobile ? 'Chicken Management' : 'Chicken House Management System'}
           </Typography>
         </Toolbar>
       </AppBar>
       
-      <Drawer
-        anchor="left"
-        open={drawerOpen}
-        onClose={toggleDrawer(false)}
-        sx={{
-          width: 250,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
+      {isMobile ? (
+        <SwipeableDrawer
+          anchor="left"
+          open={drawerOpen}
+          onClose={toggleDrawer(false)}
+          onOpen={toggleDrawer(true)}
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: 280,
+              boxSizing: 'border-box',
+            },
+          }}
+        >
+          {drawer}
+        </SwipeableDrawer>
+      ) : (
+        <Drawer
+          variant="permanent"
+          sx={{
             width: 250,
-            boxSizing: 'border-box',
-          },
-        }}
-      >
-        {drawer}
-      </Drawer>
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: 250,
+              boxSizing: 'border-box',
+            },
+          }}
+        >
+          {drawer}
+        </Drawer>
+      )}
       
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - 250px)` },
-          ml: { sm: '250px' },
+          p: { xs: 2, sm: 3 },
+          width: { xs: '100%', md: `calc(100% - 250px)` },
+          ml: { xs: 0, md: '250px' },
+          minHeight: '100vh',
+          backgroundColor: 'grey.50',
         }}
       >
-        <Toolbar />
-        {children}
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }} />
+        <Box sx={{ maxWidth: '100%', overflow: 'hidden' }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );

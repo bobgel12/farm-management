@@ -45,8 +45,8 @@ import {
   Today as TodayIcon,
   TouchApp as ClickIcon,
 } from '@mui/icons-material';
-import { useFarm } from '../contexts/FarmContext.tsx';
-import api from '../services/api.ts';
+import { useFarm } from '../contexts/FarmContext';
+import api from '../services/api';
 
 const FarmDetail: React.FC = () => {
   const { farmId } = useParams<{ farmId: string }>();
@@ -277,9 +277,6 @@ const FarmDetail: React.FC = () => {
                     </Box>
                     
                     <Box display="flex" alignItems="center" gap={1} ml="auto">
-                      <Typography variant="body2">
-                        {house.tasks.completed}/{house.tasks.total} completed
-                      </Typography>
                       <LinearProgress 
                         variant="determinate" 
                         value={completionRate} 
@@ -297,13 +294,13 @@ const FarmDetail: React.FC = () => {
                     <Box display="flex" gap={2} mb={2} flexWrap="wrap">
                       <Chip 
                         icon={<CheckCircleIcon />}
-                        label={`${house.tasks.completed} Completed`} 
+                        label="Completed" 
                         color="success" 
                         variant="outlined"
                       />
                       <Chip 
                         icon={<ScheduleIcon />}
-                        label={`${house.tasks.pending} Pending`} 
+                        label="Pending" 
                         color="info" 
                         variant="outlined"
                       />
