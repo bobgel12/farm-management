@@ -30,8 +30,19 @@ class Command(BaseCommand):
         parser.add_argument(
             '--houses-per-farm',
             type=int,
-            default=2,
-            help='Number of houses per farm (default: 2)',
+            default=4,
+            help='Number of houses per farm (default: 4)',
+        )
+        parser.add_argument(
+            '--workers-per-farm',
+            type=int,
+            default=3,
+            help='Number of workers per farm (default: 3)',
+        )
+        parser.add_argument(
+            '--variety',
+            action='store_true',
+            help='Create maximum variety in house dates and task statuses',
         )
 
     def handle(self, *args, **options):
@@ -43,17 +54,23 @@ class Command(BaseCommand):
             Worker.objects.all().delete()
             Farm.objects.all().delete()
             User.objects.filter(is_superuser=False).delete()
+            
+            # Reset auto-increment sequences
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('farms_farm', 'farms_worker', 'houses_house', 'tasks_task', 'tasks_recurringtask', 'tasks_emailtask')")
+            self.stdout.write('Reset auto-increment sequences')
 
         # Create sample farms
         farms = self.create_farms(options['farms'])
         
         # Create workers for each farm
         for farm in farms:
-            self.create_workers(farm)
+            self.create_workers(farm, options['workers_per_farm'])
         
         # Create houses for each farm
         for farm in farms:
-            houses = self.create_houses(farm, options['houses_per_farm'])
+            houses = self.create_houses(farm, options['houses_per_farm'], options['variety'])
             
             # Generate tasks for each house
             for house in houses:
@@ -99,49 +116,209 @@ class Command(BaseCommand):
         
         return farms
 
-    def create_workers(self, farm):
-        """Create workers for a farm"""
+    def create_workers(self, farm, num_workers):
+        """Create workers for a farm with variety"""
         worker_names = [
             ("John Smith", "john.smith@example.com"),
             ("Jane Doe", "jane.doe@example.com"),
             ("Mike Johnson", "mike.johnson@example.com"),
             ("Sarah Wilson", "sarah.wilson@example.com"),
             ("Tom Brown", "tom.brown@example.com"),
+            ("Emily Davis", "emily.davis@example.com"),
+            ("David Lee", "david.lee@example.com"),
+            ("Lisa Chen", "lisa.chen@example.com"),
+            ("Mark Wilson", "mark.wilson@example.com"),
+            ("Anna Rodriguez", "anna.rodriguez@example.com"),
         ]
         
-        # Create 2-3 workers per farm
-        num_workers = random.randint(2, 3)
-        selected_workers = random.sample(worker_names, num_workers)
+        # Select workers for this farm
+        selected_workers = random.sample(worker_names, min(num_workers, len(worker_names)))
         
-        for name, email in selected_workers:
-            Worker.objects.create(
+        # Define roles with distribution
+        roles = ["Farm Manager", "Supervisor", "Worker", "Maintenance", "Health Inspector"]
+        role_weights = [0.1, 0.2, 0.5, 0.1, 0.1]  # More workers, fewer managers
+        
+        for i, (name, email) in enumerate(selected_workers):
+            # First worker is usually a manager
+            if i == 0:
+                role = "Farm Manager"
+            else:
+                role = random.choices(roles, weights=role_weights)[0]
+            
+            # Some workers might be inactive
+            is_active = random.random() > 0.1  # 90% active
+            
+            # Some workers might not receive daily tasks
+            receive_daily_tasks = random.random() > 0.2  # 80% receive tasks
+            
+            worker = Worker.objects.create(
                 farm=farm,
                 name=name,
                 email=email,
                 phone=f"+1-555-{random.randint(1000, 9999)}",
-                role=random.choice(["Farm Manager", "Worker", "Supervisor"]),
-                is_active=True,
-                receive_daily_tasks=True
+                role=role,
+                is_active=is_active,
+                receive_daily_tasks=receive_daily_tasks
             )
-            self.stdout.write(f'Created worker: {name} for {farm.name}')
+            
+            # Log worker creation with status
+            status_icons = {
+                'Farm Manager': '👨‍💼',
+                'Supervisor': '👨‍🔧',
+                'Worker': '👷',
+                'Maintenance': '🔧',
+                'Health Inspector': '👩‍⚕️'
+            }
+            
+            active_status = "✅" if is_active else "❌"
+            email_status = "📧" if receive_daily_tasks else "📵"
+            
+            self.stdout.write(
+                f'Created worker: {name} for {farm.name} '
+                f'{status_icons.get(role, "👤")} {role} {active_status} {email_status}'
+            )
 
-    def create_houses(self, farm, num_houses):
-        """Create houses for a farm"""
+    def create_houses(self, farm, num_houses, variety_mode=False):
+        """Create houses for a farm with variety of dates and statuses"""
         houses = []
         
         for i in range(num_houses):
-            # Random start date between 1-30 days ago
-            start_date = timezone.now().date() - timedelta(days=random.randint(1, 30))
+            # Create variety of house statuses and dates
+            if variety_mode:
+                # In variety mode, cycle through different scenarios to ensure variety
+                scenario_index = i % 7  # Cycle through 7 different scenarios
+                house_scenarios = [
+                    # Scenario 1: New house (chickens just arrived)
+                    {
+                        'days_ago': random.randint(0, 2),
+                        'out_day': random.randint(40, 45),
+                        'status': 'setup'
+                    },
+                    # Scenario 2: Early care phase (1-7 days)
+                    {
+                        'days_ago': random.randint(3, 7),
+                        'out_day': random.randint(40, 45),
+                        'status': 'early_care'
+                    },
+                    # Scenario 3: Growth phase (8-20 days)
+                    {
+                        'days_ago': random.randint(8, 20),
+                        'out_day': random.randint(40, 45),
+                        'status': 'growth'
+                    },
+                    # Scenario 4: Mature phase (21-35 days)
+                    {
+                        'days_ago': random.randint(21, 35),
+                        'out_day': random.randint(40, 45),
+                        'status': 'mature'
+                    },
+                    # Scenario 5: Near completion (36-40 days)
+                    {
+                        'days_ago': random.randint(36, 40),
+                        'out_day': random.randint(40, 45),
+                        'status': 'near_completion'
+                    },
+                    # Scenario 6: Empty house (chickens already out)
+                    {
+                        'days_ago': random.randint(45, 60),
+                        'out_day': random.randint(40, 45),
+                        'status': 'empty'
+                    },
+                    # Scenario 7: Future house (chickens arriving soon)
+                    {
+                        'days_ago': -random.randint(1, 7),  # Future date
+                        'out_day': random.randint(40, 45),
+                        'status': 'preparation'
+                    }
+                ]
+                scenario = house_scenarios[scenario_index]
+            else:
+                # Normal mode - randomly select scenarios
+                house_scenarios = [
+                    # Scenario 1: New house (chickens just arrived)
+                    {
+                        'days_ago': random.randint(0, 2),
+                        'out_day': random.randint(40, 45),
+                        'status': 'setup'
+                    },
+                    # Scenario 2: Early care phase (1-7 days)
+                    {
+                        'days_ago': random.randint(3, 7),
+                        'out_day': random.randint(40, 45),
+                        'status': 'early_care'
+                    },
+                    # Scenario 3: Growth phase (8-20 days)
+                    {
+                        'days_ago': random.randint(8, 20),
+                        'out_day': random.randint(40, 45),
+                        'status': 'growth'
+                    },
+                    # Scenario 4: Mature phase (21-35 days)
+                    {
+                        'days_ago': random.randint(21, 35),
+                        'out_day': random.randint(40, 45),
+                        'status': 'mature'
+                    },
+                    # Scenario 5: Near completion (36-40 days)
+                    {
+                        'days_ago': random.randint(36, 40),
+                        'out_day': random.randint(40, 45),
+                        'status': 'near_completion'
+                    },
+                    # Scenario 6: Empty house (chickens already out)
+                    {
+                        'days_ago': random.randint(45, 60),
+                        'out_day': random.randint(40, 45),
+                        'status': 'empty'
+                    },
+                    # Scenario 7: Future house (chickens arriving soon)
+                    {
+                        'days_ago': -random.randint(1, 7),  # Future date
+                        'out_day': random.randint(40, 45),
+                        'status': 'preparation'
+                    }
+                ]
+                scenario = random.choice(house_scenarios)
+            
+            # Calculate dates
+            if scenario['days_ago'] >= 0:
+                start_date = timezone.now().date() - timedelta(days=scenario['days_ago'])
+            else:
+                start_date = timezone.now().date() + timedelta(days=abs(scenario['days_ago']))
+            
+            # Calculate out date
+            out_date = start_date + timedelta(days=scenario['out_day'])
+            
+            # Determine if house is active based on status
+            is_active = scenario['status'] not in ['empty', 'preparation']
             
             house = House.objects.create(
                 farm=farm,
                 house_number=i + 1,
                 chicken_in_date=start_date,
-                chicken_out_day=random.randint(35, 45),  # Random out day between 35-45 days
-                is_active=True
+                chicken_out_date=out_date if scenario['status'] == 'empty' else None,
+                chicken_out_day=scenario['out_day'],
+                is_active=is_active
             )
             houses.append(house)
-            self.stdout.write(f'Created house: {house.house_number} for {farm.name}')
+            
+            # Log house creation with status
+            status_emoji = {
+                'setup': '🏗️',
+                'early_care': '🐣',
+                'growth': '🌱',
+                'mature': '🐔',
+                'near_completion': '📦',
+                'empty': '🏠',
+                'preparation': '⏳'
+            }
+            
+            self.stdout.write(
+                f'Created house: {house.house_number} for {farm.name} '
+                f'{status_emoji.get(scenario["status"], "🏠")} '
+                f'({scenario["status"].replace("_", " ").title()}) - '
+                f'Day {house.current_day if house.current_day is not None else "N/A"}'
+            )
         
         return houses
 
@@ -149,11 +326,117 @@ class Command(BaseCommand):
         """Generate tasks for a house using the task scheduler"""
         try:
             TaskScheduler.generate_tasks_for_house(house)
+            
+            # Add variety to task completion statuses
+            self.add_task_status_variety(house)
+            
             self.stdout.write(f'Generated tasks for house {house.house_number}')
         except Exception as e:
             self.stdout.write(
                 self.style.WARNING(f'Error generating tasks for house {house.house_number}: {e}')
             )
+
+    def add_task_status_variety(self, house):
+        """Add variety to task completion statuses based on house age and status"""
+        if not house.is_active:
+            return
+            
+        current_day = house.current_day
+        if current_day is None:
+            return
+            
+        # Get all tasks for this house
+        all_tasks = Task.objects.filter(house=house)
+        
+        if not all_tasks.exists():
+            return
+            
+        # Determine completion rates based on house status and age
+        completion_scenarios = {
+            'setup': 0.1,      # Very few tasks completed in setup
+            'early_care': 0.3, # Some tasks completed in early care
+            'growth': 0.6,     # Most tasks completed in growth
+            'mature': 0.8,     # Almost all tasks completed in mature
+            'near_completion': 0.9, # Nearly all tasks completed
+            'empty': 1.0,      # All tasks completed for empty houses
+            'preparation': 0.0  # No tasks completed for future houses
+        }
+        
+        # Get house status (simplified logic)
+        if current_day <= 2:
+            status = 'setup'
+        elif current_day <= 7:
+            status = 'early_care'
+        elif current_day <= 20:
+            status = 'growth'
+        elif current_day <= 35:
+            status = 'mature'
+        elif current_day <= 40:
+            status = 'near_completion'
+        else:
+            status = 'empty'
+            
+        completion_rate = completion_scenarios.get(status, 0.5)
+        
+        # Mark tasks as completed based on completion rate
+        tasks_to_complete = int(len(all_tasks) * completion_rate)
+        completed_tasks = random.sample(list(all_tasks), min(tasks_to_complete, len(all_tasks)))
+        
+        for task in completed_tasks:
+            # Mark as completed
+            task.is_completed = True
+            
+            # Add completion details
+            if random.random() < 0.7:  # 70% chance to have completion details
+                task.completed_by = random.choice([
+                    'John Smith', 'Jane Doe', 'Mike Johnson', 
+                    'Sarah Wilson', 'Tom Brown', 'System'
+                ])
+                
+                # Add completion notes based on task type
+                notes_templates = {
+                    'Feeding': [
+                        'Completed morning feeding routine',
+                        'All feeders checked and refilled',
+                        'Feeding schedule maintained',
+                        'Feed quality verified'
+                    ],
+                    'Health': [
+                        'Health inspection completed',
+                        'No issues found during check',
+                        'All birds appear healthy',
+                        'Temperature and humidity normal'
+                    ],
+                    'Maintenance': [
+                        'Equipment checked and functioning',
+                        'Water system operating normally',
+                        'Ventilation system working properly',
+                        'All systems operational'
+                    ],
+                    'Cleaning': [
+                        'House cleaned and sanitized',
+                        'Waste removed and disposed',
+                        'Disinfection completed',
+                        'House ready for next cycle'
+                    ]
+                }
+                
+                task_type = getattr(task, 'task_type', 'Maintenance')
+                notes_options = notes_templates.get(task_type, ['Task completed successfully'])
+                task.notes = random.choice(notes_options)
+            
+            # Set completion date (randomly within the last few days)
+            days_ago = random.randint(0, min(current_day, 7))
+            task.completed_at = timezone.now() - timedelta(days=days_ago)
+            task.save()
+        
+        # Log completion statistics
+        completed_count = len(completed_tasks)
+        total_count = len(all_tasks)
+        self.stdout.write(
+            f'  → Marked {completed_count}/{total_count} tasks as completed '
+            f'({completion_rate:.1%} completion rate) for house {house.house_number}'
+        )
 
     def create_sample_recurring_tasks(self):
         """Create sample recurring tasks"""

@@ -5,6 +5,7 @@ Django settings for chicken_management project.
 from pathlib import Path
 from decouple import config
 import os
+import logging
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -163,9 +164,19 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@chickenmanage
 EMAIL_TIMEOUT = 30
 EMAIL_USE_SSL = False
 
+# Configure logger
+logger = logging.getLogger(__name__)
+
 # Email logging for debugging
-if DEBUG:
+# Use SMTP backend if email credentials are provided, otherwise console
+if DEBUG and not EMAIL_HOST_USER:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    logger.info("Using console email backend for development (no SMTP credentials)")
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    logger.info(f"Using SMTP email backend: {EMAIL_HOST}:{EMAIL_PORT}")
+    logger.info(f"Email User: {EMAIL_HOST_USER}")
+    logger.info(f"Email Password: {'*' * len(EMAIL_HOST_PASSWORD) if EMAIL_HOST_PASSWORD else 'Not set'}")
 
 # Logging configuration
 LOGGING = {

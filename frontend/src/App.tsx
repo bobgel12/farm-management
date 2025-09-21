@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider } from './contexts/AuthContext';
 import { FarmProvider } from './contexts/FarmContext';
 import { TaskProvider } from './contexts/TaskContext';
+import { WorkerProvider } from './contexts/WorkerContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import FarmList from './components/FarmList';
@@ -135,7 +136,8 @@ function App() {
       <AuthProvider>
         <FarmProvider>
           <TaskProvider>
-            <Router>
+            <WorkerProvider>
+              <Router>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/" element={
@@ -175,7 +177,8 @@ function App() {
                 } />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-            </Router>
+              </Router>
+            </WorkerProvider>
           </TaskProvider>
         </FarmProvider>
       </AuthProvider>
