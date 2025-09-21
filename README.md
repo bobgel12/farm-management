@@ -98,6 +98,8 @@ A comprehensive web application for managing multiple chicken farms with automat
 4. Add environment variable: `REACT_APP_API_URL=https://your-backend.railway.app/api`
 5. Deploy
 
+**Detailed Frontend Guide:** See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)
+
 ### Quick Deploy
 For a quick production deployment, see [QUICK_DEPLOY.md](QUICK_DEPLOY.md).
 
