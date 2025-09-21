@@ -239,9 +239,8 @@ class TaskEmailService:
             if not task_data['houses']:
                 return False, "No active houses with tasks found for this farm"
             
-            # Send test email to specified address
-            test_workers = [type('Worker', (), {'email': test_email, 'name': 'Test User'})()]
-            success = TaskEmailService._send_farm_task_email(farm, test_workers, task_data)
+            # Send test email directly without creating EmailTask record
+            success = TaskEmailService._send_test_email_direct(farm, test_email, task_data)
             
             return success, "Test email sent successfully" if success else "Failed to send test email"
             
@@ -249,3 +248,52 @@ class TaskEmailService:
             return False, "Farm not found"
         except Exception as e:
             return False, f"Error: {str(e)}"
+    
+    @staticmethod
+    def _send_test_email_direct(farm, test_email, task_data):
+        """Send test email directly without creating EmailTask record"""
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            from django.utils import timezone
+            
+            # Prepare email content
+            subject = f"Test Email - Daily Tasks for {farm.name}"
+            
+            # Create simple text content
+            tomorrow_date = task_data['date'] + timezone.timedelta(days=1)
+            text_content = f"""
+Test Email - Daily Tasks for {farm.name}
+
+Today's Tasks ({task_data['date']}):
+{chr(10).join([f"- House {house['house_number']}: {len(house['today_tasks'])} tasks" for house in task_data['houses']])}
+
+Tomorrow's Tasks ({tomorrow_date}):
+{chr(10).join([f"- House {house['house_number']}: {len(house['tomorrow_tasks'])} tasks" for house in task_data['houses']])}
+
+This is a test email to verify email configuration.
+"""
+            
+            # Log email configuration for debugging
+            logger.info(f"Email configuration - Host: {settings.EMAIL_HOST}")
+            logger.info(f"Email configuration - Port: {settings.EMAIL_PORT}")
+            logger.info(f"Email configuration - User: {settings.EMAIL_HOST_USER}")
+            logger.info(f"Email configuration - Password: {'*' * len(settings.EMAIL_HOST_PASSWORD) if settings.EMAIL_HOST_PASSWORD else 'Not set'}")
+            logger.info(f"Email configuration - From: {settings.DEFAULT_FROM_EMAIL}")
+            logger.info(f"Email configuration - Backend: {settings.EMAIL_BACKEND}")
+            
+            # Send simple email
+            send_mail(
+                subject=subject,
+                message=text_content,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[test_email],
+                fail_silently=False
+            )
+            
+            logger.info(f"Test email sent successfully to {test_email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error sending test email to {test_email}: {str(e)}")
+            return False

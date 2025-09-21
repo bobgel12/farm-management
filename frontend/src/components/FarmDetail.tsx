@@ -47,6 +47,7 @@ import {
 } from '@mui/icons-material';
 import { useFarm } from '../contexts/FarmContext';
 import EmailManager from './EmailManager';
+import WorkerList from './WorkerList';
 import api from '../services/api';
 
 const FarmDetail: React.FC = () => {
@@ -548,6 +549,11 @@ const FarmDetail: React.FC = () => {
       {/* Email Management for this farm */}
       <Box mb={4}>
         <EmailManager farmId={farm?.id} farmName={farm?.name} />
+      </Box>
+
+      {/* Worker Management for this farm */}
+      <Box mb={4}>
+        <WorkerList farmId={farm?.id} farmName={farm?.name} />
       </Box>
 
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
