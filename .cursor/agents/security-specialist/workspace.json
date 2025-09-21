@@ -1,0 +1,16 @@
+{
+  "name": "Security Specialist",
+  "focus": "Application Security, Authentication, Data Protection",
+  "files": [
+    "backend/authentication/**/*.py",
+    "backend/chicken_management/settings*.py",
+    "frontend/src/contexts/AuthContext.tsx",
+    "frontend/src/services/api.ts"
+  ],
+  "tools": ["bandit", "safety", "semgrep", "eslint-plugin-security"],
+  "context": [
+    "backend/authentication/views.py",
+    "backend/chicken_management/settings.py",
+    "frontend/src/contexts/AuthContext.tsx"
+  ]
+}

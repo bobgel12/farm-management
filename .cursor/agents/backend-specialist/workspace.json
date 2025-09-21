@@ -1,0 +1,16 @@
+{
+  "name": "Backend Specialist",
+  "focus": "Django, Django REST Framework, Python, API Design",
+  "files": [
+    "backend/**/*.py",
+    "backend/requirements.txt",
+    "backend/pyproject.toml"
+  ],
+  "tools": ["black", "isort", "flake8", "mypy", "pytest"],
+  "context": [
+    "backend/farms/models.py",
+    "backend/houses/models.py",
+    "backend/tasks/models.py",
+    "backend/authentication/views.py"
+  ]
+}
