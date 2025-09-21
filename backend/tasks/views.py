@@ -186,12 +186,29 @@ def send_test_email(request):
 
 @api_view(['POST'])
 def send_daily_tasks(request):
-    """Manually trigger daily task email sending"""
+    """Manually trigger daily task email sending for all farms or specific farm"""
+    farm_id = request.data.get('farm_id')
+    
     try:
-        sent_count = TaskEmailService.send_daily_task_reminders()
-        return Response({
-            'message': f'Successfully sent {sent_count} daily task reminder emails'
-        })
+        if farm_id:
+            # Send emails for specific farm
+            from farms.models import Farm
+            farm = Farm.objects.get(id=farm_id)
+            sent_count = TaskEmailService.send_farm_task_reminders(farm)
+            return Response({
+                'message': f'Successfully sent daily task reminder email for {farm.name}'
+            })
+        else:
+            # Send emails for all farms
+            sent_count = TaskEmailService.send_daily_task_reminders()
+            return Response({
+                'message': f'Successfully sent {sent_count} daily task reminder emails'
+            })
+    except Farm.DoesNotExist:
+        return Response(
+            {'error': 'Farm not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
     except Exception as e:
         return Response(
             {'error': f'Failed to send daily task emails: {str(e)}'}, 

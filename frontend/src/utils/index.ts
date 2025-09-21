@@ -107,7 +107,7 @@ export const isValidEmail = (email: string): boolean => {
  * Validate phone number format
  */
 export const isValidPhone = (phone: string): boolean => {
-  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+  const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
   return phoneRegex.test(phone.replace(/\D/g, ''));
 };
 
@@ -118,7 +118,7 @@ export const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) {
     return text;
   }
-  return text.slice(0, maxLength) + '...';
+  return `${text.slice(0, maxLength)}...`;
 };
 
 /**
@@ -144,7 +144,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
-  let timeout: NodeJS.Timeout;
+  let timeout: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
@@ -199,7 +199,7 @@ export const formatFileSize = (bytes: number): string => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 };
 
 /**

@@ -28,6 +28,7 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import EmailStatus from './EmailStatus';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -166,6 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             {isMobile ? 'Chicken Management' : 'Chicken House Management System'}
           </Typography>
+          <EmailStatus />
         </Toolbar>
       </AppBar>
       

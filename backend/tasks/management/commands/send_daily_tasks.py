@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Send daily task reminder emails to all farm workers'
+    help = 'Send daily task reminder emails to farm workers (all farms or specific farm)'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -18,40 +18,80 @@ class Command(BaseCommand):
         parser.add_argument(
             '--farm-id',
             type=int,
-            help='Send test email for specific farm ID',
+            help='Send email for specific farm ID (or test email for specific farm)',
         )
         parser.add_argument(
             '--test-email',
             type=str,
             help='Email address to send test email to',
         )
+        parser.add_argument(
+            '--all-farms',
+            action='store_true',
+            help='Send emails to all farms (default behavior)',
+        )
 
     def handle(self, *args, **options):
         if options['test']:
             self.send_test_email(options)
         else:
-            self.send_daily_emails()
+            self.send_daily_emails(options)
 
-    def send_daily_emails(self):
+    def send_daily_emails(self, options):
         """Send daily task reminder emails"""
-        self.stdout.write(
-            self.style.SUCCESS('Starting daily task email process...')
-        )
+        farm_id = options.get('farm_id')
         
-        try:
-            sent_count = TaskEmailService.send_daily_task_reminders()
-            
+        if farm_id:
             self.stdout.write(
-                self.style.SUCCESS(
-                    f'Successfully sent {sent_count} daily task reminder emails'
+                self.style.SUCCESS(f'Starting daily task email process for farm {farm_id}...')
+            )
+            
+            try:
+                from farms.models import Farm
+                farm = Farm.objects.get(id=farm_id)
+                sent_count = TaskEmailService.send_farm_task_reminders(farm)
+                
+                if sent_count > 0:
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f'Successfully sent daily task reminder email for {farm.name}'
+                        )
+                    )
+                else:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'No email sent for {farm.name} (already sent today or no workers/tasks)'
+                        )
+                    )
+                    
+            except Farm.DoesNotExist:
+                self.stdout.write(
+                    self.style.ERROR(f'Farm with ID {farm_id} not found')
                 )
+            except Exception as e:
+                self.stdout.write(
+                    self.style.ERROR(f'Error sending daily task emails for farm {farm_id}: {str(e)}')
+                )
+                logger.error(f'Error in daily task email command for farm {farm_id}: {str(e)}')
+        else:
+            self.stdout.write(
+                self.style.SUCCESS('Starting daily task email process for all farms...')
             )
             
-        except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f'Error sending daily task emails: {str(e)}')
-            )
-            logger.error(f'Error in daily task email command: {str(e)}')
+            try:
+                sent_count = TaskEmailService.send_daily_task_reminders()
+                
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f'Successfully sent {sent_count} daily task reminder emails'
+                    )
+                )
+                
+            except Exception as e:
+                self.stdout.write(
+                    self.style.ERROR(f'Error sending daily task emails: {str(e)}')
+                )
+                logger.error(f'Error in daily task email command: {str(e)}')
 
     def send_test_email(self, options):
         """Send test email"""

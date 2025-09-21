@@ -46,6 +46,7 @@ import {
   TouchApp as ClickIcon,
 } from '@mui/icons-material';
 import { useFarm } from '../contexts/FarmContext';
+import EmailManager from './EmailManager';
 import api from '../services/api';
 
 const FarmDetail: React.FC = () => {
@@ -543,6 +544,11 @@ const FarmDetail: React.FC = () => {
           })}
         </Box>
       )}
+
+      {/* Email Management for this farm */}
+      <Box mb={4}>
+        <EmailManager farmId={farm?.id} farmName={farm?.name} />
+      </Box>
 
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5">Houses</Typography>
