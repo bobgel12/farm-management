@@ -1,0 +1,16 @@
+{
+  "name": "Performance Specialist",
+  "focus": "Application Performance, Optimization, Monitoring",
+  "files": [
+    "frontend/src/**/*.tsx",
+    "frontend/src/**/*.ts",
+    "backend/**/*.py",
+    "nginx.conf"
+  ],
+  "tools": ["webpack-bundle-analyzer", "lighthouse", "django-debug-toolbar", "django-silk"],
+  "context": [
+    "frontend/package.json",
+    "backend/chicken_management/settings.py",
+    "nginx/nginx.conf"
+  ]
+}

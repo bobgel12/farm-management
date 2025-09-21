@@ -1,0 +1,310 @@
+{
+  "agents": {
+    "frontend-specialist": {
+      "name": "Frontend Specialist",
+      "description": "Expert in React, TypeScript, Material-UI, and frontend architecture",
+      "focus_areas": [
+        "React components and hooks",
+        "TypeScript type definitions",
+        "Material-UI components and theming",
+        "State management with Context",
+        "API integration and error handling",
+        "Frontend testing and optimization",
+        "Responsive design and UX"
+      ],
+      "file_patterns": [
+        "frontend/src/**/*.tsx",
+        "frontend/src/**/*.ts",
+        "frontend/src/**/*.css",
+        "frontend/package.json",
+        "frontend/tsconfig.json"
+      ],
+      "tools": [
+        "eslint",
+        "prettier",
+        "typescript",
+        "react-testing-library",
+        "storybook"
+      ],
+      "context_files": [
+        "frontend/src/types/index.ts",
+        "frontend/src/utils/index.ts",
+        "frontend/src/services/api.ts"
+      ]
+    },
+    "backend-specialist": {
+      "name": "Backend Specialist",
+      "description": "Expert in Django, Django REST Framework, Python, and backend architecture",
+      "focus_areas": [
+        "Django models and database design",
+        "Django REST Framework serializers and views",
+        "Authentication and permissions",
+        "API design and documentation",
+        "Database migrations and optimization",
+        "Celery task scheduling",
+        "Backend testing and security"
+      ],
+      "file_patterns": [
+        "backend/**/*.py",
+        "backend/requirements.txt",
+        "backend/pyproject.toml"
+      ],
+      "tools": [
+        "black",
+        "isort",
+        "flake8",
+        "mypy",
+        "pytest",
+        "django-debug-toolbar"
+      ],
+      "context_files": [
+        "backend/farms/models.py",
+        "backend/houses/models.py",
+        "backend/tasks/models.py",
+        "backend/authentication/views.py"
+      ]
+    },
+    "devops-specialist": {
+      "name": "DevOps Specialist",
+      "description": "Expert in Docker, deployment, CI/CD, and infrastructure",
+      "focus_areas": [
+        "Docker containerization",
+        "Docker Compose orchestration",
+        "Railway and Vercel deployment",
+        "Environment configuration",
+        "CI/CD pipeline setup",
+        "Database management",
+        "Monitoring and logging"
+      ],
+      "file_patterns": [
+        "Dockerfile*",
+        "docker-compose*.yml",
+        "railway.json",
+        "vercel.json",
+        "nginx.conf",
+        "scripts/*.sh"
+      ],
+      "tools": [
+        "docker",
+        "docker-compose",
+        "nginx",
+        "git",
+        "bash"
+      ],
+      "context_files": [
+        "docker-compose.yml",
+        "docker-compose.prod.yml",
+        "scripts/dev-setup.sh",
+        "scripts/start-dev.sh"
+      ]
+    },
+    "testing-specialist": {
+      "name": "Testing Specialist",
+      "description": "Expert in testing strategies, test automation, and quality assurance",
+      "focus_areas": [
+        "Unit testing (Jest, React Testing Library)",
+        "Integration testing (Django TestCase)",
+        "End-to-end testing",
+        "Test coverage optimization",
+        "Mocking and test data",
+        "Performance testing",
+        "Security testing"
+      ],
+      "file_patterns": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/test_*.py",
+        "**/tests.py"
+      ],
+      "tools": [
+        "jest",
+        "react-testing-library",
+        "pytest",
+        "coverage",
+        "cypress"
+      ],
+      "context_files": [
+        "frontend/src/components/__tests__/",
+        "backend/farms/tests.py",
+        "backend/houses/tests.py"
+      ]
+    },
+    "security-specialist": {
+      "name": "Security Specialist",
+      "description": "Expert in application security, authentication, and data protection",
+      "focus_areas": [
+        "Authentication and authorization",
+        "JWT token management",
+        "CORS configuration",
+        "Input validation and sanitization",
+        "SQL injection prevention",
+        "XSS protection",
+        "CSRF protection",
+        "Environment variable security"
+      ],
+      "file_patterns": [
+        "backend/authentication/**/*.py",
+        "backend/chicken_management/settings*.py",
+        "frontend/src/contexts/AuthContext.tsx",
+        "frontend/src/services/api.ts"
+      ],
+      "tools": [
+        "bandit",
+        "safety",
+        "semgrep",
+        "eslint-plugin-security"
+      ],
+      "context_files": [
+        "backend/authentication/views.py",
+        "backend/chicken_management/settings.py",
+        "frontend/src/contexts/AuthContext.tsx"
+      ]
+    },
+    "database-specialist": {
+      "name": "Database Specialist",
+      "description": "Expert in database design, optimization, and data management",
+      "focus_areas": [
+        "Database schema design",
+        "Query optimization",
+        "Migration strategies",
+        "Data modeling",
+        "Index optimization",
+        "Backup and recovery",
+        "Data integrity"
+      ],
+      "file_patterns": [
+        "backend/**/migrations/*.py",
+        "backend/**/models.py",
+        "database_dump.sql",
+        "scripts/dump_database.sh",
+        "scripts/restore_database.sh"
+      ],
+      "tools": [
+        "django-migrations",
+        "psql",
+        "pg_dump",
+        "pg_restore"
+      ],
+      "context_files": [
+        "backend/farms/models.py",
+        "backend/houses/models.py",
+        "backend/tasks/models.py"
+      ]
+    },
+    "ui-ux-specialist": {
+      "name": "UI/UX Specialist",
+      "description": "Expert in user interface design, user experience, and accessibility",
+      "focus_areas": [
+        "Material-UI component design",
+        "Responsive design",
+        "Accessibility (WCAG compliance)",
+        "User experience optimization",
+        "Color schemes and theming",
+        "Component library design",
+        "Mobile-first design"
+      ],
+      "file_patterns": [
+        "frontend/src/components/**/*.tsx",
+        "frontend/src/index.css",
+        "frontend/public/**/*"
+      ],
+      "tools": [
+        "axe-core",
+        "lighthouse",
+        "storybook",
+        "chromatic"
+      ],
+      "context_files": [
+        "frontend/src/components/Layout.tsx",
+        "frontend/src/components/Dashboard.tsx",
+        "frontend/src/index.css"
+      ]
+    },
+    "performance-specialist": {
+      "name": "Performance Specialist",
+      "description": "Expert in application performance optimization and monitoring",
+      "focus_areas": [
+        "Frontend performance optimization",
+        "Backend query optimization",
+        "Database performance tuning",
+        "Caching strategies",
+        "Bundle size optimization",
+        "API response optimization",
+        "Memory usage optimization"
+      ],
+      "file_patterns": [
+        "frontend/src/**/*.tsx",
+        "frontend/src/**/*.ts",
+        "backend/**/*.py",
+        "nginx.conf"
+      ],
+      "tools": [
+        "webpack-bundle-analyzer",
+        "lighthouse",
+        "django-debug-toolbar",
+        "django-silk"
+      ],
+      "context_files": [
+        "frontend/package.json",
+        "backend/chicken_management/settings.py",
+        "nginx/nginx.conf"
+      ]
+    }
+  },
+  "collaboration_rules": {
+    "communication": {
+      "primary_language": "English",
+      "communication_style": "Professional and collaborative",
+      "conflict_resolution": "Discuss and reach consensus before implementation"
+    },
+    "workflow": {
+      "parallel_work": "Agents can work on different files simultaneously",
+      "coordination": "Agents should communicate when working on related features",
+      "code_review": "All changes should be reviewed by relevant specialists",
+      "testing": "Testing specialist should validate all changes"
+    },
+    "file_ownership": {
+      "frontend_files": "frontend-specialist, ui-ux-specialist, testing-specialist",
+      "backend_files": "backend-specialist, database-specialist, security-specialist",
+      "infrastructure_files": "devops-specialist, security-specialist",
+      "test_files": "testing-specialist with input from relevant specialists"
+    }
+  },
+  "agent_workflows": {
+    "feature_development": {
+      "description": "Complete feature development workflow",
+      "steps": [
+        "1. Backend specialist: Design API endpoints and database models",
+        "2. Database specialist: Review and optimize database design",
+        "3. Security specialist: Review security implications",
+        "4. Frontend specialist: Implement UI components and API integration",
+        "5. UI/UX specialist: Review and improve user experience",
+        "6. Testing specialist: Write comprehensive tests",
+        "7. Performance specialist: Optimize performance",
+        "8. DevOps specialist: Update deployment configuration if needed"
+      ]
+    },
+    "bug_fixing": {
+      "description": "Bug fixing workflow",
+      "steps": [
+        "1. Testing specialist: Reproduce and identify the bug",
+        "2. Relevant specialist: Fix the bug in their domain",
+        "3. Security specialist: Review for security implications",
+        "4. Testing specialist: Verify the fix with tests",
+        "5. Performance specialist: Ensure no performance regression"
+      ]
+    },
+    "refactoring": {
+      "description": "Code refactoring workflow",
+      "steps": [
+        "1. Performance specialist: Identify optimization opportunities",
+        "2. Relevant specialist: Plan refactoring approach",
+        "3. All specialists: Coordinate on changes affecting multiple areas",
+        "4. Testing specialist: Ensure all tests pass after refactoring",
+        "5. Security specialist: Verify no security issues introduced"
+      ]
+    }
+  }
+}

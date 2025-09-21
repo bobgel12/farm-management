@@ -19,8 +19,8 @@ import {
   DialogActions,
 } from '@mui/material';
 import { Assignment as TaskIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
-import { useTask } from '../contexts/TaskContext.tsx';
-import api from '../services/api.ts';
+import { useTask } from '../contexts/TaskContext';
+import api from '../services/api';
 
 const TaskList: React.FC = () => {
   const { houseId } = useParams<{ houseId: string }>();
@@ -133,66 +133,147 @@ const TaskList: React.FC = () => {
 
   return (
     <Box>
-      <Box mb={3}>
-        <Typography variant="h4" gutterBottom>
+      <Box mb={{ xs: 2, sm: 3 }}>
+        <Typography 
+          variant="h4" 
+          gutterBottom
+          sx={{ 
+            fontSize: { xs: '1.5rem', sm: '2.125rem' },
+            fontWeight: 600,
+            mb: { xs: 2, sm: 3 }
+          }}
+        >
           {house.farm_name} - House {house.house_number} Tasks
         </Typography>
         
-        <Box display="flex" gap={2} mb={3}>
+        <Box 
+          display="flex" 
+          gap={{ xs: 1, sm: 2 }} 
+          mb={{ xs: 2, sm: 3 }}
+          flexWrap="wrap"
+        >
           <Chip
             label={house.status}
             color={getStatusColor(house.status) as any}
+            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
           />
           {house.current_day !== null && (
             <Chip
               label={`Day ${house.current_day}`}
               variant="outlined"
+              sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
             />
           )}
         </Box>
       </Box>
 
       {sortedDays.map((day) => (
-        <Card key={day} sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Day {day}
+        <Card key={day} sx={{ mb: { xs: 2, sm: 3 } }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box 
+              display="flex" 
+              alignItems="center" 
+              justifyContent="space-between"
+              mb={{ xs: 2, sm: 3 }}
+              flexWrap="wrap"
+              gap={1}
+            >
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                  fontWeight: 600
+                }}
+              >
+                Day {day}
+              </Typography>
               {day === house.current_day && (
-                <Chip label="Today" color="primary" size="small" sx={{ ml: 2 }} />
+                <Chip 
+                  label="Today" 
+                  color="primary" 
+                  size="small" 
+                  sx={{ 
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                    ml: { xs: 0, sm: 2 }
+                  }} 
+                />
               )}
-            </Typography>
+            </Box>
             
-            <Grid container spacing={2}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }}>
               {tasksByDay[day].map((task) => (
-                <Grid item xs={12} md={6} key={task.id}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Box display="flex" alignItems="flex-start" justifyContent="space-between">
-                        <Box flexGrow={1}>
-                          <Typography variant="subtitle1" gutterBottom>
+                <Grid item xs={12} sm={6} md={6} key={task.id}>
+                  <Card 
+                    variant="outlined" 
+                    sx={{ 
+                      height: '100%',
+                      '&:hover': {
+                        boxShadow: 2
+                      }
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                      <Box 
+                        display="flex" 
+                        alignItems="flex-start" 
+                        justifyContent="space-between"
+                        flexDirection={{ xs: 'column', sm: 'row' }}
+                        gap={{ xs: 2, sm: 1 }}
+                      >
+                        <Box flexGrow={1} width="100%">
+                          <Typography 
+                            variant="subtitle1" 
+                            gutterBottom
+                            sx={{ 
+                              fontSize: { xs: '0.9rem', sm: '1rem' },
+                              fontWeight: 600
+                            }}
+                          >
                             {task.task_name}
                           </Typography>
-                          <Typography variant="body2" color="textSecondary" gutterBottom>
+                          <Typography 
+                            variant="body2" 
+                            color="textSecondary" 
+                            gutterBottom
+                            sx={{ 
+                              fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                              mb: 2
+                            }}
+                          >
                             {task.description}
                           </Typography>
-                          <Box display="flex" gap={1} mb={2}>
+                          <Box 
+                            display="flex" 
+                            gap={1} 
+                            mb={2}
+                            flexWrap="wrap"
+                          >
                             <Chip
                               label={task.task_type}
                               size="small"
                               color={getTaskTypeColor(task.task_type) as any}
                               variant="outlined"
+                              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
                             />
                             {task.is_completed && (
                               <Chip
                                 label="Completed"
                                 size="small"
                                 color="success"
-                                icon={<CheckCircleIcon />}
+                                icon={<CheckCircleIcon sx={{ fontSize: { xs: 14, sm: 16 } }} />}
+                                sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
                               />
                             )}
                           </Box>
                           {task.is_completed && task.completed_at && (
-                            <Typography variant="caption" color="textSecondary">
+                            <Typography 
+                              variant="caption" 
+                              color="textSecondary"
+                              sx={{ 
+                                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                                display: 'block'
+                              }}
+                            >
                               Completed on {new Date(task.completed_at).toLocaleString()}
                               {task.completed_by && ` by ${task.completed_by}`}
                             </Typography>
@@ -204,6 +285,11 @@ const TaskList: React.FC = () => {
                             size="small"
                             variant="outlined"
                             onClick={() => handleCompleteTask(task)}
+                            sx={{ 
+                              minWidth: { xs: '100%', sm: 'auto' },
+                              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                              minHeight: { xs: 40, sm: 32 }
+                            }}
                           >
                             Complete
                           </Button>
@@ -219,15 +305,44 @@ const TaskList: React.FC = () => {
       ))}
 
       {/* Complete Task Dialog */}
-      <Dialog open={completeDialogOpen} onClose={() => setCompleteDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Complete Task</DialogTitle>
-        <DialogContent>
+      <Dialog 
+        open={completeDialogOpen} 
+        onClose={() => setCompleteDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={false}
+        sx={{
+          '& .MuiDialog-paper': {
+            m: { xs: 1, sm: 2 },
+            maxHeight: { xs: '95vh', sm: '90vh' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' }, fontWeight: 600 }}>
+          Complete Task
+        </DialogTitle>
+        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
           {selectedTask && (
             <Box>
-              <Typography variant="h6" gutterBottom>
+              <Typography 
+                variant="h6" 
+                gutterBottom
+                sx={{ 
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  fontWeight: 600
+                }}
+              >
                 {selectedTask.task_name}
               </Typography>
-              <Typography variant="body2" color="textSecondary" gutterBottom>
+              <Typography 
+                variant="body2" 
+                color="textSecondary" 
+                gutterBottom
+                sx={{ 
+                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                  mb: 2
+                }}
+              >
                 {selectedTask.description}
               </Typography>
               
@@ -240,6 +355,12 @@ const TaskList: React.FC = () => {
                 value={completedBy}
                 onChange={(e) => setCompletedBy(e.target.value)}
                 sx={{ mt: 2 }}
+                InputProps={{
+                  sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+                }}
               />
               
               <TextField
@@ -252,13 +373,34 @@ const TaskList: React.FC = () => {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 sx={{ mt: 2 }}
+                InputProps={{
+                  sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+                }}
               />
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCompleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmitCompletion} variant="contained">
+        <DialogActions sx={{ p: { xs: 2, sm: 3 }, gap: 1 }}>
+          <Button 
+            onClick={() => setCompleteDialogOpen(false)}
+            sx={{ 
+              fontSize: { xs: '0.875rem', sm: '0.875rem' },
+              minHeight: { xs: 44, sm: 36 }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmitCompletion} 
+            variant="contained"
+            sx={{ 
+              fontSize: { xs: '0.875rem', sm: '0.875rem' },
+              minHeight: { xs: 44, sm: 36 }
+            }}
+          >
             Complete Task
           </Button>
         </DialogActions>

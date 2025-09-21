@@ -23,7 +23,7 @@ import {
   Delete as DeleteIcon,
   Home as HomeIcon,
 } from '@mui/icons-material';
-import { useFarm } from '../contexts/FarmContext.tsx';
+import { useFarm } from '../contexts/FarmContext';
 
 const FarmList: React.FC = () => {
   const navigate = useNavigate();
@@ -107,12 +107,32 @@ const FarmList: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Farms</Typography>
+      <Box 
+        display="flex" 
+        justifyContent="space-between" 
+        alignItems={{ xs: 'flex-start', sm: 'center' }} 
+        mb={3}
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        gap={{ xs: 2, sm: 0 }}
+      >
+        <Typography 
+          variant="h4"
+          sx={{ 
+            fontSize: { xs: '1.75rem', sm: '2.125rem' },
+            fontWeight: 600
+          }}
+        >
+          Farms
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
+          sx={{
+            minHeight: { xs: 48, sm: 36 },
+            fontSize: { xs: '0.875rem', sm: '0.875rem' },
+            width: { xs: '100%', sm: 'auto' }
+          }}
         >
           Add Farm
         </Button>
@@ -125,55 +145,78 @@ const FarmList: React.FC = () => {
       )}
 
       {Array.isArray(farms) && farms.length > 0 ? (
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 2, sm: 3 }}>
           {farms.map((farm) => (
             <Grid item xs={12} sm={6} md={4} key={farm.id}>
-              <Card>
-                <CardContent>
+              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CardContent sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                   <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                    <Typography variant="h6" component="div">
+                    <Typography 
+                      variant="h6" 
+                      component="div"
+                      sx={{ 
+                        fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                        fontWeight: 600,
+                        pr: 1
+                      }}
+                    >
                       {farm.name}
                     </Typography>
-                    <Box>
+                    <Box display="flex" gap={0.5}>
                       <IconButton
                         size="small"
                         onClick={() => handleOpenDialog(farm)}
+                        sx={{ minWidth: 32, minHeight: 32 }}
                       >
-                        <EditIcon />
+                        <EditIcon fontSize="small" />
                       </IconButton>
                       <IconButton
                         size="small"
                         onClick={() => handleDelete(farm.id)}
                         color="error"
+                        sx={{ minWidth: 32, minHeight: 32 }}
                       >
-                        <DeleteIcon />
+                        <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Box>
                   </Box>
                   
-                  <Typography color="textSecondary" gutterBottom>
+                  <Typography 
+                    color="textSecondary" 
+                    gutterBottom
+                    sx={{ 
+                      fontSize: { xs: '0.875rem', sm: '1rem' },
+                      mb: 2
+                    }}
+                  >
                     {farm.location}
                   </Typography>
                   
-                  <Box display="flex" gap={1} mb={2}>
+                  <Box display="flex" gap={1} mb={2} flexWrap="wrap">
                     <Chip
                       label={`${farm.active_houses || 0} Active`}
                       color="primary"
                       size="small"
+                      sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
                     />
                     <Chip
                       label={`${farm.total_houses || 0} Total`}
                       variant="outlined"
                       size="small"
+                      sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
                     />
                   </Box>
                   
-                  <Box display="flex" gap={1}>
+                  <Box display="flex" gap={1} mt="auto">
                     <Button
                       size="small"
                       variant="outlined"
                       startIcon={<HomeIcon />}
                       onClick={() => navigate(`/farms/${farm.id}`)}
+                      sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        minHeight: { xs: 40, sm: 32 }
+                      }}
                     >
                       View Houses
                     </Button>
@@ -195,11 +238,23 @@ const FarmList: React.FC = () => {
       )}
 
       {/* Add/Edit Farm Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={false}
+        sx={{
+          '& .MuiDialog-paper': {
+            m: { xs: 1, sm: 2 },
+            maxHeight: { xs: '95vh', sm: '90vh' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' }, fontWeight: 600 }}>
           {editingFarm ? 'Edit Farm' : 'Add New Farm'}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
           <TextField
             autoFocus
             margin="dense"
@@ -209,6 +264,12 @@ const FarmList: React.FC = () => {
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             sx={{ mb: 2 }}
+            InputProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
+            InputLabelProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
           />
           <TextField
             margin="dense"
@@ -218,6 +279,12 @@ const FarmList: React.FC = () => {
             value={formData.location}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             sx={{ mb: 2 }}
+            InputProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
+            InputLabelProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
           />
           <TextField
             margin="dense"
@@ -227,6 +294,12 @@ const FarmList: React.FC = () => {
             value={formData.contact_person}
             onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
             sx={{ mb: 2 }}
+            InputProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
+            InputLabelProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
           />
           <TextField
             margin="dense"
@@ -236,6 +309,12 @@ const FarmList: React.FC = () => {
             value={formData.contact_phone}
             onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
             sx={{ mb: 2 }}
+            InputProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
+            InputLabelProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
           />
           <TextField
             margin="dense"
@@ -245,11 +324,32 @@ const FarmList: React.FC = () => {
             type="email"
             value={formData.contact_email}
             onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+            InputProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
+            InputLabelProps={{
+              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
+            }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained">
+        <DialogActions sx={{ p: { xs: 2, sm: 3 }, gap: 1 }}>
+          <Button 
+            onClick={handleCloseDialog}
+            sx={{ 
+              fontSize: { xs: '0.875rem', sm: '0.875rem' },
+              minHeight: { xs: 44, sm: 36 }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained"
+            sx={{ 
+              fontSize: { xs: '0.875rem', sm: '0.875rem' },
+              minHeight: { xs: 44, sm: 36 }
+            }}
+          >
             {editingFarm ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
