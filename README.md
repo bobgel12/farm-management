@@ -1,351 +1,228 @@
 # 🐔 Chicken House Management System
 
-A comprehensive web application for managing multiple chicken farms with automated task scheduling based on chicken age. The system tracks daily tasks for each house from day -1 (setup) through day 41 (cleanup).
-
-[![Django](https://img.shields.io/badge/Django-4.2+-green.svg)](https://djangoproject.com/)
-[![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Material-UI](https://img.shields.io/badge/Material--UI-5.0+-purple.svg)](https://mui.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com/)
-
-## ✨ Features
-
-- **🏭 Farm Management**: Create and manage multiple farms with location and contact information
-- **🏠 House Management**: Add houses to farms with configurable chicken in/out dates
-- **📅 Task Scheduling**: Automatic task generation based on chicken age (days -1 to 41)
-- **📊 Dashboard**: Overview of all farms, houses, and tasks with real-time updates
-- **✅ Task Management**: Mark tasks as completed with notes and completion tracking
-- **🔐 Authentication**: Secure token-based authentication system
-- **📱 Responsive UI**: Modern Material-UI interface for desktop and mobile
-- **📧 Email Notifications**: Daily task reminders sent to farm workers
-- **🌐 Production Ready**: Docker containerization with PostgreSQL database
-- **🚀 Easy Deployment**: One-click deployment to Railway, Render, or Vercel
-
-## Technology Stack
-
-### Backend
-- **Django 4.2+** with Django REST Framework
-- **PostgreSQL** (production) / SQLite (development)
-- **Python 3.11+**
-
-### Frontend
-- **React 18+** with TypeScript
-- **Material-UI (MUI) v5**
-- **React Router v6**
-
-### Deployment
-- **Docker** with docker-compose
-- **Nginx** reverse proxy
-- **PostgreSQL** database
+A full-stack application for managing chicken farms, houses, and daily tasks with automated email notifications.
 
 ## 🚀 Quick Start
 
+```bash
+# Clone and setup
+git clone <repository-url>
+cd chicken_house_management
+
+# Quick start (install, start, migrate, seed)
+make quick-start
+```
+
+**Access the application:**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Admin Panel**: http://localhost:8000/admin (admin/admin123)
+
+## 📋 Features
+
+- **Farm Management** - Manage multiple farms with houses
+- **Task Scheduling** - Automated daily task generation based on chicken age
+- **Worker Management** - Add and manage farm workers
+- **Email Notifications** - Daily task reminders via email
+- **Real-time Dashboard** - Monitor farm status and tasks
+- **Mobile Responsive** - Works on all devices
+
+## 🛠️ Development
+
 ### Prerequisites
-- Docker and Docker Compose
-- Git
-- Node.js 18+ (for local development)
-- Python 3.11+ (for local development)
+- Docker & Docker Compose
+- Make (optional, for convenience commands)
 
-### Development Setup
+### Available Commands
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/chicken-house-management.git
-   cd chicken-house-management
-   ```
-
-2. **Run the automated setup script** (Recommended)
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-   
-   This script will:
-   - Check for Docker and install Colima on macOS if needed
-   - Resolve port conflicts automatically
-   - Create necessary environment files
-   - Build and start all containers
-   - Set up the database with migrations
-   - Create admin user
-   - Wait for all services to be ready
-   - Test API connectivity
-
-3. **Manual setup** (Alternative)
-   ```bash
-   docker-compose up --build
-   ```
-
-4. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000/api
-   - Admin Panel: http://localhost:8000/admin
-   - Default credentials: `admin` / `admin123`
-
-## 🌐 Production Deployment
-
-### Backend: Railway + Frontend: Vercel
-
-**Backend Deployment:**
 ```bash
-# Deploy backend to Railway
-./deploy_railway.sh
+# Development
+make dev          # Start development environment
+make logs         # Show logs
+make restart      # Restart services
+make down         # Stop services
+
+# Database
+make migrate      # Run migrations
+make seed         # Seed with sample data
+make seed-variety # Seed with variety of data
+
+# Email
+make email-test   # Send test email
+make email-daily  # Send daily emails
+
+# Utilities
+make clean        # Clean up containers
+make status       # Show service status
+make help         # Show all commands
 ```
 
-**Frontend Deployment:**
-1. Go to [vercel.com](https://vercel.com)
-2. Connect your GitHub repository
-3. Set **Root Directory** to `frontend/`
-4. Add environment variable: `REACT_APP_API_URL=https://your-backend.railway.app/api`
-5. Deploy
+### Manual Setup (without Make)
 
-**Detailed Frontend Guide:** See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)
-
-### Quick Deploy
-For a quick production deployment, see [QUICK_DEPLOY.md](QUICK_DEPLOY.md).
-
-### Detailed Guide
-For detailed deployment instructions, see [DEPLOYMENT_SIMPLE.md](DEPLOYMENT_SIMPLE.md).
-
-## 🔧 Troubleshooting
-
-### Quick Fix
-If you encounter issues, run the quick fix script:
 ```bash
-./quick-fix.sh
-```
+# Start services
+docker-compose up -d
 
-### Common Issues
-
-#### Port Conflicts
-If you get "port already in use" errors:
-```bash
-# Check what's using the port
-lsof -i :5432  # or :8000, :3000
-
-# Kill the process
-kill <PID>
-```
-
-#### CSRF Errors
-If you see CSRF origin checking errors, the setup script automatically configures `CSRF_TRUSTED_ORIGINS` to include `http://localhost:3000`.
-
-#### Database Issues
-If you get "no such table" errors:
-```bash
-docker-compose exec backend python manage.py makemigrations
+# Run migrations
 docker-compose exec backend python manage.py migrate
+
+# Seed database
+docker-compose exec backend python manage.py seed_data --clear
+
+# Send test email
+curl -X POST 'http://localhost:8000/api/tasks/send-test-email/' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Token YOUR_TOKEN' \
+  -d '{"farm_id":1,"test_email":"your-email@gmail.com"}'
 ```
 
-#### Frontend Compilation Errors
-If the frontend won't compile:
+## 📧 Email Setup
+
+### Local Development
+1. Create `.env` file with your Gmail credentials:
 ```bash
-docker-compose restart frontend
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
 ```
 
-### Detailed Troubleshooting
-For more detailed troubleshooting information, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+2. Test email configuration:
+```bash
+make email-test
+```
+
+### Railway Production
+1. Set environment variables in Railway dashboard:
+   - `EMAIL_HOST_USER` - Your Gmail address
+   - `EMAIL_HOST_PASSWORD` - Gmail App Password
+   - `SECRET_KEY` - Django secret key
+   - `ADMIN_PASSWORD` - Admin password
+
+2. Deploy:
+```bash
+make deploy-railway
+```
+
+## 🏗️ Architecture
+
+- **Backend**: Django REST Framework + PostgreSQL
+- **Frontend**: React + TypeScript + Material-UI
+- **Database**: PostgreSQL (production) / SQLite (development)
+- **Email**: Gmail SMTP
+- **Deployment**: Railway + Docker
 
 ## 📁 Project Structure
 
-4. **Default credentials**
-   - Username: `admin`
-   - Password: `admin123`
-
-### Production Deployment
-
-1. **Copy environment file**
-   ```bash
-   cp env.example .env
-   ```
-
-2. **Update environment variables**
-   Edit `.env` file with your production settings:
-   - Set secure database password
-   - Set secret key
-   - Set admin credentials
-   - Set allowed hosts
-
-3. **Deploy with production configuration**
-   ```bash
-   docker-compose -f docker-compose.prod.yml up -d
-   ```
-
-## Task Schedule
-
-The system automatically generates tasks based on chicken age:
-
-### Day -1: House Setup
-- Open heater pipe lock
-- Turn heater (24 hours ahead)
-- Turn water on and check water line
-- Replace filter and set water pressure
-- Place feed trays and set up turbo
-
-### Day 0: Chicken Arrival
-- Chicken is in
-- Check water line and heater
-- Check feed is full
-
-### Days 1-7: Early Care
-- Daily water pressure adjustments
-- Death chicken pickup
-- Manual feed management
-
-### Day 8: Full House Operations
-- Full house feed and water
-- Heat management
-- Automatic feed controller
-
-### Days 9-21: Growth Phase
-- Feeder monitoring and adjustment
-- Water pressure increases
-- Coolpad activation
-
-### Days 35-40: Exit Planning
-- Schedule confirmation
-- Pre-exit preparation
-- Exit day procedures
-
-### Day 41: Cleanup
-- Post-exit cleanup tasks
-
-## API Endpoints
-
-### Farms
-- `GET /api/farms/` - List all farms
-- `POST /api/farms/` - Create new farm
-- `GET /api/farms/{id}/` - Get farm details
-- `PUT /api/farms/{id}/` - Update farm
-- `DELETE /api/farms/{id}/` - Delete farm
-
-### Houses
-- `GET /api/houses/` - List all houses
-- `POST /api/houses/` - Create new house
-- `GET /api/houses/{id}/` - Get house details
-- `PUT /api/houses/{id}/` - Update house
-- `DELETE /api/houses/{id}/` - Delete house
-
-### Tasks
-- `GET /api/tasks/` - List all tasks
-- `GET /api/houses/{id}/tasks/` - Get tasks for house
-- `POST /api/tasks/{id}/complete/` - Mark task complete
-- `POST /api/houses/{id}/tasks/generate/` - Generate tasks for house
-
-### Authentication
-- `POST /api/auth/login/` - Login
-- `POST /api/auth/logout/` - Logout
-- `GET /api/auth/user/` - Get user info
-
-## Development
-
-### Backend Development
-
-1. **Navigate to backend directory**
-   ```bash
-   cd backend
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run migrations**
-   ```bash
-   python manage.py migrate
-   ```
-
-5. **Create superuser**
-   ```bash
-   python manage.py createsuperuser
-   ```
-
-6. **Start development server**
-   ```bash
-   python manage.py runserver
-   ```
-
-### Frontend Development
-
-1. **Navigate to frontend directory**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start development server**
-   ```bash
-   npm start
-   ```
-
-## Project Structure
-
 ```
 chicken_house_management/
-├── backend/
-│   ├── chicken_management/
-│   │   ├── settings.py
-│   │   ├── urls.py
-│   │   └── wsgi.py
-│   ├── farms/
-│   │   ├── models.py
-│   │   ├── views.py
-│   │   ├── serializers.py
-│   │   └── urls.py
-│   ├── houses/
-│   │   ├── models.py
-│   │   ├── views.py
-│   │   ├── serializers.py
-│   │   └── urls.py
-│   ├── tasks/
-│   │   ├── models.py
-│   │   ├── views.py
-│   │   ├── serializers.py
-│   │   ├── task_scheduler.py
-│   │   └── urls.py
-│   ├── authentication/
-│   │   ├── views.py
-│   │   └── urls.py
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
+├── backend/                 # Django API
+│   ├── farms/              # Farm and worker management
+│   ├── houses/             # House management
+│   ├── tasks/              # Task scheduling and email
+│   └── authentication/     # User authentication
+├── frontend/               # React frontend
 │   ├── src/
-│   │   ├── components/
-│   │   ├── contexts/
-│   │   ├── services/
-│   │   └── App.tsx
-│   ├── package.json
-│   └── Dockerfile
-├── nginx/
-│   └── nginx.conf
-├── docker-compose.yml
-├── docker-compose.prod.yml
-└── README.md
+│   │   ├── components/     # React components
+│   │   ├── contexts/       # React contexts
+│   │   └── services/       # API services
+├── docker-compose.yml      # Development setup
+├── docker-compose.prod.yml # Production setup
+├── Makefile               # Development commands
+└── README.md              # This file
 ```
 
-## Contributing
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `EMAIL_HOST_USER` | Gmail address | Required |
+| `EMAIL_HOST_PASSWORD` | Gmail App Password | Required |
+| `SECRET_KEY` | Django secret key | Auto-generated |
+| `ADMIN_PASSWORD` | Admin password | admin123 |
+| `DEBUG` | Debug mode | True (dev) / False (prod) |
+
+### Gmail App Password Setup
+
+1. Enable 2-Factor Authentication on Google
+2. Go to [Google Account Settings](https://myaccount.google.com/)
+3. Security → 2-Step Verification → App passwords
+4. Generate password for "Mail"
+5. Use the 16-character password in `EMAIL_HOST_PASSWORD`
+
+## 🚀 Deployment
+
+### Railway (Recommended)
+
+```bash
+# Deploy to Railway
+make deploy-railway
+```
+
+### Manual Docker
+
+```bash
+# Production build
+make prod-build
+make prod-up
+```
+
+## 📚 API Documentation
+
+### Authentication
+- **Login**: `POST /api/auth/login/`
+- **Logout**: `POST /api/auth/logout/`
+
+### Farms
+- **List**: `GET /api/farms/`
+- **Detail**: `GET /api/farms/{id}/`
+- **Workers**: `GET /api/farms/{id}/workers/`
+
+### Tasks
+- **List**: `GET /api/tasks/`
+- **Send Email**: `POST /api/tasks/send-test-email/`
+- **Daily Tasks**: `POST /api/tasks/send-daily-tasks/`
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Port already in use**
+   ```bash
+   make clean
+   make dev
+   ```
+
+2. **Email not working**
+   - Check Gmail App Password
+   - Verify environment variables
+   - Test with `make email-test`
+
+3. **Database issues**
+   ```bash
+   make down
+   make up
+   make migrate
+   ```
+
+### Getting Help
+
+- Check logs: `make logs`
+- Test email: `make email-test`
+- Reset everything: `make quick-reset`
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
+4. Test thoroughly
 5. Submit a pull request
 
-## License
+---
 
-This project is licensed under the MIT License.
-
-## Support
-
-For support and questions, please contact the development team or create an issue in the repository.
-# farm-management
+**Need help?** Check the `make help` command for all available options!
