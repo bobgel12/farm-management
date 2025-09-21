@@ -93,7 +93,7 @@ const WorkerForm: React.FC<WorkerFormProps> = ({
 
     const workerData = {
       ...formData,
-      farm: farmId,
+      farm_id: farmId,
     };
 
     const success = worker 
