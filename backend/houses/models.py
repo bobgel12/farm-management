@@ -23,15 +23,19 @@ class House(models.Model):
 
     @property
     def current_day(self):
-        """Calculate current chicken age in days"""
+        """Calculate current chicken age in days (day 0 = first day chickens are in)"""
         if not self.chicken_in_date:
             return None
         
+        # Use timezone-aware date calculation to ensure consistency
         today = timezone.now().date()
         if self.chicken_out_date and today > self.chicken_out_date:
             return None  # House is empty
         
-        return (today - self.chicken_in_date).days
+        # Calculate days since chicken in date, where day 0 is the first day
+        # This ensures that if chickens arrive on day X, then on day X it's day 0
+        days_since_in = (today - self.chicken_in_date).days
+        return days_since_in
 
     @property
     def days_remaining(self):
