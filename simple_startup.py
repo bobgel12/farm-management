@@ -13,7 +13,11 @@ def main():
     print("🐔 Starting Chicken House Management System...")
     
     # Set up Django
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings')
+    # Use production settings for Railway deployment
+    if os.getenv('RAILWAY_ENVIRONMENT'):
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings_prod')
+    else:
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings')
     django.setup()
     
     # Run migrations
@@ -55,6 +59,24 @@ def main():
     if not os.getenv('EMAIL_HOST_USER') or not os.getenv('EMAIL_HOST_PASSWORD'):
         print("⚠️  Email credentials not configured. Daily emails will not work.")
         print("   Please set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in Railway dashboard.")
+    else:
+        # Test SMTP connectivity
+        print("🔍 Testing SMTP connectivity...")
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+            result = sock.connect_ex(('smtp.gmail.com', 587))
+            sock.close()
+            
+            if result == 0:
+                print("✅ SMTP server is reachable")
+            else:
+                print(f"❌ SMTP server is not reachable (error code: {result})")
+                print("   This may be due to Railway network restrictions.")
+        except Exception as e:
+            print(f"❌ SMTP connectivity test failed: {str(e)}")
+            print("   This may be due to Railway network restrictions.")
     
     # Start the server
     print("🚀 Starting Django development server...")
