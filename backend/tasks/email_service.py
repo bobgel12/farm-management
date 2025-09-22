@@ -255,11 +255,21 @@ class TaskEmailService:
             api_key = os.getenv('EMAIL_HOST_PASSWORD')  # SendGrid API key
             from_email = settings.DEFAULT_FROM_EMAIL
             
+            # Validate API key
+            if not api_key or not api_key.startswith('SG.'):
+                logger.error("Invalid SendGrid API key format")
+                return False
+            
             url = "https://api.sendgrid.com/v3/mail/send"
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
+            
+            # Build content array
+            content = [{"type": "text/plain", "value": text_content}]
+            if html_content:
+                content.append({"type": "text/html", "value": html_content})
             
             data = {
                 "personalizations": [{
@@ -267,20 +277,19 @@ class TaskEmailService:
                 }],
                 "from": {"email": from_email},
                 "subject": subject,
-                "content": [
-                    {
-                        "type": "text/plain",
-                        "value": text_content
-                    },
-                    {
-                        "type": "text/html",
-                        "value": html_content
-                    }
-                ]
+                "content": content
             }
             
+            logger.info(f"Sending SendGrid API request to {len(recipients)} recipients")
+            logger.info(f"From: {from_email}, Subject: {subject}")
+            
             response = requests.post(url, headers=headers, json=data, timeout=10)
-            response.raise_for_status()
+            
+            # Log response details for debugging
+            logger.info(f"SendGrid API response: {response.status_code}")
+            if response.status_code != 202:
+                logger.error(f"SendGrid API error: {response.text}")
+                return False
             
             logger.info(f"SendGrid API email sent successfully to {recipients}")
             return True
