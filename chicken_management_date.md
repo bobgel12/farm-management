@@ -403,20 +403,20 @@ ADMIN_PASSWORD=admin123
 ADMIN_EMAIL=admin@example.com
 
 # Frontend (.env)
-REACT_APP_API_URL=http://localhost:8000/api
+REACT_APP_API_URL=http://localhost:8002/api
 ```
 
 ### Docker Services
-- **frontend**: React app on port 3000
-- **backend**: Django API on port 8000
+- **frontend**: React app on port 3002
+- **backend**: Django API on port 8002
 - **db**: PostgreSQL on port 5433
 
 ### CORS & CSRF Settings
 ```python
 # Django settings
-CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+CORS_ALLOWED_ORIGINS = ["http://localhost:3002", "http://127.0.0.1:3002"]
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+CSRF_TRUSTED_ORIGINS = ["http://localhost:3002", "http://127.0.0.1:3002"]
 ```
 
 ## Troubleshooting
