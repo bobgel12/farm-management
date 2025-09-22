@@ -248,45 +248,51 @@ class TaskEmailService:
     
     @staticmethod
     def _send_via_sendgrid_api(recipients, subject, text_content, html_content):
-        """Send email via SendGrid REST API"""
+        """Send email via SendGrid Python Library"""
         try:
-            import requests
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail
             
             api_key = os.getenv('EMAIL_HOST_PASSWORD')  # SendGrid API key
             from_email = settings.DEFAULT_FROM_EMAIL
             
-            url = "https://api.sendgrid.com/v3/mail/send"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
+            # Validate API key
+            if not api_key or not api_key.startswith('SG.'):
+                logger.error("Invalid SendGrid API key format")
+                return False
             
-            data = {
-                "personalizations": [{
-                    "to": [{"email": email} for email in recipients]
-                }],
-                "from": {"email": from_email},
-                "subject": subject,
-                "content": [
-                    {
-                        "type": "text/plain",
-                        "value": text_content
-                    },
-                    {
-                        "type": "text/html",
-                        "value": html_content
-                    }
-                ]
-            }
+            logger.info(f"Sending SendGrid email to {len(recipients)} recipients")
+            logger.info(f"From: {from_email}, Subject: {subject}")
             
-            response = requests.post(url, headers=headers, json=data, timeout=10)
-            response.raise_for_status()
+            # Create SendGrid client
+            sg = SendGridAPIClient(api_key=api_key)
             
-            logger.info(f"SendGrid API email sent successfully to {recipients}")
-            return True
+            # Create Mail object
+            message = Mail(
+                from_email=from_email,
+                to_emails=recipients,
+                subject=subject,
+                html_content=html_content if html_content else None,
+                plain_text_content=text_content
+            )
+            
+            # Send email
+            response = sg.send(message)
+            
+            # Log response details for debugging
+            logger.info(f"SendGrid response status: {response.status_code}")
+            logger.info(f"SendGrid response headers: {response.headers}")
+            
+            if response.status_code in [200, 202]:
+                logger.info(f"SendGrid email sent successfully to {recipients}")
+                return True
+            else:
+                logger.error(f"SendGrid API error: Status {response.status_code}")
+                logger.error(f"SendGrid response body: {response.body}")
+                return False
             
         except Exception as e:
-            logger.error(f"SendGrid API email failed: {str(e)}")
+            logger.error(f"SendGrid email failed: {str(e)}")
             return False
     
     @staticmethod
