@@ -71,7 +71,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get('/api/programs/');
+      const response = await api.get('/programs/');
       setPrograms(Array.isArray(response.data) ? response.data : response.data.results || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch programs');
@@ -84,7 +84,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const createProgram = useCallback(async (programData: Partial<Program>): Promise<boolean> => {
     try {
       setError(null);
-      const response = await api.post('/api/programs/', programData);
+      const response = await api.post('/programs/', programData);
       setPrograms(prev => [...prev, response.data]);
       return true;
     } catch (err: any) {
@@ -97,7 +97,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const updateProgram = useCallback(async (id: number, programData: Partial<Program>): Promise<boolean> => {
     try {
       setError(null);
-      const response = await api.put(`/api/programs/${id}/`, programData);
+      const response = await api.put(`/programs/${id}/`, programData);
       setPrograms(prev => prev.map(program => 
         program.id === id ? response.data : program
       ));
@@ -112,7 +112,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const deleteProgram = useCallback(async (id: number): Promise<boolean> => {
     try {
       setError(null);
-      await api.delete(`/api/programs/${id}/`);
+      await api.delete(`/programs/${id}/`);
       setPrograms(prev => prev.filter(program => program.id !== id));
       return true;
     } catch (err: any) {
@@ -125,7 +125,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const copyProgram = useCallback(async (id: number, newName?: string): Promise<boolean> => {
     try {
       setError(null);
-      const response = await api.post(`/api/programs/${id}/copy/`, { name: newName });
+      const response = await api.post(`/programs/${id}/copy/`, { name: newName });
       setPrograms(prev => [...prev, response.data]);
       return true;
     } catch (err: any) {
@@ -138,7 +138,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const getProgramTasks = useCallback(async (programId: number): Promise<ProgramTask[]> => {
     try {
       setError(null);
-      const response = await api.get(`/api/programs/${programId}/tasks/`);
+      const response = await api.get(`/programs/${programId}/tasks/`);
       return Array.isArray(response.data) ? response.data : response.data.results || [];
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch program tasks');
@@ -150,7 +150,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const createProgramTask = useCallback(async (programId: number, taskData: Partial<ProgramTask>): Promise<boolean> => {
     try {
       setError(null);
-      await api.post('/api/program-tasks/', { ...taskData, program_id: programId });
+      await api.post('/program-tasks/', { ...taskData, program_id: programId });
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create program task');
@@ -162,7 +162,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const updateProgramTask = useCallback(async (id: number, taskData: Partial<ProgramTask>): Promise<boolean> => {
     try {
       setError(null);
-      await api.put(`/api/program-tasks/${id}/`, taskData);
+      await api.put(`/program-tasks/${id}/`, taskData);
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update program task');
@@ -174,7 +174,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const deleteProgramTask = useCallback(async (id: number): Promise<boolean> => {
     try {
       setError(null);
-      await api.delete(`/api/program-tasks/${id}/`);
+      await api.delete(`/program-tasks/${id}/`);
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete program task');
@@ -186,7 +186,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
   const getDefaultProgram = useCallback(async (): Promise<Program | null> => {
     try {
       setError(null);
-      const response = await api.get('/api/programs/default/');
+      const response = await api.get('/programs/default/');
       return response.data;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch default program');
