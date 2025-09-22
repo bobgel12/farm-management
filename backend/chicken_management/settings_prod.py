@@ -99,6 +99,15 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@chickenmanagement.com')
 
+# Email debugging for production
+print(f"📧 Email configuration - Host: {EMAIL_HOST}")
+print(f"📧 Email configuration - Port: {EMAIL_PORT}")
+print(f"📧 Email configuration - User: {EMAIL_HOST_USER}")
+print(f"📧 Email configuration - Password: {'*' * len(EMAIL_HOST_PASSWORD) if EMAIL_HOST_PASSWORD else 'Not set'}")
+print(f"📧 Email configuration - From: {DEFAULT_FROM_EMAIL}")
+print(f"📧 Email configuration - Backend: {EMAIL_BACKEND}")
+print(f"📧 Email configuration - TLS: {EMAIL_USE_TLS}")
+
 # Admin settings
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
