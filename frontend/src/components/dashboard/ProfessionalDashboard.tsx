@@ -295,8 +295,8 @@ const ProfessionalDashboard: React.FC = () => {
                   <Button 
                     variant="outlined" 
                     startIcon={<FarmIcon />}
+                    onClick={() => navigate('/farms')}
                     sx={{ mt: 2 }}
-                    href="/farms"
                   >
                     Add Farm
                   </Button>
@@ -351,7 +351,7 @@ const ProfessionalDashboard: React.FC = () => {
                 <Typography variant="h6" fontWeight={600}>
                   Recent Activities
                 </Typography>
-                <Button size="small" color="primary">
+                <Button size="small" color="primary" onClick={() => navigate('/activities')}>
                   View All
                 </Button>
               </Box>
@@ -392,6 +392,7 @@ const ProfessionalDashboard: React.FC = () => {
                     variant="outlined"
                     fullWidth
                     startIcon={<FarmIcon />}
+                    onClick={() => navigate('/farms')}
                     sx={{ py: 2, textTransform: 'none' }}
                   >
                     Add New Farm
@@ -402,6 +403,7 @@ const ProfessionalDashboard: React.FC = () => {
                     variant="outlined"
                     fullWidth
                     startIcon={<ProgramIcon />}
+                    onClick={() => navigate('/programs')}
                     sx={{ py: 2, textTransform: 'none' }}
                   >
                     Create Program
@@ -412,6 +414,7 @@ const ProfessionalDashboard: React.FC = () => {
                     variant="outlined"
                     fullWidth
                     startIcon={<WorkerIcon />}
+                    onClick={() => navigate('/workers')}
                     sx={{ py: 2, textTransform: 'none' }}
                   >
                     Add Worker
@@ -422,6 +425,7 @@ const ProfessionalDashboard: React.FC = () => {
                     variant="outlined"
                     fullWidth
                     startIcon={<EmailIcon />}
+                    onClick={() => navigate('/email')}
                     sx={{ py: 2, textTransform: 'none' }}
                   >
                     Send Email

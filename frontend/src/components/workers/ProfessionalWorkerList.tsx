@@ -63,6 +63,7 @@ const ProfessionalWorkerList: React.FC = () => {
     role: '',
     is_active: true,
     receive_daily_tasks: true,
+    farm_id: farmId ? parseInt(farmId) : undefined,
   });
   const { workers, fetchWorkers, createWorker, updateWorker, deleteWorker } = useWorker();
 
@@ -82,6 +83,9 @@ const ProfessionalWorkerList: React.FC = () => {
     fetchFarmDetails();
     if (farmId) {
       fetchWorkers(parseInt(farmId));
+    } else {
+      // Fetch all workers if no specific farm
+      fetchWorkers();
     }
   }, [farmId, fetchFarmDetails, fetchWorkers]);
 
@@ -95,6 +99,7 @@ const ProfessionalWorkerList: React.FC = () => {
         role: worker.role,
         is_active: worker.is_active,
         receive_daily_tasks: worker.receive_daily_tasks,
+        farm_id: farmId ? parseInt(farmId) : undefined,
       });
     } else {
       setEditingWorker(null);
@@ -105,6 +110,7 @@ const ProfessionalWorkerList: React.FC = () => {
         role: '',
         is_active: true,
         receive_daily_tasks: true,
+        farm_id: farmId ? parseInt(farmId) : undefined,
       });
     }
     setWorkerDialogOpen(true);
@@ -120,6 +126,7 @@ const ProfessionalWorkerList: React.FC = () => {
       role: '',
       is_active: true,
       receive_daily_tasks: true,
+      farm_id: farmId ? parseInt(farmId) : undefined,
     });
   };
 
@@ -285,11 +292,16 @@ const ProfessionalWorkerList: React.FC = () => {
       {/* Header */}
       <Box mb={4}>
         <Typography variant="h4" fontWeight={700} color="text.primary" gutterBottom>
-          Worker Management
+          {farm ? `Workers - ${farm.name}` : 'All Workers'}
         </Typography>
         {farm && (
           <Typography variant="body1" color="text.secondary">
-            {farm.name}
+            Manage workers for this farm
+          </Typography>
+        )}
+        {!farm && (
+          <Typography variant="body1" color="text.secondary">
+            Manage workers across all farms
           </Typography>
         )}
       </Box>

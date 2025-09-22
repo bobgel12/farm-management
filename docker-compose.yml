@@ -30,7 +30,7 @@ services:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
-      - "8000:8000"
+      - "8002:8000"
     environment:
       - DEBUG=True
       - DATABASE_URL=postgresql://postgres:password@db:5432/chicken_management
@@ -63,9 +63,9 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - "3002:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_API_URL=http://localhost:8002/api
       - CHOKIDAR_USEPOLLING=true
     depends_on:
       - backend
