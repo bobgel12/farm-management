@@ -28,7 +28,7 @@ function App() {
           <TaskProvider>
             <WorkerProvider>
               <ProgramProvider>
-                <Router>
+                <Router basename="/">
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/" element={
