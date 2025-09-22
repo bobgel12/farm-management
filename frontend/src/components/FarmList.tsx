@@ -40,7 +40,7 @@ const FarmList: React.FC = () => {
 
   useEffect(() => {
     fetchFarms();
-  }, []);
+  }, [fetchFarms]);
 
   const handleOpenDialog = (farm?: any) => {
     if (farm) {

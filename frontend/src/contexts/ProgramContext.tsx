@@ -27,6 +27,7 @@ export interface Program {
   is_active: boolean;
   is_default: boolean;
   total_tasks: number;
+  farm_count?: number;
   tasks?: ProgramTask[];
   created_at: string;
   updated_at: string;

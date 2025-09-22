@@ -57,10 +57,18 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     try {
       const url = houseId ? `/houses/${houseId}/tasks/` : '/tasks/';
       const response = await api.get(url);
-      setTasks(response.data);
+      
+      // Ensure response.data is an array
+      if (Array.isArray(response.data)) {
+        setTasks(response.data);
+      } else {
+        console.warn('Tasks API returned non-array data:', response.data);
+        setTasks([]);
+      }
     } catch (err) {
       setError('Failed to fetch tasks');
       console.error('Error fetching tasks:', err);
+      setTasks([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -71,10 +79,18 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     setError(null);
     try {
       const response = await api.get(`/houses/${houseId}/tasks/today/`);
-      setTodayTasks(response.data);
+      
+      // Ensure response.data is an array
+      if (Array.isArray(response.data)) {
+        setTodayTasks(response.data);
+      } else {
+        console.warn('Today tasks API returned non-array data:', response.data);
+        setTodayTasks([]);
+      }
     } catch (err) {
       setError('Failed to fetch today\'s tasks');
       console.error('Error fetching today\'s tasks:', err);
+      setTodayTasks([]);
     } finally {
       setLoading(false);
     }
@@ -85,10 +101,18 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     setError(null);
     try {
       const response = await api.get(`/houses/${houseId}/tasks/upcoming/?days=${days}`);
-      setUpcomingTasks(response.data);
+      
+      // Ensure response.data is an array
+      if (Array.isArray(response.data)) {
+        setUpcomingTasks(response.data);
+      } else {
+        console.warn('Upcoming tasks API returned non-array data:', response.data);
+        setUpcomingTasks([]);
+      }
     } catch (err) {
       setError('Failed to fetch upcoming tasks');
       console.error('Error fetching upcoming tasks:', err);
+      setUpcomingTasks([]);
     } finally {
       setLoading(false);
     }
