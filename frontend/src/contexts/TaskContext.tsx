@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Task {
@@ -51,30 +51,46 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTasks = async (houseId?: number) => {
+  const fetchTasks = useCallback(async (houseId?: number) => {
     setLoading(true);
     setError(null);
     try {
       const url = houseId ? `/houses/${houseId}/tasks/` : '/tasks/';
       const response = await api.get(url);
-      setTasks(response.data);
+      
+      // Ensure response.data is an array
+      if (Array.isArray(response.data)) {
+        setTasks(response.data);
+      } else {
+        console.warn('Tasks API returned non-array data:', response.data);
+        setTasks([]);
+      }
     } catch (err) {
       setError('Failed to fetch tasks');
       console.error('Error fetching tasks:', err);
+      setTasks([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchTodayTasks = async (houseId: number) => {
     setLoading(true);
     setError(null);
     try {
       const response = await api.get(`/houses/${houseId}/tasks/today/`);
-      setTodayTasks(response.data);
+      
+      // Ensure response.data is an array
+      if (Array.isArray(response.data)) {
+        setTodayTasks(response.data);
+      } else {
+        console.warn('Today tasks API returned non-array data:', response.data);
+        setTodayTasks([]);
+      }
     } catch (err) {
       setError('Failed to fetch today\'s tasks');
       console.error('Error fetching today\'s tasks:', err);
+      setTodayTasks([]);
     } finally {
       setLoading(false);
     }
@@ -85,10 +101,18 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     setError(null);
     try {
       const response = await api.get(`/houses/${houseId}/tasks/upcoming/?days=${days}`);
-      setUpcomingTasks(response.data);
+      
+      // Ensure response.data is an array
+      if (Array.isArray(response.data)) {
+        setUpcomingTasks(response.data);
+      } else {
+        console.warn('Upcoming tasks API returned non-array data:', response.data);
+        setUpcomingTasks([]);
+      }
     } catch (err) {
       setError('Failed to fetch upcoming tasks');
       console.error('Error fetching upcoming tasks:', err);
+      setUpcomingTasks([]);
     } finally {
       setLoading(false);
     }
@@ -117,7 +141,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     }
   };
 
-  const generateTasks = async (houseId: number): Promise<boolean> => {
+  const generateTasks = useCallback(async (houseId: number): Promise<boolean> => {
     try {
       await api.post(`/houses/${houseId}/tasks/generate/`);
       // Refresh tasks after generation
@@ -128,9 +152,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       console.error('Error generating tasks:', err);
       return false;
     }
-  };
+  }, [fetchTasks]);
 
-  const value = {
+  const value = useMemo(() => ({
     tasks,
     todayTasks,
     upcomingTasks,
@@ -141,7 +165,18 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     fetchUpcomingTasks,
     completeTask,
     generateTasks,
-  };
+  }), [
+    tasks,
+    todayTasks,
+    upcomingTasks,
+    loading,
+    error,
+    fetchTasks,
+    fetchTodayTasks,
+    fetchUpcomingTasks,
+    completeTask,
+    generateTasks,
+  ]);
 
   return (
     <TaskContext.Provider value={value}>

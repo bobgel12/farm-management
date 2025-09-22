@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Farm {
@@ -101,7 +101,7 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFarms = async () => {
+  const fetchFarms = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -116,9 +116,9 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchHouses = async (farmId?: number) => {
+  const fetchHouses = useCallback(async (farmId?: number) => {
     setLoading(true);
     setError(null);
     try {
@@ -134,7 +134,7 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchFarmTaskSummary = async (farmId: number) => {
     setLoading(true);
@@ -240,7 +240,7 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     }
   };
 
-  const value = {
+  const value = useMemo(() => ({
     farms,
     houses,
     farmTaskSummary,
@@ -256,7 +256,23 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     updateHouse,
     deleteFarm,
     deleteHouse,
-  };
+  }), [
+    farms,
+    houses,
+    farmTaskSummary,
+    loading,
+    error,
+    fetchFarms,
+    fetchHouses,
+    fetchFarmTaskSummary,
+    completeTask,
+    createFarm,
+    createHouse,
+    updateFarm,
+    updateHouse,
+    deleteFarm,
+    deleteHouse,
+  ]);
 
   return (
     <FarmContext.Provider value={value}>

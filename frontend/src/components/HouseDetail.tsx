@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Box,
@@ -23,25 +23,25 @@ const HouseDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { todayTasks, upcomingTasks, fetchTodayTasks, fetchUpcomingTasks, generateTasks } = useTask();
 
+  const fetchHouseDetails = useCallback(async () => {
+    try {
+      const response = await api.get(`/houses/${houseId}/`);
+      setHouse(response.data);
+    } catch (err) {
+      setError('Failed to fetch house details');
+      // Error fetching house details
+    } finally {
+      setLoading(false);
+    }
+  }, [houseId]);
+
   useEffect(() => {
     if (houseId) {
       fetchHouseDetails();
       fetchTodayTasks(parseInt(houseId));
       fetchUpcomingTasks(parseInt(houseId), 7);
     }
-  }, [houseId]);
-
-  const fetchHouseDetails = async () => {
-    try {
-      const response = await api.get(`/houses/${houseId}/`);
-      setHouse(response.data);
-    } catch (err) {
-      setError('Failed to fetch house details');
-      console.error('Error fetching house details:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [houseId, fetchHouseDetails, fetchTodayTasks, fetchUpcomingTasks]);
 
   const handleGenerateTasks = async () => {
     if (houseId) {
