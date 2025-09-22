@@ -1,0 +1,8 @@
+backend/
+docker-compose.yml
+Dockerfile
+Makefile
+*.md
+.env
+.git
+node_modules
