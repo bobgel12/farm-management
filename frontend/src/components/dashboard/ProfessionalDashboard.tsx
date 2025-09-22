@@ -222,6 +222,95 @@ const ProfessionalDashboard: React.FC = () => {
         </Grid>
       </Grid>
 
+      {/* Recent Farms Section */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <Typography variant="h6" fontWeight={600}>
+              Recent Farms
+            </Typography>
+            <Button size="small" color="primary" href="/farms">
+              View All
+            </Button>
+          </Box>
+          <Grid container spacing={2}>
+            {farms?.slice(0, 4).map((farm) => (
+              <Grid item xs={12} sm={6} md={3} key={farm.id}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    height: '100%',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      boxShadow: 2,
+                      transform: 'translateY(-2px)',
+                    }
+                  }}
+                  onClick={() => window.location.href = `/farms/${farm.id}`}
+                >
+                  <CardContent sx={{ p: 2 }}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                      <Avatar 
+                        sx={{ 
+                          bgcolor: farm.is_active ? 'success.main' : 'grey.400',
+                          width: 32, 
+                          height: 32,
+                          mr: 1
+                        }}
+                      >
+                        <FarmIcon fontSize="small" />
+                      </Avatar>
+                      <Box flex={1}>
+                        <Typography variant="subtitle2" fontWeight={600} noWrap>
+                          {farm.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {farm.is_active ? 'Active' : 'Inactive'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="caption" color="text.secondary">
+                        {farm.total_houses || 0} houses
+                      </Typography>
+                      <Chip 
+                        size="small" 
+                        label={farm.is_active ? 'Active' : 'Inactive'}
+                        color={farm.is_active ? 'success' : 'default'}
+                        variant="outlined"
+                      />
+                    </Box>
+                    {farm.contact_person && (
+                      <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                        Contact: {farm.contact_person}
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+            {(!farms || farms.length === 0) && (
+              <Grid item xs={12}>
+                <Box textAlign="center" py={4}>
+                  <Typography variant="body2" color="text.secondary">
+                    No farms found. Create your first farm to get started.
+                  </Typography>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<FarmIcon />}
+                    sx={{ mt: 2 }}
+                    href="/farms"
+                  >
+                    Add Farm
+                  </Button>
+                </Box>
+              </Grid>
+            )}
+          </Grid>
+        </CardContent>
+      </Card>
+
       <Grid container spacing={3}>
         {/* Task Progress */}
         <Grid item xs={12} md={6}>

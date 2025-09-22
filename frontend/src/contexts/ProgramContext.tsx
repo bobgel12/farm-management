@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 export interface ProgramTask {
@@ -230,7 +230,7 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
     }
   }, []);
 
-  const value: ProgramContextType = {
+  const value: ProgramContextType = useMemo(() => ({
     programs,
     loading,
     error,
@@ -246,7 +246,23 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
     getDefaultProgram,
     handleProgramChange,
     getPendingChanges,
-  };
+  }), [
+    programs,
+    loading,
+    error,
+    fetchPrograms,
+    createProgram,
+    updateProgram,
+    deleteProgram,
+    copyProgram,
+    getProgramTasks,
+    createProgramTask,
+    updateProgramTask,
+    deleteProgramTask,
+    getDefaultProgram,
+    handleProgramChange,
+    getPendingChanges,
+  ]);
 
   return (
     <ProgramContext.Provider value={value}>

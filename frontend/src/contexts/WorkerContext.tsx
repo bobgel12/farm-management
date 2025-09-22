@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Worker {
@@ -145,7 +145,7 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const value: WorkerContextType = {
+  const value: WorkerContextType = useMemo(() => ({
     workers,
     loading,
     error,
@@ -154,7 +154,16 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
     updateWorker,
     deleteWorker,
     getFarmWorkers,
-  };
+  }), [
+    workers,
+    loading,
+    error,
+    fetchWorkers,
+    createWorker,
+    updateWorker,
+    deleteWorker,
+    getFarmWorkers,
+  ]);
 
   return (
     <WorkerContext.Provider value={value}>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Task {
@@ -51,7 +51,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTasks = async (houseId?: number) => {
+  const fetchTasks = useCallback(async (houseId?: number) => {
     setLoading(true);
     setError(null);
     try {
@@ -72,7 +72,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchTodayTasks = async (houseId: number) => {
     setLoading(true);
@@ -141,7 +141,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     }
   };
 
-  const generateTasks = async (houseId: number): Promise<boolean> => {
+  const generateTasks = useCallback(async (houseId: number): Promise<boolean> => {
     try {
       await api.post(`/houses/${houseId}/tasks/generate/`);
       // Refresh tasks after generation
@@ -152,9 +152,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       console.error('Error generating tasks:', err);
       return false;
     }
-  };
+  }, [fetchTasks]);
 
-  const value = {
+  const value = useMemo(() => ({
     tasks,
     todayTasks,
     upcomingTasks,
@@ -165,7 +165,18 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     fetchUpcomingTasks,
     completeTask,
     generateTasks,
-  };
+  }), [
+    tasks,
+    todayTasks,
+    upcomingTasks,
+    loading,
+    error,
+    fetchTasks,
+    fetchTodayTasks,
+    fetchUpcomingTasks,
+    completeTask,
+    generateTasks,
+  ]);
 
   return (
     <TaskContext.Provider value={value}>
