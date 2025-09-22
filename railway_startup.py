@@ -62,17 +62,11 @@ def setup_database():
         # Ensure default program exists
         logger.info("Ensuring default program exists...")
         try:
-            execute_from_command_line(['manage.py', 'debug_default_program'])
+            execute_from_command_line(['manage.py', 'ensure_default_program'])
             logger.info("✅ Default program ensured")
         except Exception as e:
             logger.error(f"❌ Default program creation failed: {str(e)}")
-            # Try the original command as fallback
-            try:
-                execute_from_command_line(['manage.py', 'ensure_default_program'])
-                logger.info("✅ Default program ensured (fallback)")
-            except Exception as e2:
-                logger.error(f"❌ Fallback default program creation also failed: {str(e2)}")
-                # Continue anyway - this is not critical for startup
+            # Continue anyway - this is not critical for startup
         
         return True
     except Exception as e:
