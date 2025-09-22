@@ -9,7 +9,7 @@ const getApiUrl = () => {
   // Production detection
   if (process.env.NODE_ENV === 'production') {
     // This will be set by Vercel environment variable
-    // console.warn('REACT_APP_API_URL not set in production. Please configure it in Vercel.');
+    console.warn('REACT_APP_API_URL not set in production. Please configure it in Vercel.');
     return 'http://localhost:8000/api'; // Fallback
   }
   
@@ -56,6 +56,10 @@ api.interceptors.response.use(
       // Clear token and redirect to login
       localStorage.removeItem('authToken');
       window.location.href = '/login';
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      // Handle network errors or API unavailable
+      console.error('API unavailable:', error.message);
+      // You could show a toast notification here
     }
     return Promise.reject(error);
   }
