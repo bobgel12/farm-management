@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "Chicken House Management System",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "cd frontend && npm ci && npm run build",
     "dev": "cd frontend && npm install && npm start",
-    "start": "cd frontend && npm start"
+    "start": "cd frontend && npm start",
+    "vercel-build": "cd frontend && npm ci && npm run build"
   },
   "engines": {
     "node": ">=18.0.0"
