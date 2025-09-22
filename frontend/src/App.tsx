@@ -6,12 +6,14 @@ import { AuthProvider } from './contexts/AuthContext';
 import { FarmProvider } from './contexts/FarmContext';
 import { TaskProvider } from './contexts/TaskContext';
 import { WorkerProvider } from './contexts/WorkerContext';
+import { ProgramProvider } from './contexts/ProgramContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import FarmList from './components/FarmList';
 import FarmDetail from './components/FarmDetail';
 import HouseDetail from './components/HouseDetail';
 import TaskList from './components/TaskList';
+import ProgramManager from './components/ProgramManager';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -137,7 +139,8 @@ function App() {
         <FarmProvider>
           <TaskProvider>
             <WorkerProvider>
-              <Router>
+              <ProgramProvider>
+                <Router>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/" element={
@@ -175,9 +178,17 @@ function App() {
                     </Layout>
                   </ProtectedRoute>
                 } />
+                <Route path="/programs" element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ProgramManager />
+                    </Layout>
+                  </ProtectedRoute>
+                } />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-              </Router>
+                </Router>
+              </ProgramProvider>
             </WorkerProvider>
           </TaskProvider>
         </FarmProvider>

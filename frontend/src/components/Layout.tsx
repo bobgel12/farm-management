@@ -24,6 +24,7 @@ import {
   Agriculture as FarmIcon,
   Home as HomeIcon,
   Assignment as TaskIcon,
+  Schedule as ProgramIcon,
   Logout as LogoutIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
@@ -50,6 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Farms', icon: <FarmIcon />, path: '/farms' },
+    { text: 'Programs', icon: <ProgramIcon />, path: '/programs' },
   ];
 
   const toggleDrawer = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
