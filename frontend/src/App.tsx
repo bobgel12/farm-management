@@ -15,6 +15,7 @@ import HouseDetail from './components/HouseDetail';
 import ProfessionalTaskList from './components/tasks/ProfessionalTaskList';
 import ProfessionalProgramManager from './components/programs/ProfessionalProgramManager';
 import ProfessionalWorkerList from './components/workers/ProfessionalWorkerList';
+import EmailManager from './components/EmailManager';
 import ProtectedRoute from './components/ProtectedRoute';
 import ProfessionalLayout from './components/layout/ProfessionalLayout';
 import theme from './theme';
@@ -77,6 +78,20 @@ function App() {
                   <ProtectedRoute>
                     <ProfessionalLayout>
                       <ProfessionalProgramManager />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/workers" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <ProfessionalWorkerList />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/email" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <EmailManager />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />

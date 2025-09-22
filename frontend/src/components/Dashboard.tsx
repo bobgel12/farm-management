@@ -470,7 +470,7 @@ const Dashboard: React.FC = () => {
                 <Button
                   variant="outlined"
                   startIcon={<HomeIcon />}
-                  onClick={() => navigate('/farms')}
+                  onClick={() => navigate('/houses')}
                   sx={{ 
                     minHeight: { xs: 48, sm: 36 },
                     fontSize: { xs: '0.875rem', sm: '0.875rem' },
@@ -482,7 +482,7 @@ const Dashboard: React.FC = () => {
                 <Button
                   variant="outlined"
                   startIcon={<TaskIcon />}
-                  onClick={() => navigate('/farms')}
+                  onClick={() => navigate('/tasks')}
                   sx={{ 
                     minHeight: { xs: 48, sm: 36 },
                     fontSize: { xs: '0.875rem', sm: '0.875rem' },
