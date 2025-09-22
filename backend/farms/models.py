@@ -129,3 +129,42 @@ class ProgramTask(models.Model):
     @property
     def is_setup_task(self):
         return self.day == -1
+
+
+class ProgramChangeLog(models.Model):
+    """Track changes to programs and their impact on farms"""
+    CHANGE_TYPES = [
+        ('task_added', 'Task Added'),
+        ('task_modified', 'Task Modified'),
+        ('task_deleted', 'Task Deleted'),
+        ('program_modified', 'Program Modified'),
+    ]
+    
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name='change_logs')
+    change_type = models.CharField(max_length=20, choices=CHANGE_TYPES)
+    affected_farms = models.ManyToManyField(Farm, related_name='program_changes', blank=True)
+    change_description = models.TextField()
+    old_data = models.JSONField(null=True, blank=True, help_text="Previous state of the changed item")
+    new_data = models.JSONField(null=True, blank=True, help_text="New state of the changed item")
+    user_choice = models.CharField(
+        max_length=20,
+        choices=[
+            ('retroactive', 'Apply to Current Flock'),
+            ('next_flock', 'Apply to Next Flock'),
+        ],
+        null=True,
+        blank=True,
+        help_text="User's choice for handling existing farm tasks"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.program.name} - {self.get_change_type_display()} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+    
+    @property
+    def is_processed(self):
+        return self.processed_at is not None

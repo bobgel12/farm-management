@@ -24,7 +24,12 @@ urlpatterns = [
     path('program-tasks/', views.ProgramTaskListCreateView.as_view(), name='program-task-list-create'),
     path('program-tasks/<int:pk>/', views.ProgramTaskDetailView.as_view(), name='program-task-detail'),
     
-    # Farm with Program URLs (alternative endpoints)
-    path('farms-with-programs/', views.FarmWithProgramListCreateView.as_view(), name='farm-with-program-list-create'),
-    path('farms-with-programs/<int:pk>/', views.FarmWithProgramDetailView.as_view(), name='farm-with-program-detail'),
+        # Farm with Program URLs (alternative endpoints)
+        path('farms-with-programs/', views.FarmWithProgramListCreateView.as_view(), name='farm-with-program-list-create'),
+        path('farms-with-programs/<int:pk>/', views.FarmWithProgramDetailView.as_view(), name='farm-with-program-detail'),
+        
+        # Program Change Management URLs
+        path('program-changes/pending/', views.pending_program_changes, name='pending-program-changes'),
+        path('program-changes/<int:change_log_id>/handle/', views.handle_program_change, name='handle-program-change'),
+        path('programs/<int:program_id>/impact/', views.program_change_impact, name='program-change-impact'),
 ]

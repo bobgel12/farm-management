@@ -51,6 +51,7 @@ import {
   Repeat as RepeatIcon,
 } from '@mui/icons-material';
 import { useProgram, Program, ProgramTask } from '../contexts/ProgramContext';
+import ProgramChangeDialog from './ProgramChangeDialog';
 
 const ProgramManager: React.FC = () => {
   const {
@@ -62,6 +63,7 @@ const ProgramManager: React.FC = () => {
     updateProgram,
     deleteProgram,
     copyProgram,
+    handleProgramChange,
     getProgramTasks,
     createProgramTask,
     updateProgramTask,
@@ -77,6 +79,9 @@ const ProgramManager: React.FC = () => {
   const [editingTask, setEditingTask] = useState<ProgramTask | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [expandedProgram, setExpandedProgram] = useState<number | false>(false);
+  const [changeDialogOpen, setChangeDialogOpen] = useState(false);
+  const [changeData, setChangeData] = useState<any>(null);
+  const [changeLoading, setChangeLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -207,6 +212,29 @@ const ProgramManager: React.FC = () => {
     return grouped;
   };
 
+  const handleChangeDialogClose = () => {
+    setChangeDialogOpen(false);
+    setChangeData(null);
+  };
+
+  const handleChangeChoice = async (choice: 'retroactive' | 'next_flock') => {
+    if (!changeData?.change_log_id) return;
+
+    setChangeLoading(true);
+    try {
+      const success = await handleProgramChange(changeData.change_log_id, choice);
+      if (success) {
+        handleChangeDialogClose();
+        // Refresh programs to show updated data
+        fetchPrograms();
+      }
+    } catch (error) {
+      // Error handling program change
+    } finally {
+      setChangeLoading(false);
+    }
+  };
+
   const handleOpenDialog = (program?: Program) => {
     if (program) {
       setEditingProgram(program);
@@ -243,13 +271,24 @@ const ProgramManager: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const success = editingProgram
-      ? await updateProgram(editingProgram.id, formData)
-      : await createProgram(formData);
-
-    if (success) {
-      handleCloseDialog();
-      fetchPrograms();
+    if (editingProgram) {
+      const result = await updateProgram(editingProgram.id, formData);
+      if (result.success) {
+        handleCloseDialog();
+        fetchPrograms();
+        
+        // Check if there are program changes that need user decision
+        if (result.changeData) {
+          setChangeData(result.changeData);
+          setChangeDialogOpen(true);
+        }
+      }
+    } else {
+      const success = await createProgram(formData);
+      if (success) {
+        handleCloseDialog();
+        fetchPrograms();
+      }
     }
   };
 
@@ -752,6 +791,15 @@ const ProgramManager: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Program Change Dialog */}
+      <ProgramChangeDialog
+        open={changeDialogOpen}
+        onClose={handleChangeDialogClose}
+        changeData={changeData || { change_detected: false }}
+        onHandleChange={handleChangeChoice}
+        loading={changeLoading}
+      />
     </Box>
   );
 };

@@ -38,7 +38,7 @@ interface ProgramContextType {
   error: string | null;
   fetchPrograms: () => Promise<void>;
   createProgram: (programData: Partial<Program>) => Promise<boolean>;
-  updateProgram: (id: number, programData: Partial<Program>) => Promise<boolean>;
+  updateProgram: (id: number, programData: Partial<Program>) => Promise<{ success: boolean; changeData?: any }>;
   deleteProgram: (id: number) => Promise<boolean>;
   copyProgram: (id: number, newName?: string) => Promise<boolean>;
   getProgramTasks: (programId: number) => Promise<ProgramTask[]>;
@@ -46,6 +46,8 @@ interface ProgramContextType {
   updateProgramTask: (id: number, taskData: Partial<ProgramTask>) => Promise<boolean>;
   deleteProgramTask: (id: number) => Promise<boolean>;
   getDefaultProgram: () => Promise<Program | null>;
+  handleProgramChange: (changeLogId: number, choice: 'retroactive' | 'next_flock') => Promise<boolean>;
+  getPendingChanges: () => Promise<any[]>;
 }
 
 const ProgramContext = createContext<ProgramContextType | undefined>(undefined);
@@ -94,18 +96,26 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
     }
   }, []);
 
-  const updateProgram = useCallback(async (id: number, programData: Partial<Program>): Promise<boolean> => {
+  const updateProgram = useCallback(async (id: number, programData: Partial<Program>): Promise<{ success: boolean; changeData?: any }> => {
     try {
       setError(null);
       const response = await api.put(`/programs/${id}/`, programData);
       setPrograms(prev => prev.map(program => 
         program.id === id ? response.data : program
       ));
-      return true;
+      
+      return {
+        success: true,
+        changeData: response.data.change_detected ? {
+          change_detected: response.data.change_detected,
+          change_log_id: response.data.change_log_id,
+          impact_analysis: response.data.impact_analysis
+        } : undefined
+      };
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update program');
       console.error('Error updating program:', err);
-      return false;
+      return { success: false };
     }
   }, []);
 
@@ -195,6 +205,30 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
     }
   }, []);
 
+  const handleProgramChange = useCallback(async (changeLogId: number, choice: 'retroactive' | 'next_flock'): Promise<boolean> => {
+    try {
+      setError(null);
+      const response = await api.post(`/program-changes/${changeLogId}/handle/`, { choice });
+      return response.data.processed || true;
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to handle program change');
+      console.error('Error handling program change:', err);
+      return false;
+    }
+  }, []);
+
+  const getPendingChanges = useCallback(async (): Promise<any[]> => {
+    try {
+      setError(null);
+      const response = await api.get('/program-changes/pending/');
+      return response.data;
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to fetch pending changes');
+      console.error('Error fetching pending changes:', err);
+      return [];
+    }
+  }, []);
+
   const value: ProgramContextType = {
     programs,
     loading,
@@ -209,6 +243,8 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
     updateProgramTask,
     deleteProgramTask,
     getDefaultProgram,
+    handleProgramChange,
+    getPendingChanges,
   };
 
   return (
