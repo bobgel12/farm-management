@@ -1,42 +1,14 @@
 {
-  "version": 2,
-  "buildCommand": "npm run vercel-build",
+  "buildCommand": "cd frontend && npm ci && npm run build",
   "outputDirectory": "frontend/build",
-  "builds": [
+  "rewrites": [
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "frontend/build"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      }
+      "source": "/static/(.*)",
+      "destination": "/static/$1"
     },
     {
-      "src": "/manifest.json",
-      "dest": "/manifest.json"
-    },
-    {
-      "src": "/asset-manifest.json",
-      "dest": "/asset-manifest.json"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/favicon.ico"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html",
-      "headers": {
-        "Cache-Control": "no-cache"
-      }
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
