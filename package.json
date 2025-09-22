@@ -1,0 +1,13 @@
+{
+  "name": "chicken-house-management",
+  "version": "1.0.0",
+  "description": "Chicken House Management System",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "cd frontend && npm install && npm start",
+    "start": "cd frontend && npm start"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
