@@ -18,11 +18,11 @@ interface WorkerContextType {
   workers: Worker[];
   loading: boolean;
   error: string | null;
-  fetchWorkers: (farmId?: number) => Promise<void>;
-  createWorker: (workerData: Partial<Worker>) => Promise<boolean>;
-  updateWorker: (id: number, workerData: Partial<Worker>) => Promise<boolean>;
-  deleteWorker: (id: number) => Promise<boolean>;
-  getFarmWorkers: (farmId: number) => Promise<Worker[]>;
+  fetchWorkers: (_farmId?: number) => Promise<void>;
+  createWorker: (_workerData: Partial<Worker>) => Promise<boolean>;
+  updateWorker: (_id: number, _workerData: Partial<Worker>) => Promise<boolean>;
+  deleteWorker: (_id: number) => Promise<boolean>;
+  getFarmWorkers: (_farmId: number) => Promise<Worker[]>;
 }
 
 const WorkerContext = createContext<WorkerContextType | undefined>(undefined);
@@ -66,7 +66,6 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
       setWorkers(workersData);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch workers');
-      console.error('Error fetching workers:', err);
       setWorkers([]); // Set empty array on error
     } finally {
       setLoading(false);
@@ -82,7 +81,6 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create worker');
-      console.error('Error creating worker:', err);
       return false;
     } finally {
       setLoading(false);
@@ -100,7 +98,6 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update worker');
-      console.error('Error updating worker:', err);
       return false;
     } finally {
       setLoading(false);
@@ -116,7 +113,6 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete worker');
-      console.error('Error deleting worker:', err);
       return false;
     } finally {
       setLoading(false);
@@ -140,7 +136,6 @@ export const WorkerProvider: React.FC<WorkerProviderProps> = ({ children }) => {
       
       return [];
     } catch (err: any) {
-      console.error('Error fetching farm workers:', err);
       return [];
     }
   }, []);

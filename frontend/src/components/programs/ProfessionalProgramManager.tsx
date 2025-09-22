@@ -62,10 +62,10 @@ import ProgramChangeDialog from '../ProgramChangeDialog';
 
 interface ProgramCardProps {
   program: Program;
-  onEdit: (program: Program) => void;
-  onDelete: (program: Program) => void;
-  onView: (program: Program) => void;
-  onCopy: (program: Program) => void;
+  onEdit: (_program: Program) => void;
+  onDelete: (_program: Program) => void;
+  onView: (_program: Program) => void;
+  onCopy: (_program: Program) => void;
 }
 
 const ProgramCard: React.FC<ProgramCardProps> = ({ program, onEdit, onDelete, onView, onCopy }) => {
@@ -77,16 +77,6 @@ const ProgramCard: React.FC<ProgramCardProps> = ({ program, onEdit, onDelete, on
 
   const handleMenuClose = () => {
     setAnchorEl(null);
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'critical': return 'error';
-      case 'high': return 'warning';
-      case 'medium': return 'info';
-      case 'low': return 'success';
-      default: return 'default';
-    }
   };
 
   return (

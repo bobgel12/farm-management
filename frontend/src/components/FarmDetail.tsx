@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -59,14 +59,14 @@ const FarmDetail: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [completionNotes, setCompletionNotes] = useState('');
 
-  const fetchFarmDetails = async () => {
+  const fetchFarmDetails = useCallback(async () => {
     try {
       const response = await api.get(`/farms/${farmId}/`);
       setFarm(response.data);
     } catch (error) {
       // Error fetching farm details
     }
-  };
+  }, [farmId]);
 
   useEffect(() => {
     if (farmId) {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Farm {
@@ -69,15 +69,15 @@ interface FarmContextType {
   loading: boolean;
   error: string | null;
   fetchFarms: () => Promise<void>;
-  fetchHouses: (farmId?: number) => Promise<void>;
-  fetchFarmTaskSummary: (farmId: number) => Promise<void>;
-  completeTask: (taskId: number, completedBy?: string, notes?: string) => Promise<boolean>;
-  createFarm: (farmData: Partial<Farm>) => Promise<Farm | null>;
-  createHouse: (houseData: Partial<House>) => Promise<House | null>;
-  updateFarm: (id: number, farmData: Partial<Farm>) => Promise<Farm | null>;
-  updateHouse: (id: number, houseData: Partial<House>) => Promise<House | null>;
-  deleteFarm: (id: number) => Promise<boolean>;
-  deleteHouse: (id: number) => Promise<boolean>;
+  fetchHouses: (_farmId?: number) => Promise<void>;
+  fetchFarmTaskSummary: (_farmId: number) => Promise<void>;
+  completeTask: (_taskId: number, _completedBy?: string, _notes?: string) => Promise<boolean>;
+  createFarm: (_farmData: Partial<Farm>) => Promise<Farm | null>;
+  createHouse: (_houseData: Partial<House>) => Promise<House | null>;
+  updateFarm: (_id: number, _farmData: Partial<Farm>) => Promise<Farm | null>;
+  updateHouse: (_id: number, _houseData: Partial<House>) => Promise<House | null>;
+  deleteFarm: (_id: number) => Promise<boolean>;
+  deleteHouse: (_id: number) => Promise<boolean>;
 }
 
 const FarmContext = createContext<FarmContextType | undefined>(undefined);
@@ -111,7 +111,6 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
       setFarms(Array.isArray(farmsData) ? farmsData : []);
     } catch (err) {
       setError('Failed to fetch farms');
-      console.error('Error fetching farms:', err);
       setFarms([]); // Ensure farms is always an array
     } finally {
       setLoading(false);
@@ -129,14 +128,13 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
       setHouses(Array.isArray(housesData) ? housesData : []);
     } catch (err) {
       setError('Failed to fetch houses');
-      console.error('Error fetching houses:', err);
       setHouses([]); // Ensure houses is always an array
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchFarmTaskSummary = async (farmId: number) => {
+  const fetchFarmTaskSummary = useCallback(async (farmId: number) => {
     setLoading(true);
     setError(null);
     try {
@@ -144,16 +142,15 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
       setFarmTaskSummary(response.data);
     } catch (err) {
       setError('Failed to fetch farm task summary');
-      console.error('Error fetching farm task summary:', err);
       setFarmTaskSummary(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const completeTask = async (taskId: number, completedBy?: string, notes?: string): Promise<boolean> => {
+  const completeTask = useCallback(async (taskId: number, completedBy?: string, notes?: string): Promise<boolean> => {
     try {
-      const response = await api.post(`/tasks/${taskId}/complete/`, {
+      await api.post(`/tasks/${taskId}/complete/`, {
         completed_by: completedBy || 'user',
         notes: notes || ''
       });
@@ -163,82 +160,75 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
       return true;
     } catch (err) {
       setError('Failed to complete task');
-      console.error('Error completing task:', err);
       return false;
     }
-  };
+  }, []);
 
-  const createFarm = async (farmData: Partial<Farm>): Promise<Farm | null> => {
+  const createFarm = useCallback(async (farmData: Partial<Farm>): Promise<Farm | null> => {
     try {
       const response = await api.post('/farms/', farmData);
       setFarms(prev => [...prev, response.data]);
       return response.data;
     } catch (err) {
       setError('Failed to create farm');
-      console.error('Error creating farm:', err);
       return null;
     }
-  };
+  }, []);
 
-  const createHouse = async (houseData: Partial<House>): Promise<House | null> => {
+  const createHouse = useCallback(async (houseData: Partial<House>): Promise<House | null> => {
     try {
       const response = await api.post('/houses/', houseData);
       setHouses(prev => [...prev, response.data]);
       return response.data;
     } catch (err) {
       setError('Failed to create house');
-      console.error('Error creating house:', err);
       return null;
     }
-  };
+  }, []);
 
-  const updateFarm = async (id: number, farmData: Partial<Farm>): Promise<Farm | null> => {
+  const updateFarm = useCallback(async (id: number, farmData: Partial<Farm>): Promise<Farm | null> => {
     try {
       const response = await api.put(`/farms/${id}/`, farmData);
       setFarms(prev => prev.map(farm => farm.id === id ? response.data : farm));
       return response.data;
     } catch (err) {
       setError('Failed to update farm');
-      console.error('Error updating farm:', err);
       return null;
     }
-  };
+  }, []);
 
-  const updateHouse = async (id: number, houseData: Partial<House>): Promise<House | null> => {
+  const updateHouse = useCallback(async (id: number, houseData: Partial<House>): Promise<House | null> => {
     try {
       const response = await api.put(`/houses/${id}/`, houseData);
       setHouses(prev => prev.map(house => house.id === id ? response.data : house));
       return response.data;
     } catch (err) {
       setError('Failed to update house');
-      console.error('Error updating house:', err);
       return null;
     }
-  };
+  }, []);
 
-  const deleteFarm = async (id: number): Promise<boolean> => {
+  const deleteFarm = useCallback(async (id: number): Promise<boolean> => {
     try {
       await api.delete(`/farms/${id}/`);
       setFarms(prev => prev.filter(farm => farm.id !== id));
       return true;
     } catch (err) {
       setError('Failed to delete farm');
-      console.error('Error deleting farm:', err);
       return false;
     }
-  };
+  }, []);
 
-  const deleteHouse = async (id: number): Promise<boolean> => {
+  const deleteHouse = useCallback(async (id: number): Promise<boolean> => {
     try {
       await api.delete(`/houses/${id}/`);
       setHouses(prev => prev.filter(house => house.id !== id));
       return true;
     } catch (err) {
       setError('Failed to delete house');
-      console.error('Error deleting house:', err);
       return false;
     }
-  };
+  }, []);
 
   const value = useMemo(() => ({
     farms,

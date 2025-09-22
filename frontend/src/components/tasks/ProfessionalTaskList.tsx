@@ -15,26 +15,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemSecondaryAction,
-  Divider,
-  Avatar,
-  IconButton,
-  Tooltip,
-  Badge,
   Paper,
-  Tabs,
-  Tab,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
 } from '@mui/material';
 import {
   Assignment as TaskIcon,
@@ -42,13 +27,7 @@ import {
   Schedule as ScheduleIcon,
   Person as PersonIcon,
   Notes as NotesIcon,
-  ExpandMore as ExpandMoreIcon,
-  FilterList as FilterIcon,
   Search as SearchIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Warning as WarningIcon,
   Info as InfoIcon,
   Today as TodayIcon,
   Upcoming as UpcomingIcon,
@@ -108,9 +87,6 @@ const ProfessionalTaskList: React.FC = () => {
     }
   }, [houseId, fetchHouseDetails, fetchTasks, fetchTodayTasks, fetchUpcomingTasks]);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
 
   const handleCompleteTask = (task: any) => {
     setSelectedTask(task);

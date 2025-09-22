@@ -51,7 +51,7 @@ interface ProgramChangeDialogProps {
       }>;
     };
   };
-  onHandleChange: (choice: 'retroactive' | 'next_flock') => Promise<void>;
+  onHandleChange: (_choice: 'retroactive' | 'next_flock') => Promise<void>;
   loading?: boolean;
 }
 

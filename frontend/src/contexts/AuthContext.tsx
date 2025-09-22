@@ -11,7 +11,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (_username: string, _password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   loading: boolean;
 }
@@ -48,7 +48,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
       localStorage.removeItem('authToken');
     } finally {
       setLoading(false);
@@ -65,7 +64,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       return false;
     } catch (error) {
-      console.error('Login failed:', error);
       return false;
     }
   };
@@ -74,7 +72,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await api.post('/auth/logout/');
     } catch (error) {
-      console.error('Logout failed:', error);
+      // Logout failed, but continue with cleanup
     } finally {
       localStorage.removeItem('authToken');
       setUser(null);

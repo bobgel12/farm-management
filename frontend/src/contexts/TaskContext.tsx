@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Task {
@@ -23,11 +23,11 @@ interface TaskContextType {
   upcomingTasks: Task[];
   loading: boolean;
   error: string | null;
-  fetchTasks: (houseId?: number) => Promise<void>;
-  fetchTodayTasks: (houseId: number) => Promise<void>;
-  fetchUpcomingTasks: (houseId: number, days?: number) => Promise<void>;
-  completeTask: (taskId: number, completedBy?: string, notes?: string) => Promise<boolean>;
-  generateTasks: (houseId: number) => Promise<boolean>;
+  fetchTasks: (_houseId?: number) => Promise<void>;
+  fetchTodayTasks: (_houseId: number) => Promise<void>;
+  fetchUpcomingTasks: (_houseId: number, _days?: number) => Promise<void>;
+  completeTask: (_taskId: number, _completedBy?: string, _notes?: string) => Promise<boolean>;
+  generateTasks: (_houseId: number) => Promise<boolean>;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -62,19 +62,17 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       if (Array.isArray(response.data)) {
         setTasks(response.data);
       } else {
-        console.warn('Tasks API returned non-array data:', response.data);
         setTasks([]);
       }
     } catch (err) {
       setError('Failed to fetch tasks');
-      console.error('Error fetching tasks:', err);
       setTasks([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchTodayTasks = async (houseId: number) => {
+  const fetchTodayTasks = useCallback(async (houseId: number) => {
     setLoading(true);
     setError(null);
     try {
@@ -84,19 +82,17 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       if (Array.isArray(response.data)) {
         setTodayTasks(response.data);
       } else {
-        console.warn('Today tasks API returned non-array data:', response.data);
         setTodayTasks([]);
       }
     } catch (err) {
       setError('Failed to fetch today\'s tasks');
-      console.error('Error fetching today\'s tasks:', err);
       setTodayTasks([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchUpcomingTasks = async (houseId: number, days: number = 7) => {
+  const fetchUpcomingTasks = useCallback(async (houseId: number, days: number = 7) => {
     setLoading(true);
     setError(null);
     try {
@@ -106,19 +102,17 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       if (Array.isArray(response.data)) {
         setUpcomingTasks(response.data);
       } else {
-        console.warn('Upcoming tasks API returned non-array data:', response.data);
         setUpcomingTasks([]);
       }
     } catch (err) {
       setError('Failed to fetch upcoming tasks');
-      console.error('Error fetching upcoming tasks:', err);
       setUpcomingTasks([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const completeTask = async (taskId: number, completedBy: string = '', notes: string = ''): Promise<boolean> => {
+  const completeTask = useCallback(async (taskId: number, completedBy: string = '', notes: string = ''): Promise<boolean> => {
     try {
       const response = await api.post(`/tasks/${taskId}/complete/`, {
         completed_by: completedBy,
@@ -136,10 +130,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       return true;
     } catch (err) {
       setError('Failed to complete task');
-      console.error('Error completing task:', err);
       return false;
     }
-  };
+  }, []);
 
   const generateTasks = useCallback(async (houseId: number): Promise<boolean> => {
     try {
@@ -149,7 +142,6 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       return true;
     } catch (err) {
       setError('Failed to generate tasks');
-      console.error('Error generating tasks:', err);
       return false;
     }
   }, [fetchTasks]);

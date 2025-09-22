@@ -22,16 +22,11 @@ import {
   FormControlLabel,
   Alert,
   CircularProgress,
-  Tooltip,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
   ListItemIcon,
-  ListItemSecondaryAction,
+  ListItemText,
   Divider,
   Paper,
-  Badge,
   Menu,
   MenuItem as MenuItemComponent,
 } from '@mui/material';
@@ -41,8 +36,6 @@ import {
   Delete as DeleteIcon,
   MoreVert as MoreVertIcon,
   Agriculture as FarmIcon,
-  Home as HouseIcon,
-  People as WorkerIcon,
   LocationOn as LocationIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
@@ -56,14 +49,13 @@ import { useProgram } from '../../contexts/ProgramContext';
 
 interface FarmCardProps {
   farm: any;
-  onEdit: (farm: any) => void;
-  onDelete: (farm: any) => void;
-  onView: (farm: any) => void;
+  onEdit: (_farm: any) => void;
+  onDelete: (_farm: any) => void;
+  onView: (_farm: any) => void;
 }
 
 const FarmCard: React.FC<FarmCardProps> = ({ farm, onEdit, onDelete, onView }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const navigate = useNavigate();
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);

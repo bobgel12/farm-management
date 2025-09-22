@@ -15,16 +15,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
   ListItemText,
   ListItemIcon,
-  ListItemSecondaryAction,
   Divider,
   Avatar,
   IconButton,
-  Tooltip,
-  Badge,
   Paper,
   FormControl,
   InputLabel,
@@ -39,20 +34,14 @@ import {
   Person as PersonIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
-  Work as WorkIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   MoreVert as MoreVertIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
   Assignment as AssignmentIcon,
-  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useWorker } from '../../contexts/WorkerContext';
-import { useFarm } from '../../contexts/FarmContext';
 import api from '../../services/api';
 
 const ProfessionalWorkerList: React.FC = () => {
@@ -76,7 +65,6 @@ const ProfessionalWorkerList: React.FC = () => {
     receive_daily_tasks: true,
   });
   const { workers, fetchWorkers, createWorker, updateWorker, deleteWorker } = useWorker();
-  const { farms } = useFarm();
 
   const fetchFarmDetails = useCallback(async () => {
     if (farmId) {
@@ -147,7 +135,7 @@ const ProfessionalWorkerList: React.FC = () => {
         fetchWorkers(parseInt(farmId));
       }
     } catch (err) {
-      console.error('Error saving worker:', err);
+      // Error saving worker
     }
   };
 
@@ -159,7 +147,7 @@ const ProfessionalWorkerList: React.FC = () => {
           fetchWorkers(parseInt(farmId));
         }
       } catch (err) {
-        console.error('Error deleting worker:', err);
+        // Error deleting worker
       }
     }
   };

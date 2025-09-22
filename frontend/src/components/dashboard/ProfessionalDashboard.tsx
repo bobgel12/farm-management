@@ -15,20 +15,14 @@ import {
   ListItemText,
   ListItemIcon,
   Divider,
-  Paper,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import {
   Agriculture as FarmIcon,
   Home as HouseIcon,
   People as WorkerIcon,
-  Assignment as TaskIcon,
   Schedule as ProgramIcon,
   TrendingUp as TrendingUpIcon,
-  Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
   Email as EmailIcon,
 } from '@mui/icons-material';
 import { useFarm } from '../../contexts/FarmContext';
@@ -132,7 +126,7 @@ const ProfessionalDashboard: React.FC = () => {
           fetchPrograms(),
         ]);
       } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        // Error loading dashboard data
       } finally {
         setLoading(false);
       }

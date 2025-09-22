@@ -20,18 +20,14 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Chip,
   Tooltip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
   Agriculture as FarmIcon,
-  Home as HomeIcon,
-  Assignment as TaskIcon,
   Schedule as ProgramIcon,
   People as WorkerIcon,
-  Email as EmailIcon,
   Logout as LogoutIcon,
   Close as CloseIcon,
   Notifications as NotificationsIcon,

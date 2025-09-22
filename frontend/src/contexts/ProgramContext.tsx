@@ -38,16 +38,16 @@ interface ProgramContextType {
   loading: boolean;
   error: string | null;
   fetchPrograms: () => Promise<void>;
-  createProgram: (programData: Partial<Program>) => Promise<boolean>;
-  updateProgram: (id: number, programData: Partial<Program>) => Promise<{ success: boolean; changeData?: any }>;
-  deleteProgram: (id: number) => Promise<boolean>;
-  copyProgram: (id: number, newName?: string) => Promise<boolean>;
-  getProgramTasks: (programId: number) => Promise<ProgramTask[]>;
-  createProgramTask: (programId: number, taskData: Partial<ProgramTask>) => Promise<boolean>;
-  updateProgramTask: (id: number, taskData: Partial<ProgramTask>) => Promise<boolean>;
-  deleteProgramTask: (id: number) => Promise<boolean>;
+  createProgram: (_programData: Partial<Program>) => Promise<boolean>;
+  updateProgram: (_id: number, _programData: Partial<Program>) => Promise<{ success: boolean; changeData?: any }>;
+  deleteProgram: (_id: number) => Promise<boolean>;
+  copyProgram: (_id: number, _newName?: string) => Promise<boolean>;
+  getProgramTasks: (_programId: number) => Promise<ProgramTask[]>;
+  createProgramTask: (_programId: number, _taskData: Partial<ProgramTask>) => Promise<boolean>;
+  updateProgramTask: (_id: number, _taskData: Partial<ProgramTask>) => Promise<boolean>;
+  deleteProgramTask: (_id: number) => Promise<boolean>;
   getDefaultProgram: () => Promise<Program | null>;
-  handleProgramChange: (changeLogId: number, choice: 'retroactive' | 'next_flock') => Promise<boolean>;
+  handleProgramChange: (_changeLogId: number, _choice: 'retroactive' | 'next_flock') => Promise<boolean>;
   getPendingChanges: () => Promise<any[]>;
 }
 
@@ -78,7 +78,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       setPrograms(Array.isArray(response.data) ? response.data : response.data.results || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch programs');
-      console.error('Error fetching programs:', err);
     } finally {
       setLoading(false);
     }
@@ -92,7 +91,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create program');
-      console.error('Error creating program:', err);
       return false;
     }
   }, []);
@@ -115,7 +113,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       };
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update program');
-      console.error('Error updating program:', err);
       return { success: false };
     }
   }, []);
@@ -128,7 +125,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete program');
-      console.error('Error deleting program:', err);
       return false;
     }
   }, []);
@@ -141,7 +137,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to copy program');
-      console.error('Error copying program:', err);
       return false;
     }
   }, []);
@@ -153,7 +148,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return Array.isArray(response.data) ? response.data : response.data.results || [];
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch program tasks');
-      console.error('Error fetching program tasks:', err);
       return [];
     }
   }, []);
@@ -165,7 +159,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create program task');
-      console.error('Error creating program task:', err);
       return false;
     }
   }, []);
@@ -177,7 +170,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update program task');
-      console.error('Error updating program task:', err);
       return false;
     }
   }, []);
@@ -189,7 +181,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete program task');
-      console.error('Error deleting program task:', err);
       return false;
     }
   }, []);
@@ -201,7 +192,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return response.data;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch default program');
-      console.error('Error fetching default program:', err);
       return null;
     }
   }, []);
@@ -213,7 +203,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return response.data.processed || true;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to handle program change');
-      console.error('Error handling program change:', err);
       return false;
     }
   }, []);
@@ -225,7 +214,6 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       return response.data;
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch pending changes');
-      console.error('Error fetching pending changes:', err);
       return [];
     }
   }, []);
