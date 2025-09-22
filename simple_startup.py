@@ -47,17 +47,11 @@ def main():
     # Ensure default program exists
     print("Ensuring default program exists...")
     try:
-        execute_from_command_line(['manage.py', 'debug_default_program'])
+        execute_from_command_line(['manage.py', 'ensure_default_program'])
         print("✅ Default program ensured")
     except Exception as e:
         print(f"❌ Default program creation failed: {str(e)}")
-        # Try the original command as fallback
-        try:
-            execute_from_command_line(['manage.py', 'ensure_default_program'])
-            print("✅ Default program ensured (fallback)")
-        except Exception as e2:
-            print(f"❌ Fallback default program creation also failed: {str(e2)}")
-            # Continue anyway - this is not critical for startup
+        # Continue anyway - this is not critical for startup
     
     # Collect static files
     print("Collecting static files...")

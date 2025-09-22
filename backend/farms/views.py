@@ -227,18 +227,19 @@ def ensure_default_program(request):
             serializer = ProgramSerializer(program)
             return Response({
                 'message': 'Default program already exists',
-                'program': serializer.data
+                'program': serializer.data,
+                'total_tasks': program.tasks.count()
             })
         except Program.DoesNotExist:
             pass
         
-        # Create default program
+        # Create default program using the management command
         from django.core.management import call_command
         from io import StringIO
         
-        # Run the debug command to create default program
+        # Run the ensure_default_program command
         output = StringIO()
-        call_command('debug_default_program', stdout=output)
+        call_command('ensure_default_program', stdout=output)
         
         # Get the created program
         program = Program.objects.get(is_default=True, is_active=True)
@@ -246,7 +247,9 @@ def ensure_default_program(request):
         
         return Response({
             'message': 'Default program created successfully',
-            'program': serializer.data
+            'program': serializer.data,
+            'total_tasks': program.tasks.count(),
+            'command_output': output.getvalue()
         })
         
     except Exception as e:
