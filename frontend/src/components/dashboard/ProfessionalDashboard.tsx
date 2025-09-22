@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -113,6 +114,7 @@ const TaskProgress: React.FC<TaskProgressProps> = ({ title, completed, total, co
 };
 
 const ProfessionalDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { farms, fetchFarms } = useFarm();
   const { tasks, fetchTasks } = useTask();
   const { workers, fetchWorkers } = useWorker();
@@ -229,7 +231,7 @@ const ProfessionalDashboard: React.FC = () => {
             <Typography variant="h6" fontWeight={600}>
               Recent Farms
             </Typography>
-            <Button size="small" color="primary" href="/farms">
+            <Button size="small" color="primary" onClick={() => navigate('/farms')}>
               View All
             </Button>
           </Box>
@@ -247,7 +249,7 @@ const ProfessionalDashboard: React.FC = () => {
                       transform: 'translateY(-2px)',
                     }
                   }}
-                  onClick={() => window.location.href = `/farms/${farm.id}`}
+                  onClick={() => navigate(`/farms/${farm.id}`)}
                 >
                   <CardContent sx={{ p: 2 }}>
                     <Box display="flex" alignItems="center" mb={1}>
