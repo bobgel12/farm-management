@@ -12,8 +12,9 @@ import ProfessionalDashboard from './components/dashboard/ProfessionalDashboard'
 import ProfessionalFarmList from './components/farms/ProfessionalFarmList';
 import FarmDetail from './components/FarmDetail';
 import HouseDetail from './components/HouseDetail';
-import TaskList from './components/TaskList';
+import ProfessionalTaskList from './components/tasks/ProfessionalTaskList';
 import ProfessionalProgramManager from './components/programs/ProfessionalProgramManager';
+import ProfessionalWorkerList from './components/workers/ProfessionalWorkerList';
 import ProtectedRoute from './components/ProtectedRoute';
 import ProfessionalLayout from './components/layout/ProfessionalLayout';
 import theme from './theme';
@@ -61,7 +62,14 @@ function App() {
                 <Route path="/houses/:houseId/tasks" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
-                      <TaskList />
+                      <ProfessionalTaskList />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/farms/:farmId/workers" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <ProfessionalWorkerList />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />

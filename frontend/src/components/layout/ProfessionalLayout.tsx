@@ -83,7 +83,7 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
     { 
       text: 'Workers', 
       icon: <WorkerIcon />, 
-      path: '/workers',
+      path: '/farms/1/workers',
       description: 'Manage farm workers'
     },
   ];
