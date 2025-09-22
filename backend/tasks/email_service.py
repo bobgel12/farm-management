@@ -211,19 +211,23 @@ class TaskEmailService:
             )
             email.attach_alternative(html_content, "text/html")
             
-            # Send email with timeout
-            import socket
-            import smtplib
-            
-            # Set timeout for SMTP connection
-            socket.setdefaulttimeout(10)  # 10 second timeout
-            
-            try:
-                email.send()
-            except (socket.timeout, smtplib.SMTPException, OSError) as e:
-                logger.error(f"SMTP connection failed: {str(e)}")
-                # Return False to indicate failure
-                return False
+            # Use SendGrid API instead of SMTP for Railway
+            if os.getenv('EMAIL_HOST', '').endswith('sendgrid.net'):
+                return TaskEmailService._send_via_sendgrid_api(recipient_emails, subject, text_content, html_content)
+            else:
+                # Send email with timeout for other providers
+                import socket
+                import smtplib
+                
+                # Set timeout for SMTP connection
+                socket.setdefaulttimeout(10)  # 10 second timeout
+                
+                try:
+                    email.send()
+                except (socket.timeout, smtplib.SMTPException, OSError) as e:
+                    logger.error(f"SMTP connection failed: {str(e)}")
+                    # Return False to indicate failure
+                    return False
             
             # Record the sent email
             EmailTask.objects.create(
@@ -240,6 +244,49 @@ class TaskEmailService:
             
         except Exception as e:
             logger.error(f"Error sending email to {recipient_emails}: {str(e)}")
+            return False
+    
+    @staticmethod
+    def _send_via_sendgrid_api(recipients, subject, text_content, html_content):
+        """Send email via SendGrid REST API"""
+        try:
+            import requests
+            
+            api_key = os.getenv('EMAIL_HOST_PASSWORD')  # SendGrid API key
+            from_email = settings.DEFAULT_FROM_EMAIL
+            
+            url = "https://api.sendgrid.com/v3/mail/send"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "personalizations": [{
+                    "to": [{"email": email} for email in recipients]
+                }],
+                "from": {"email": from_email},
+                "subject": subject,
+                "content": [
+                    {
+                        "type": "text/plain",
+                        "value": text_content
+                    },
+                    {
+                        "type": "text/html",
+                        "value": html_content
+                    }
+                ]
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=10)
+            response.raise_for_status()
+            
+            logger.info(f"SendGrid API email sent successfully to {recipients}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"SendGrid API email failed: {str(e)}")
             return False
     
     @staticmethod
@@ -300,26 +347,30 @@ This is a test email to verify email configuration.
             logger.info(f"Email configuration - From: {settings.DEFAULT_FROM_EMAIL}")
             logger.info(f"Email configuration - Backend: {settings.EMAIL_BACKEND}")
             
-            # Send simple email with timeout
-            import socket
-            import smtplib
-            
-            # Set timeout for SMTP connection
-            socket.setdefaulttimeout(10)  # 10 second timeout
-            
-            try:
-                send_mail(
-                    subject=subject,
-                    message=text_content,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[test_email],
-                    fail_silently=False
-                )
-            except (socket.timeout, smtplib.SMTPException, OSError) as e:
-                logger.error(f"SMTP connection failed: {str(e)}")
-                # Return a mock success for testing purposes
-                logger.info("Email sending disabled due to network restrictions")
-                return True
+            # Use SendGrid API for test emails on Railway
+            if os.getenv('EMAIL_HOST', '').endswith('sendgrid.net'):
+                return TaskEmailService._send_via_sendgrid_api([test_email], subject, text_content, None)
+            else:
+                # Send simple email with timeout for other providers
+                import socket
+                import smtplib
+                
+                # Set timeout for SMTP connection
+                socket.setdefaulttimeout(10)  # 10 second timeout
+                
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=text_content,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[test_email],
+                        fail_silently=False
+                    )
+                except (socket.timeout, smtplib.SMTPException, OSError) as e:
+                    logger.error(f"SMTP connection failed: {str(e)}")
+                    # Return a mock success for testing purposes
+                    logger.info("Email sending disabled due to network restrictions")
+                    return True
             
             logger.info(f"Test email sent successfully to {test_email}")
             return True
