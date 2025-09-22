@@ -217,6 +217,45 @@ def default_program(request):
         )
 
 
+@api_view(['POST'])
+def ensure_default_program(request):
+    """Ensure a default program exists, create if needed"""
+    try:
+        # Check if default program already exists
+        try:
+            program = Program.objects.get(is_default=True, is_active=True)
+            serializer = ProgramSerializer(program)
+            return Response({
+                'message': 'Default program already exists',
+                'program': serializer.data
+            })
+        except Program.DoesNotExist:
+            pass
+        
+        # Create default program
+        from django.core.management import call_command
+        from io import StringIO
+        
+        # Run the debug command to create default program
+        output = StringIO()
+        call_command('debug_default_program', stdout=output)
+        
+        # Get the created program
+        program = Program.objects.get(is_default=True, is_active=True)
+        serializer = ProgramSerializer(program)
+        
+        return Response({
+            'message': 'Default program created successfully',
+            'program': serializer.data
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to ensure default program: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(['GET'])
 def pending_program_changes(request):
     """Get all pending program changes that need user decision"""

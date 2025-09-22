@@ -19,6 +19,7 @@ urlpatterns = [
     path('programs/<int:program_id>/tasks/day/<int:day>/', views.program_tasks_by_day, name='program-tasks-by-day'),
     path('programs/<int:program_id>/copy/', views.copy_program, name='copy-program'),
     path('programs/default/', views.default_program, name='default-program'),
+    path('programs/ensure-default/', views.ensure_default_program, name='ensure-default-program'),
     
     # Program Task URLs
     path('program-tasks/', views.ProgramTaskListCreateView.as_view(), name='program-task-list-create'),

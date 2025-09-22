@@ -191,6 +191,19 @@ export const ProgramProvider: React.FC<ProgramProviderProps> = ({ children }) =>
       const response = await api.get('/programs/default/');
       return response.data;
     } catch (err: any) {
+      // If default program doesn't exist, try to create one
+      if (err.response?.status === 404) {
+        try {
+          // Try to trigger default program creation
+          await api.post('/programs/ensure-default/');
+          // Retry fetching
+          const retryResponse = await api.get('/programs/default/');
+          return retryResponse.data;
+        } catch (retryErr: any) {
+          setError('No default program found and unable to create one');
+          return null;
+        }
+      }
       setError(err.response?.data?.error || 'Failed to fetch default program');
       return null;
     }

@@ -107,3 +107,38 @@ def simple_health_check(request):
         'timestamp': timezone.now().isoformat(),
         'message': 'Service is running'
     })
+
+
+def default_program_check(request):
+    """Check if default program exists and is accessible"""
+    try:
+        from farms.models import Program
+        
+        # Check if default program exists
+        default_programs = Program.objects.filter(is_default=True, is_active=True)
+        
+        if default_programs.exists():
+            program = default_programs.first()
+            return JsonResponse({
+                'status': 'ok',
+                'default_program_exists': True,
+                'program_id': program.id,
+                'program_name': program.name,
+                'total_tasks': program.tasks.count(),
+                'timestamp': timezone.now().isoformat()
+            })
+        else:
+            return JsonResponse({
+                'status': 'warning',
+                'default_program_exists': False,
+                'message': 'No default program found',
+                'timestamp': timezone.now().isoformat()
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'default_program_exists': False,
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=500)
