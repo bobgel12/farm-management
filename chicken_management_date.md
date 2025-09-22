@@ -47,7 +47,7 @@ A comprehensive web application for managing multiple chicken farms with automat
 - **Containerization**: Docker with docker-compose
 - **Environment**: Development and Production configurations
 - **Database**: PostgreSQL for production, SQLite for development
-- **Ports**: Frontend (3000), Backend (8000), Database (5432)
+- **Ports**: Frontend (3000), Backend (8000), Database (5433)
 
 ## Data Models
 
@@ -409,7 +409,7 @@ REACT_APP_API_URL=http://localhost:8000/api
 ### Docker Services
 - **frontend**: React app on port 3000
 - **backend**: Django API on port 8000
-- **db**: PostgreSQL on port 5432
+- **db**: PostgreSQL on port 5433
 
 ### CORS & CSRF Settings
 ```python

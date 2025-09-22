@@ -25,7 +25,7 @@ kill_port() {
 echo "🔍 Checking for port conflicts..."
 kill_port 3000
 kill_port 8000
-kill_port 5432
+kill_port 5433
 
 # Check Docker status
 if ! command_exists docker; then
