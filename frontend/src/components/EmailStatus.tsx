@@ -41,7 +41,7 @@ const EmailStatus: React.FC<EmailStatusProps> = ({ onSendEmail, farmId }) => {
         setEmailCount(emails.length);
       }
     } catch (error) {
-      console.error('Failed to fetch email status:', error);
+      // Failed to fetch email status
     }
   };
 
@@ -56,7 +56,7 @@ const EmailStatus: React.FC<EmailStatusProps> = ({ onSendEmail, farmId }) => {
         onSendEmail();
       }
     } catch (error) {
-      console.error('Failed to send daily tasks:', error);
+      // Failed to send daily tasks
     } finally {
       setLoading(false);
       setAnchorEl(null);

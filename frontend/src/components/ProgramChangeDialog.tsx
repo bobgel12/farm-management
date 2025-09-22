@@ -28,9 +28,7 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon,
   Agriculture as FarmIcon,
-  Home as HouseIcon,
   Task as TaskIcon,
-  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 
 interface ProgramChangeDialogProps {

@@ -16,13 +16,6 @@ import {
   Alert,
   CircularProgress,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   LinearProgress,
   Accordion,
   AccordionSummary,
@@ -66,22 +59,22 @@ const FarmDetail: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [completionNotes, setCompletionNotes] = useState('');
 
+  const fetchFarmDetails = async () => {
+    try {
+      const response = await api.get(`/farms/${farmId}/`);
+      setFarm(response.data);
+    } catch (error) {
+      // Error fetching farm details
+    }
+  };
+
   useEffect(() => {
     if (farmId) {
       fetchFarmDetails();
       fetchHouses(parseInt(farmId));
       fetchFarmTaskSummary(parseInt(farmId));
     }
-  }, [farmId]);
-
-  const fetchFarmDetails = async () => {
-    try {
-      const response = await api.get(`/farms/${farmId}/`);
-      setFarm(response.data);
-    } catch (error) {
-      console.error('Error fetching farm details:', error);
-    }
-  };
+  }, [farmId, fetchFarmDetails, fetchFarmTaskSummary, fetchHouses]);
 
   const handleOpenDialog = (house?: any) => {
     if (house) {
