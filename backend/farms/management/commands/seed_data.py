@@ -5,7 +5,8 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import datetime, timedelta
-from farms.models import Farm, Worker
+from farms.models import Farm, Worker, Program, ProgramTask
+from .program_tasks_data import get_standard_program_tasks, get_extended_program_tasks, get_quick_program_tasks
 from houses.models import House
 from tasks.models import Task, RecurringTask
 from tasks.task_scheduler import TaskScheduler
@@ -53,16 +54,21 @@ class Command(BaseCommand):
             House.objects.all().delete()
             Worker.objects.all().delete()
             Farm.objects.all().delete()
+            ProgramTask.objects.all().delete()
+            Program.objects.all().delete()
             User.objects.filter(is_superuser=False).delete()
             
             # Reset auto-increment sequences
             from django.db import connection
             with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('farms_farm', 'farms_worker', 'houses_house', 'tasks_task', 'tasks_recurringtask', 'tasks_emailtask')")
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('farms_farm', 'farms_worker', 'farms_program', 'farms_programtask', 'houses_house', 'tasks_task', 'tasks_recurringtask', 'tasks_emailtask')")
             self.stdout.write('Reset auto-increment sequences')
 
+        # Create sample programs first
+        programs = self.create_programs()
+        
         # Create sample farms
-        farms = self.create_farms(options['farms'])
+        farms = self.create_farms(options['farms'], programs)
         
         # Create workers for each farm
         for farm in farms:
@@ -84,7 +90,55 @@ class Command(BaseCommand):
             )
         )
 
-    def create_farms(self, num_farms):
+    def create_programs(self):
+        """Create sample task programs"""
+        programs = []
+        
+        # Standard 40-day program
+        standard_program = Program.objects.create(
+            name="Standard 40-Day Program",
+            description="Standard chicken rearing program for 40 days",
+            duration_days=40,
+            is_active=True,
+            is_default=True
+        )
+        programs.append(standard_program)
+        
+        # Extended 45-day program
+        extended_program = Program.objects.create(
+            name="Extended 45-Day Program",
+            description="Extended program for larger chickens, 45 days",
+            duration_days=45,
+            is_active=True,
+            is_default=False
+        )
+        programs.append(extended_program)
+        
+        # Quick 35-day program
+        quick_program = Program.objects.create(
+            name="Quick 35-Day Program",
+            description="Fast-track program for smaller chickens, 35 days",
+            duration_days=35,
+            is_active=True,
+            is_default=False
+        )
+        programs.append(quick_program)
+        
+        # Create tasks for each program
+        self.create_program_tasks(standard_program, get_standard_program_tasks())
+        self.create_program_tasks(extended_program, get_extended_program_tasks())
+        self.create_program_tasks(quick_program, get_quick_program_tasks())
+        
+        self.stdout.write(f'Created {len(programs)} programs')
+        return programs
+
+    def create_program_tasks(self, program, tasks_data):
+        """Create tasks for a program"""
+        for task_data in tasks_data:
+            ProgramTask.objects.create(program=program, **task_data)
+        self.stdout.write(f'Created {len(tasks_data)} tasks for {program.name}')
+
+    def create_farms(self, num_farms, programs):
         """Create sample farms"""
         farms = []
         farm_names = [
@@ -103,12 +157,16 @@ class Command(BaseCommand):
             if i > 0:
                 name = f"{name} #{i + 1}"
             
+            # Assign program to farm (cycle through available programs)
+            program = programs[i % len(programs)]
+            
             farm = Farm.objects.create(
                 name=name,
                 location=f"Location {i + 1}",
                 contact_person=f"Farmer {i + 1}",
                 contact_email=f"farmer{i + 1}@example.com",
                 contact_phone=f"+1-555-{1000 + i:04d}",
+                program=program,
                 is_active=True
             )
             farms.append(farm)

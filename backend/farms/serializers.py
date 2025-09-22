@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Farm, Worker
+from .models import Farm, Worker, Program, ProgramTask
 
 
 class WorkerSerializer(serializers.ModelSerializer):
@@ -38,3 +38,97 @@ class FarmListSerializer(serializers.ModelSerializer):
             'id', 'name', 'location', 'is_active',
             'total_houses', 'active_houses'
         ]
+
+
+class ProgramTaskSerializer(serializers.ModelSerializer):
+    is_recurring = serializers.ReadOnlyField()
+    is_setup_task = serializers.ReadOnlyField()
+
+    class Meta:
+        model = ProgramTask
+        fields = [
+            'id', 'day', 'task_type', 'title', 'description', 'instructions',
+            'priority', 'estimated_duration', 'is_required', 'requires_confirmation',
+            'recurring_days', 'is_recurring', 'is_setup_task', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_recurring_days(self, value):
+        """Validate recurring days are valid weekday numbers (0-6)"""
+        if value:
+            for day in value:
+                if not isinstance(day, int) or day < 0 or day > 6:
+                    raise serializers.ValidationError(
+                        "Recurring days must be integers between 0 (Monday) and 6 (Sunday)"
+                    )
+        return value
+
+    def validate(self, data):
+        """Validate that recurring tasks have recurring_days set"""
+        if data.get('task_type') == 'recurring' and not data.get('recurring_days'):
+            raise serializers.ValidationError(
+                "Recurring tasks must specify recurring_days"
+            )
+        return data
+
+
+class ProgramSerializer(serializers.ModelSerializer):
+    total_tasks = serializers.ReadOnlyField()
+    tasks = ProgramTaskSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Program
+        fields = [
+            'id', 'name', 'description', 'duration_days', 'is_active',
+            'is_default', 'total_tasks', 'tasks', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_is_default(self, value):
+        """Ensure only one default program exists"""
+        if value and Program.objects.filter(is_default=True).exclude(pk=self.instance.pk if self.instance else None).exists():
+            raise serializers.ValidationError(
+                "Only one program can be set as default"
+            )
+        return value
+
+
+class ProgramListSerializer(serializers.ModelSerializer):
+    total_tasks = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Program
+        fields = [
+            'id', 'name', 'description', 'duration_days', 'is_active',
+            'is_default', 'total_tasks', 'created_at', 'updated_at'
+        ]
+
+
+class FarmWithProgramSerializer(serializers.ModelSerializer):
+    total_houses = serializers.ReadOnlyField()
+    active_houses = serializers.ReadOnlyField()
+    workers = WorkerSerializer(many=True, read_only=True)
+    program = ProgramListSerializer(read_only=True)
+    program_id = serializers.IntegerField(write_only=True, required=False)
+
+    class Meta:
+        model = Farm
+        fields = [
+            'id', 'name', 'location', 'contact_person',
+            'contact_phone', 'contact_email', 'program', 'program_id',
+            'is_active', 'total_houses', 'active_houses', 'workers',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        program_id = validated_data.pop('program_id', None)
+        if program_id:
+            validated_data['program_id'] = program_id
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        program_id = validated_data.pop('program_id', None)
+        if program_id:
+            validated_data['program_id'] = program_id
+        return super().update(instance, validated_data)
