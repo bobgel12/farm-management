@@ -32,10 +32,10 @@ fi
 
 # Check for port conflicts
 echo "🔍 Checking for port conflicts..."
-if lsof -i :5432 &> /dev/null; then
-    echo "⚠️  Port 5432 is already in use. Attempting to free it..."
-    # Kill any processes using port 5432 (except Docker)
-    lsof -ti :5432 | grep -v $(docker ps -q) | xargs kill -9 2>/dev/null || true
+if lsof -i :5433 &> /dev/null; then
+    echo "⚠️  Port 5433 is already in use. Attempting to free it..."
+    # Kill any processes using port 5433 (except Docker)
+    lsof -ti :5433 | grep -v $(docker ps -q) | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
@@ -65,7 +65,7 @@ DB_NAME=chicken_management
 DB_USER=postgres
 DB_PASSWORD=password
 DB_HOST=db
-DB_PORT=5432
+DB_PORT=5433
 
 # Admin Settings
 ADMIN_USERNAME=admin
