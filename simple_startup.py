@@ -44,6 +44,14 @@ def main():
     except Exception as e:
         print(f"❌ Admin user creation failed: {str(e)}")
     
+    # Ensure default program exists
+    print("Ensuring default program exists...")
+    try:
+        execute_from_command_line(['manage.py', 'ensure_default_program'])
+        print("✅ Default program ensured")
+    except Exception as e:
+        print(f"❌ Default program creation failed: {str(e)}")
+    
     # Collect static files
     print("Collecting static files...")
     execute_from_command_line(['manage.py', 'collectstatic', '--noinput'])

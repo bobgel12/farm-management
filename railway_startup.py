@@ -58,9 +58,15 @@ def setup_database():
         logger.info("Running database migrations...")
         execute_from_command_line(['manage.py', 'migrate'])
         logger.info("✅ Database migrations completed")
+        
+        # Ensure default program exists
+        logger.info("Ensuring default program exists...")
+        execute_from_command_line(['manage.py', 'ensure_default_program'])
+        logger.info("✅ Default program ensured")
+        
         return True
     except Exception as e:
-        logger.error(f"❌ Database migration failed: {str(e)}")
+        logger.error(f"❌ Database setup failed: {str(e)}")
         return False
 
 def create_admin_user():
