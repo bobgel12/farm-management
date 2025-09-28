@@ -125,7 +125,7 @@ const MLDashboard: React.FC = () => {
       case 'high': return 'error';
       case 'medium': return 'warning';
       case 'low': return 'info';
-      default: return 'inherit';
+      default: return 'primary';
     }
   };
 

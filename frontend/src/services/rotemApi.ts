@@ -28,7 +28,7 @@ class RotemApiService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = `${API_BASE_URL}/rotem`;
+    this.baseURL = API_BASE_URL;
   }
 
   // Helper method to get auth headers
@@ -402,6 +402,13 @@ class RotemApiService {
   }
 
   // ML Prediction Methods
+  async getPredictions(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data.results;
+  }
+
   async getMLPredictions(): Promise<MLPrediction[]> {
     const response = await axios.get(`${this.baseURL}/rotem/predictions/`, {
       headers: this.getAuthHeaders()

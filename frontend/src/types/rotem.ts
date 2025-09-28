@@ -62,16 +62,6 @@ export interface RotemScrapeLog {
   created_at: string;
 }
 
-export interface MLPrediction {
-  id: number;
-  controller: number;
-  prediction_type: string;
-  predicted_at: string;
-  confidence_score: number;
-  prediction_data: any;
-  is_active: boolean;
-  created_at: string;
-}
 
 export interface MLModel {
   id: number;
