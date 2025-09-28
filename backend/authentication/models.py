@@ -42,7 +42,7 @@ class PasswordResetToken(models.Model):
 class LoginAttempt(models.Model):
     """Model for tracking login attempts for security"""
     username = models.CharField(max_length=150)
-    ip_address = models.GenericIPAddressField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
     success = models.BooleanField(default=False)
     attempted_at = models.DateTimeField(auto_now_add=True)
@@ -74,7 +74,7 @@ class SecurityEvent(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='security_events', null=True, blank=True)
     event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
     description = models.TextField()
-    ip_address = models.GenericIPAddressField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     metadata = models.JSONField(default=dict, blank=True)
