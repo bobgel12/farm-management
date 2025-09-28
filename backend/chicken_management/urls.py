@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/', include('tasks.urls')),
     path('api/', include('authentication.urls')),
     path('api/', include('health.urls')),
+    path('api/rotem/', include('rotem_scraper.urls')),
     # API root endpoint
     path('', lambda request: JsonResponse({
         'status': 'ok', 
@@ -25,6 +26,7 @@ urlpatterns = [
             'tasks': '/api/tasks/',
             'auth': '/api/auth/',
             'health': '/api/health/',
+            'rotem': '/api/rotem/',
             'admin': '/admin/'
         }
     })),

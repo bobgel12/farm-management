@@ -13,7 +13,7 @@ const getApiUrl = () => {
   }
   
   // Development
-  return 'http://localhost:8000/api';
+  return 'http://localhost:8002/api';
 };
 
 const API_BASE_URL = getApiUrl();

@@ -34,6 +34,8 @@ import {
   Settings as SettingsIcon,
   Agriculture as AgricultureIcon,
   AccountCircle as AccountIcon,
+  Security as SecurityIcon,
+  Sensors as SensorsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import EmailStatus from '../EmailStatus';
@@ -71,6 +73,12 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
       description: 'Manage farms and houses'
     },
     { 
+      text: 'Rotem Integration', 
+      icon: <SensorsIcon />, 
+      path: '/rotem',
+      description: 'Sensor data and monitoring'
+    },
+    { 
       text: 'Programs', 
       icon: <ProgramIcon />, 
       path: '/programs',
@@ -81,6 +89,12 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
       icon: <WorkerIcon />, 
       path: '/farms/1/workers',
       description: 'Manage farm workers'
+    },
+    { 
+      text: 'Security', 
+      icon: <SecurityIcon />, 
+      path: '/security',
+      description: 'Password and security settings'
     },
   ];
 

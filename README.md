@@ -225,4 +225,31 @@ This project is licensed under the MIT License.
 
 ---
 
+## 🆕 NEW: Rotem Integration (Phase 2 Complete)
+
+**✅ ROTEM INTEGRATION COMPLETE** - Multi-farm data collection system:
+- Multi-farm support with individual credentials
+- Real-time data processing from RotemNetWeb API
+- Comprehensive sensor data collection (temperature, humidity, pressure, etc.)
+- RESTful API endpoints for frontend integration
+- Automated data scraping with Celery tasks
+- Machine learning pipeline ready
+- Database persistence for all farm data
+
+### Quick Start with Rotem Integration
+```bash
+# Add a farm with Rotem credentials
+make rotem-setup
+
+# Test the scraper
+make rotem-test
+
+# View scraper logs
+make rotem-logs
+```
+
+See [ROTEM_PHASE2_COMPLETION.md](ROTEM_PHASE2_COMPLETION.md) for detailed documentation.
+
+---
+
 **Need help?** Check the `make help` command for all available options!
