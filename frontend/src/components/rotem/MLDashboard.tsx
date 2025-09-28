@@ -16,26 +16,16 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Divider,
-  Paper,
-  LinearProgress,
-  IconButton,
-  Tooltip
+  Divider
 } from '@mui/material';
 import {
   Warning,
   Error,
-  CheckCircle,
-  TrendingUp,
-  TrendingDown,
   Refresh,
   Science,
-  Psychology,
-  Speed,
   Assessment,
   Lightbulb,
-  BugReport,
-  Settings
+  BugReport
 } from '@mui/icons-material';
 import { rotemApi } from '../../services/rotemApi';
 import { MLPrediction, MLSummary, AnomalyData, FailureData, OptimizationData, PerformanceData } from '../../types/rotem';
@@ -89,7 +79,7 @@ const MLDashboard: React.FC = () => {
       setOptimizations(optimizationsData);
       setPerformance(performanceData);
     } catch (error) {
-      console.error('Error loading ML data:', error);
+      // Error loading ML data
     } finally {
       setLoading(false);
     }
@@ -110,7 +100,7 @@ const MLDashboard: React.FC = () => {
         loadMLData();
       }, 5000);
     } catch (error) {
-      console.error('Error running ML analysis:', error);
+      // Error running ML analysis
     } finally {
       setRefreshing(false);
     }
@@ -291,8 +281,8 @@ const MLDashboard: React.FC = () => {
                               size="small"
                             />
                             <Chip
-                              label={`${(anomaly.confidence_score * 100).toFixed(1)}%`}
-                              color={getConfidenceColor(anomaly.confidence_score)}
+                              label={`${((anomaly.confidence_score || 0) * 100).toFixed(1)}%`}
+                              color={getConfidenceColor(anomaly.confidence_score || 0)}
                               size="small"
                             />
                           </Box>
@@ -306,7 +296,7 @@ const MLDashboard: React.FC = () => {
                               Detected: {formatTimestamp(anomaly.predicted_at)}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Anomaly Score: {data.anomaly_score.toFixed(3)}
+                              Anomaly Score: {(data.anomaly_score || 0).toFixed(3)}
                             </Typography>
                           </Box>
                         }
@@ -344,11 +334,11 @@ const MLDashboard: React.FC = () => {
                         primary={
                           <Box display="flex" alignItems="center" gap={1}>
                             <Typography variant="subtitle1">
-                              Failure Risk: {(data.failure_probability * 100).toFixed(1)}%
+                              Failure Risk: {((data.failure_probability || 0) * 100).toFixed(1)}%
                             </Typography>
                             <Chip
-                              label={`${(failure.confidence_score * 100).toFixed(1)}%`}
-                              color={getConfidenceColor(failure.confidence_score)}
+                              label={`${((failure.confidence_score || 0) * 100).toFixed(1)}%`}
+                              color={getConfidenceColor(failure.confidence_score || 0)}
                               size="small"
                             />
                           </Box>
@@ -422,7 +412,7 @@ const MLDashboard: React.FC = () => {
                         secondary={
                           <Box>
                             <Typography variant="body2" color="text.secondary">
-                              Current: {data.current.toFixed(1)} | Optimal: {data.optimal_range[0]}-{data.optimal_range[1]}
+                              Current: {(data.current || 0).toFixed(1)} | Optimal: {(data.optimal_range?.[0] || 0)}-{(data.optimal_range?.[1] || 0)}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                               Suggested: {formatTimestamp(optimization.predicted_at)}
@@ -466,11 +456,11 @@ const MLDashboard: React.FC = () => {
                         primary={
                           <Box display="flex" alignItems="center" gap={1}>
                             <Typography variant="subtitle1">
-                              System Efficiency: {(data.efficiency_score * 100).toFixed(1)}%
+                              System Efficiency: {((data.efficiency_score || 0) * 100).toFixed(1)}%
                             </Typography>
                             <Chip
-                              label={`${(perf.confidence_score * 100).toFixed(1)}%`}
-                              color={getConfidenceColor(perf.confidence_score)}
+                              label={`${((perf.confidence_score || 0) * 100).toFixed(1)}%`}
+                              color={getConfidenceColor(perf.confidence_score || 0)}
                               size="small"
                             />
                           </Box>
@@ -488,19 +478,19 @@ const MLDashboard: React.FC = () => {
                                 Performance Metrics:
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                • Data Completeness: {(data.data_completeness * 100).toFixed(1)}%
+                                • Data Completeness: {((data.data_completeness || 0) * 100).toFixed(1)}%
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                • Good Quality Points: {data.good_quality_points}
+                                • Good Quality Points: {data.good_quality_points || 0}
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                • Warning Points: {data.warning_quality_points}
+                                • Warning Points: {data.warning_quality_points || 0}
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                • Error Points: {data.error_quality_points}
+                                • Error Points: {data.error_quality_points || 0}
                               </Typography>
                             </Box>
-                            {data.recommendations.length > 0 && (
+                            {data.recommendations && data.recommendations.length > 0 && (
                               <Box mt={1}>
                                 <Typography variant="body2" fontWeight="bold">
                                   Recommendations:
