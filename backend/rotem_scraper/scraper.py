@@ -88,15 +88,19 @@ class RotemScraper:
                 print(f"✅ Login response: {result}")
                 
                 # Extract tokens from response if available
-                if 'd' in result and isinstance(result['d'], dict):
-                    response_data = result['d']
-                    if 'userToken' in response_data:
-                        self.user_token = response_data['userToken']
+                if 'reponseObj' in result and isinstance(result['reponseObj'], dict):
+                    response_data = result['reponseObj']
+                    if 'FarmUser' in response_data and 'UserToken' in response_data['FarmUser']:
+                        self.user_token = response_data['FarmUser']['UserToken']
                         print(f"🔑 User token extracted: {self.user_token[:50]}...")
                     
-                    if 'farmConnectionToken' in response_data:
-                        self.farm_connection_token = response_data['farmConnectionToken']
+                    if 'FarmConnectionInfo' in response_data and 'ConnectionToken' in response_data['FarmConnectionInfo']:
+                        self.farm_connection_token = response_data['FarmConnectionInfo']['ConnectionToken']
                         print(f"🏭 Farm connection token extracted: {self.farm_connection_token}")
+                        
+                    if 'FarmConnectionInfo' in response_data and 'GatewayName' in response_data['FarmConnectionInfo']:
+                        self.gateway_code = response_data['FarmConnectionInfo']['GatewayName']
+                        print(f"🏭 Gateway code extracted: {self.gateway_code}")
                 
                 # Extract session ID from cookies
                 for cookie in self.session.cookies:
@@ -173,7 +177,18 @@ class RotemScraper:
         })
         
         try:
-            response = self.session.post(url, headers=headers, json={}, timeout=30)
+            # GetSiteControllersInfo needs specific parameters
+            # Use the gateway code from the login response
+            gateway_code = "tace01000155"  # Default gateway code
+            if hasattr(self, 'gateway_code') and self.gateway_code:
+                gateway_code = self.gateway_code
+                
+            request_data = {
+                "prmSiteControllersInfoParams": {
+                    "GatewayCode": gateway_code
+                }
+            }
+            response = self.session.post(url, headers=headers, json=request_data, timeout=30)
             if response.status_code == 200:
                 try:
                     result = response.json()
@@ -312,6 +327,14 @@ class RotemScraper:
         time.sleep(1)
         
         all_data['farm_registration'] = self.get_farm_registration()
+        time.sleep(1)
+        
+        # Fetch command data for each house (1-8) to get real sensor data
+        for house_num in range(1, 9):
+            command_data = self.get_command_data(house_num)
+            if command_data:
+                all_data[f'command_data_house_{house_num}'] = command_data
+            time.sleep(0.5)  # Rate limiting between houses
         
         print("✅ Data scraping completed!")
         return all_data
@@ -353,6 +376,62 @@ class RotemScraper:
                 print(f"  - {error}")
         
         print("="*50)
+
+    def get_command_data(self, house_number: int = 2) -> Optional[Dict[Any, Any]]:
+        """
+        Get detailed command data for a specific house
+        This endpoint returns real sensor data with actual values
+        """
+        print(f"🏠 Fetching Command Data for House {house_number}...")
+        
+        url = f"{self.base_url}/Host3_V1/Services/AllServices.svc/RNBL_GetCommandData"
+        
+        headers = self.session.headers.copy()
+        headers.update({
+            'Referer': f'{self.base_url}/Host3_V1/Main.html',
+            'X-Requested-With': 'XMLHttpRequest',
+            'userToken': self.user_token or 'null',
+            'farmConnectionToken': self.farm_connection_token or '',
+            'authorization': '',
+            'userLanguage': 'ENGLISH'
+        })
+        
+        try:
+            request_data = {
+                "prmGetCommandDataParams": {
+                    "CommandID": "0",
+                    "IsSetPointCommand": False,
+                    "HouseNumber": str(house_number),
+                    "RoomNumber": -1,
+                    "ClientLanguageIndex": 1,
+                    "IsIgnoreCache": False,
+                    "PageNumber": -1,
+                    "IsLoadPageFromCache": False
+                }
+            }
+            
+            response = self.session.post(url, headers=headers, json=request_data, timeout=30)
+            if response.status_code == 200:
+                try:
+                    result = response.json()
+                except (UnicodeDecodeError, ValueError) as e:
+                    # Try with utf-8-sig encoding for BOM issues
+                    if "BOM" in str(e) or "utf-8-sig" in str(e):
+                        response.encoding = 'utf-8-sig'
+                        result = response.json()
+                    else:
+                        print(f"⚠️ JSON decode error: {e}")
+                        print(f"Response text: {response.text[:200]}...")
+                        return None
+                print(f"✅ Command data for house {house_number} retrieved successfully")
+                return result
+            else:
+                print(f"❌ Failed to get Command Data for house {house_number}: {response.status_code}")
+                print(f"Response: {response.text[:200]}...")
+                return None
+        except Exception as e:
+            print(f"❌ Error getting Command Data for house {house_number}: {str(e)}")
+            return None
 
 
 def main():

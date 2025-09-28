@@ -174,77 +174,316 @@ class DjangoRotemScraperService:
         if not controller:
             return
             
-        # Create realistic sensor data based on farm environment
-        # We'll simulate common poultry house sensors
         current_time = timezone.now()
+        data_points_created = 0
         
-        # Temperature data (typical range for poultry houses)
-        temp_value = random.uniform(20, 25)  # 20-25°C optimal for chickens
-        RotemDataPoint.objects.create(
-            controller=controller,
-            timestamp=current_time,
-            data_type='temperature',
-            value=temp_value,
-            unit='°C',
-            quality='good'
-        )
+        # Extract real data from command_data API responses for all houses
+        # This endpoint returns detailed sensor data with actual values
+        logger.info("Processing command data from all houses...")
         
-        # Humidity data
-        humidity_value = random.uniform(50, 70)  # 50-70% optimal humidity
-        RotemDataPoint.objects.create(
-            controller=controller,
-            timestamp=current_time,
-            data_type='humidity',
-            value=humidity_value,
-            unit='%',
-            quality='good'
-        )
+        for house_num in range(1, 9):
+            command_data = data.get(f'command_data_house_{house_num}')
+            if command_data and isinstance(command_data, dict) and 'reponseObj' in command_data:
+                response_obj = command_data['reponseObj']
+                logger.info(f"Processing command data for house {house_num}")
+                
+                # Extract data from different sections
+                ds_data = response_obj.get('dsData', {})
+                
+                # Process General section (basic house info)
+                general_data = ds_data.get('General', [])
+                for item in general_data:
+                    if isinstance(item, dict) and 'ParameterValue' in item:
+                        param_name = item.get('ParameterKeyName', '')
+                        param_value = item.get('ParameterValue', '')
+                        unit_type = item.get('ParameterUnitType', '')
+                        
+                        if param_value and param_value != '' and param_value != 'LangKey_Off':
+                            try:
+                                # Convert to float if possible
+                                if param_value.replace('.', '').replace('-', '').isdigit():
+                                    current_value = float(param_value)
+                                    
+                                    # Map parameter names to data types
+                                    data_type, unit = self._get_parameter_type_and_unit(param_name, unit_type)
+                                    
+                                    if data_type != 'unknown':
+                                        RotemDataPoint.objects.create(
+                                            controller=controller,
+                                            timestamp=current_time,
+                                            data_type=f"{data_type}_house_{house_num}",
+                                            value=current_value,
+                                            unit=unit,
+                                            quality='good'
+                                        )
+                                        data_points_created += 1
+                                        logger.info(f"Created {data_type}_house_{house_num} data point: {current_value} {unit}")
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Process TempSensor section (temperature sensors)
+                temp_sensors = ds_data.get('TempSensor', [])
+                for sensor in temp_sensors:
+                    if isinstance(sensor, dict) and 'ParameterValue' in sensor:
+                        sensor_name = sensor.get('ParameterKeyName', '')
+                        sensor_value = sensor.get('ParameterValue', '')
+                        unit_type = sensor.get('ParameterUnitType', '')
+                        
+                        if sensor_value and sensor_value != '' and sensor_value != '- - -':
+                            try:
+                                # Convert to float if possible
+                                if sensor_value.replace('.', '').replace('-', '').isdigit():
+                                    current_value = float(sensor_value)
+                                    
+                                    # Map sensor names to data types
+                                    data_type, unit = self._get_sensor_type_and_unit_from_name(sensor_name, unit_type)
+                                    
+                                    if data_type != 'unknown':
+                                        RotemDataPoint.objects.create(
+                                            controller=controller,
+                                            timestamp=current_time,
+                                            data_type=f"{data_type}_house_{house_num}",
+                                            value=current_value,
+                                            unit=unit,
+                                            quality='good'
+                                        )
+                                        data_points_created += 1
+                                        logger.info(f"Created {data_type}_house_{house_num} data point: {current_value} {unit}")
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Process Consumption section (water, feed, etc.)
+                consumption_data = ds_data.get('Consumption', [])
+                for item in consumption_data:
+                    if isinstance(item, dict) and 'ParameterValue' in item:
+                        param_name = item.get('ParameterKeyName', '')
+                        param_value = item.get('ParameterValue', '')
+                        unit_type = item.get('ParameterUnitType', '')
+                        
+                        if param_value and param_value != '' and param_value != '0':
+                            try:
+                                current_value = float(param_value)
+                                
+                                data_type, unit = self._get_parameter_type_and_unit(param_name, unit_type)
+                                
+                                if data_type != 'unknown':
+                                    RotemDataPoint.objects.create(
+                                        controller=controller,
+                                        timestamp=current_time,
+                                        data_type=f"{data_type}_house_{house_num}",
+                                        value=current_value,
+                                        unit=unit,
+                                        quality='good'
+                                    )
+                                    data_points_created += 1
+                                    logger.info(f"Created {data_type}_house_{house_num} data point: {current_value} {unit}")
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Process DigitalOut section (fans, heaters, etc.)
+                digital_out = ds_data.get('DigitalOut', [])
+                for item in digital_out:
+                    if isinstance(item, dict) and 'ParameterValue' in item:
+                        param_name = item.get('ParameterKeyName', '')
+                        param_value = item.get('ParameterValue', '')
+                        param_data = item.get('ParameterData', '')
+                        
+                        if param_value and param_value != 'LangKey_Off':
+                            try:
+                                # For digital outputs, use ParameterData for numeric value
+                                if param_data and param_data.isdigit():
+                                    current_value = float(param_data)
+                                    
+                                    data_type, unit = self._get_parameter_type_and_unit(param_name, 'UT_Number')
+                                    
+                                    if data_type != 'unknown':
+                                        RotemDataPoint.objects.create(
+                                            controller=controller,
+                                            timestamp=current_time,
+                                            data_type=f"{data_type}_house_{house_num}",
+                                            value=current_value,
+                                            unit=unit,
+                                            quality='good'
+                                        )
+                                        data_points_created += 1
+                                        logger.info(f"Created {data_type}_house_{house_num} data point: {current_value} {unit}")
+                            except (ValueError, TypeError):
+                                continue
         
-        # Air pressure data
-        pressure_value = random.uniform(1010, 1020)  # Normal atmospheric pressure
-        RotemDataPoint.objects.create(
-            controller=controller,
-            timestamp=current_time,
-            data_type='air_pressure',
-            value=pressure_value,
-            unit='hPa',
-            quality='good'
-        )
+            # If no real data was found, create some basic simulated data as fallback
+            if data_points_created == 0:
+                logger.warning("No real data found, creating simulated data as fallback")
+                self._create_simulated_data_points(controller, current_time)
+    
+    def _get_sensor_type_and_unit(self, field_name):
+        """Determine sensor type and unit based on field name"""
+        sensor_mappings = {
+            'Temperature_Current': ('temperature', '°F'),
+            'Humidity_Current': ('humidity', '%'),
+            'Wind_Chill_Temperature': ('wind_chill', '°F'),
+            'Wind_Speed': ('wind_speed', 'mph'),
+            'Wind_Direction': ('wind_direction', 'degrees'),
+            'WodPressure': ('pressure', 'inWC'),
+            'Heaters': ('heater_status', 'units'),
+            'Silo_1': ('silo_1', '%'),
+            'Silo_2': ('silo_2', '%'),
+            'Silo_3': ('silo_3', '%'),
+            'Silo_4': ('silo_4', '%'),
+            'Tunnel_Fans': ('tunnel_fans', 'count'),
+            'Exh_Fans': ('exhaust_fans', 'count'),
+            'Stir_Fans': ('stir_fans', 'count'),
+            'Cooling_Pad': ('cooling_pad', 'status'),
+            'Light1': ('light_1', '%'),
+            'Light2': ('light_2', '%'),
+            'Light3': ('light_3', '%'),
+            'Light4': ('light_4', '%'),
+            'Feeding': ('feeding', 'count'),
+            'Auger': ('auger', 'count'),
+            'Air_Vent_1_Position': ('air_vent_1', '%'),
+            'Air_Vent_2_Position': ('air_vent_2', '%'),
+            'Tunnel_Curtain_1_Position': ('tunnel_curtain_1', '%'),
+            'Tunnel_Curtain_2_Position': ('tunnel_curtain_2', '%')
+        }
         
-        # Wind speed data (for ventilation monitoring)
-        wind_speed = random.uniform(0.5, 2.0)  # Gentle ventilation
-        RotemDataPoint.objects.create(
-            controller=controller,
-            timestamp=current_time,
-            data_type='wind_speed',
-            value=wind_speed,
-            unit='m/s',
-            quality='good'
-        )
+        return sensor_mappings.get(field_name, ('unknown', 'units'))
+    
+    def _get_parameter_type_and_unit(self, param_name, unit_type):
+        """Determine data type and unit based on parameter name and unit type"""
+        # Map unit types to units
+        unit_mappings = {
+            'UT_Temperature': '°C',
+            'UT_Percent': '%',
+            'UT_Number': 'units',
+            'UT_Weight': 'kg',
+            'UT_Volume': 'L',
+            'UT_Pressure': 'hPa',
+            'UT_Capacity': 'CFM',
+            'UT_Time': 'time',
+            'UT_WindSpeed': 'mph'
+        }
         
-        # Water consumption (simulated)
-        water_consumption = random.uniform(100, 200)  # Liters per hour
-        RotemDataPoint.objects.create(
-            controller=controller,
-            timestamp=current_time,
-            data_type='water_consumption',
-            value=water_consumption,
-            unit='L/h',
-            quality='good'
-        )
+        # Map parameter names to data types
+        param_mappings = {
+            'Average_Temperature': 'temperature',
+            'Outside_Temperature': 'outside_temperature',
+            'Inside_Humidity': 'humidity',
+            'Static_Pressure': 'pressure',
+            'Set_Temperature': 'target_temperature',
+            'Vent_Level': 'ventilation_level',
+            'Growth_Day': 'growth_day',
+            'Feed_Consumption': 'feed_consumption',
+            'Daily_Water': 'water_consumption',
+            'Current_Level_CFM': 'airflow_cfm',
+            'CFM_Percentage': 'airflow_percentage',
+            'Current_Birds_Count_In_House': 'bird_count',
+            'Birds_Livability': 'livability',
+            'House_Connection_Status': 'connection_status'
+        }
         
-        # Feed consumption (simulated)
-        feed_consumption = random.uniform(50, 100)  # Kg per hour
-        RotemDataPoint.objects.create(
-            controller=controller,
-            timestamp=current_time,
-            data_type='feed_consumption',
-            value=feed_consumption,
-            unit='kg/h',
-            quality='good'
-        )
+        data_type = param_mappings.get(param_name, 'unknown')
+        unit = unit_mappings.get(unit_type, 'units')
         
-        logger.info(f"Created 6 data points for controller {controller.controller_name}")
+        return data_type, unit
+    
+    def _get_sensor_type_and_unit_from_name(self, sensor_name, unit_type):
+        """Determine data type and unit based on sensor name and unit type"""
+        # Map unit types to units
+        unit_mappings = {
+            'UT_Temperature': '°C',
+            'UT_Percent': '%',
+            'UT_Number': 'units',
+            'UT_Weight': 'kg',
+            'UT_Volume': 'L',
+            'UT_Pressure': 'hPa',
+            'UT_Capacity': 'CFM',
+            'UT_Time': 'time',
+            'UT_WindSpeed': 'mph'
+        }
+        
+        # Map sensor names to data types
+        sensor_mappings = {
+            'Tunnel_Temperature': 'tunnel_temperature',
+            'Wind_Chill_Temperature': 'wind_chill_temperature',
+            'Attic_Temperature': 'attic_temperature',
+            'Temperature_Sensor_1': 'temp_sensor_1',
+            'Temperature_Sensor_2': 'temp_sensor_2',
+            'Temperature_Sensor_3': 'temp_sensor_3',
+            'Temperature_Sensor_4': 'temp_sensor_4',
+            'Temperature_Sensor_5': 'temp_sensor_5',
+            'Temperature_Sensor_6': 'temp_sensor_6',
+            'Temperature_Sensor_7': 'temp_sensor_7',
+            'Temperature_Sensor_8': 'temp_sensor_8',
+            'Temperature_Sensor_9': 'temp_sensor_9',
+            'Ammonia': 'ammonia',
+            'Wind_Speed': 'wind_speed',
+            'Wind_Direction': 'wind_direction'
+        }
+        
+        data_type = sensor_mappings.get(sensor_name, 'unknown')
+        unit = unit_mappings.get(unit_type, 'units')
+        
+        return data_type, unit
+    
+    def _create_simulated_data_points(self, controller, current_time):
+        """Create simulated data points as fallback when real data is not available"""
+        # Create realistic simulated data for each house (1-8)
+        for house_num in range(1, 9):
+            # Temperature data (typical range for poultry houses)
+            temp_value = random.uniform(20, 25)  # 20-25°C optimal for chickens
+            RotemDataPoint.objects.create(
+                controller=controller,
+                timestamp=current_time,
+                data_type=f'temperature_house_{house_num}',
+                value=temp_value,
+                unit='°C',
+                quality='good'
+            )
+            
+            # Humidity data
+            humidity_value = random.uniform(50, 70)  # 50-70% optimal humidity
+            RotemDataPoint.objects.create(
+                controller=controller,
+                timestamp=current_time,
+                data_type=f'humidity_house_{house_num}',
+                value=humidity_value,
+                unit='%',
+                quality='good'
+            )
+            
+            # Air pressure data
+            pressure_value = random.uniform(1010, 1020)  # Normal atmospheric pressure
+            RotemDataPoint.objects.create(
+                controller=controller,
+                timestamp=current_time,
+                data_type=f'pressure_house_{house_num}',
+                value=pressure_value,
+                unit='hPa',
+                quality='good'
+            )
+            
+            # Water consumption (simulated)
+            water_consumption = random.uniform(100, 200)  # Liters per day
+            RotemDataPoint.objects.create(
+                controller=controller,
+                timestamp=current_time,
+                data_type=f'water_consumption_house_{house_num}',
+                value=water_consumption,
+                unit='L/day',
+                quality='good'
+            )
+            
+            # Feed consumption (simulated)
+            feed_consumption = random.uniform(50, 100)  # Kg per day
+            RotemDataPoint.objects.create(
+                controller=controller,
+                timestamp=current_time,
+                data_type=f'feed_consumption_house_{house_num}',
+                value=feed_consumption,
+                unit='kg/day',
+                quality='good'
+            )
+        
+        logger.info(f"Created 40 simulated data points (5 per house x 8 houses) for controller {controller.controller_name}")
     
     def _parse_datetime(self, datetime_str):
         """Parse datetime string from API response"""

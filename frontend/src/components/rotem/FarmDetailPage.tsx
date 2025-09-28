@@ -26,10 +26,13 @@ import {
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRotem } from '../../contexts/RotemContext';
-import { FarmDashboardData, RotemDataPoint } from '../../types/rotem';
+import { FarmDashboardData, RotemDataPoint, RealTimeFarmData, HouseSensorData } from '../../types/rotem';
 import SensorDataChart from './SensorDataChart';
 import FarmInfoCard from './FarmInfoCard';
 import ControllerStatusCard from './ControllerStatusCard';
+import RealTimeSensorCard from './RealTimeSensorCard';
+import TemperatureSensorsCard from './TemperatureSensorsCard';
+import { rotemApi } from '../../services/rotemApi';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -61,6 +64,8 @@ const FarmDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
+  const [realTimeData, setRealTimeData] = useState<RealTimeFarmData | null>(null);
+  const [isLoadingRealTime, setIsLoadingRealTime] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
 
   const loadFarmData = useCallback(async () => {
@@ -73,6 +78,9 @@ const FarmDetailPage: React.FC = () => {
       const data = await getFarmDashboard(farmId);
       console.log('DEBUG: FarmDetailPage data loaded:', data);
       setFarmData(data);
+      
+      // Load real-time data
+      await loadRealTimeData();
     } catch (err) {
       console.error('DEBUG: FarmDetailPage error:', err);
       setError('Failed to load farm data');
@@ -80,6 +88,20 @@ const FarmDetailPage: React.FC = () => {
       setLoading(false);
     }
   }, [farmId, getFarmDashboard]);
+
+  const loadRealTimeData = useCallback(async () => {
+    if (!farmId) return;
+    
+    setIsLoadingRealTime(true);
+    try {
+      const data = await rotemApi.getRealTimeFarmData(farmId);
+      setRealTimeData(data);
+    } catch (error) {
+      console.error('Error loading real-time data:', error);
+    } finally {
+      setIsLoadingRealTime(false);
+    }
+  }, [farmId]);
 
   const handleScrape = async () => {
     if (!farmId) return;
@@ -201,6 +223,7 @@ const FarmDetailPage: React.FC = () => {
           aria-label="farm detail tabs"
         >
           <Tab label="Overview" />
+          <Tab label="Real-Time Data" />
           <Tab label="Sensor Data" />
           <Tab label="Controllers" />
           <Tab label="Settings" />
@@ -220,6 +243,63 @@ const FarmDetailPage: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
+        {/* Real-Time Data Tab */}
+        {realTimeData && realTimeData.houses.length > 0 ? (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Real-Time Sensor Data - {realTimeData.farm_name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Last updated: {new Date(realTimeData.last_updated).toLocaleString()} | 
+              Total data points: {realTimeData.total_data_points.toLocaleString()}
+            </Typography>
+            
+            <Grid container spacing={3}>
+              {realTimeData.houses.map((house) => (
+                <Grid item xs={12} md={6} lg={4} key={house.house_number}>
+                  <RealTimeSensorCard 
+                    houseData={house} 
+                    isLoading={isLoadingRealTime}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Temperature Sensors Detail */}
+            <Box sx={{ mt: 4 }}>
+              <Typography variant="h6" component="h3" gutterBottom>
+                Detailed Temperature Sensors
+              </Typography>
+              <Grid container spacing={3}>
+                {realTimeData.houses.map((house) => (
+                  <Grid item xs={12} key={house.house_number}>
+                    <TemperatureSensorsCard houseData={house} />
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              No real-time data available
+            </Typography>
+            <Typography color="textSecondary" sx={{ mb: 2 }}>
+              Run a data scrape to collect real-time sensor data
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<TrendingUp />}
+              onClick={handleScrape}
+              disabled={isScraping}
+            >
+              {isScraping ? 'Scraping...' : 'Scrape Data'}
+            </Button>
+          </Box>
+        )}
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={2}>
         <SensorDataChart
           data={recent_data}
           title={`${farm.farm_name} - Sensor Data`}
@@ -227,7 +307,7 @@ const FarmDetailPage: React.FC = () => {
         />
       </TabPanel>
 
-      <TabPanel value={tabValue} index={2}>
+      <TabPanel value={tabValue} index={3}>
         <Grid container spacing={2}>
           {controllers.map((controller) => (
             <Grid item xs={12} sm={6} md={4} key={controller.id}>
@@ -261,7 +341,7 @@ const FarmDetailPage: React.FC = () => {
         </Grid>
       </TabPanel>
 
-      <TabPanel value={tabValue} index={3}>
+      <TabPanel value={tabValue} index={4}>
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>

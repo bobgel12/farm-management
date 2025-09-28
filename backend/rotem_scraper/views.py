@@ -1,6 +1,7 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from .models import RotemDataPoint, MLPrediction, RotemController, RotemFarm, RotemUser, RotemScrapeLog
 from .serializers import (
@@ -16,6 +17,27 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
     """API for Rotem data visualization"""
     queryset = RotemDataPoint.objects.all()
     serializer_class = RotemDataPointSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['data_type', 'controller', 'quality']
+    search_fields = ['data_type', 'unit']
+    ordering_fields = ['timestamp', 'value']
+    ordering = ['-timestamp']
+    
+    def get_queryset(self):
+        """Filter queryset based on query parameters"""
+        queryset = super().get_queryset()
+        
+        # Filter by farm_id if provided
+        farm_id = self.request.query_params.get('farm_id')
+        if farm_id:
+            try:
+                farm = RotemFarm.objects.get(farm_id=farm_id)
+                controllers = farm.controllers.all()
+                queryset = queryset.filter(controller__in=controllers)
+            except RotemFarm.DoesNotExist:
+                queryset = queryset.none()
+        
+        return queryset
     
     @action(detail=False, methods=['get'])
     def latest_data(self, request):

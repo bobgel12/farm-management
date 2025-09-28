@@ -69,7 +69,11 @@ class RotemDataPoint(models.Model):
     data_type = models.CharField(max_length=50)  # temperature, humidity, etc.
     value = models.FloatField()
     unit = models.CharField(max_length=20)
-    quality = models.CharField(max_length=20, default='good')  # good, warning, error
+    quality = models.CharField(max_length=20, default='good')  # good, warning, error, no_data
+    # Additional fields for real data
+    target_value = models.FloatField(null=True, blank=True)
+    low_alarm_value = models.FloatField(null=True, blank=True)
+    high_alarm_value = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

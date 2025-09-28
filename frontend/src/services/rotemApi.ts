@@ -11,7 +11,9 @@ import {
   ScraperAllResult,
   AddFarmFormData,
   SensorChartData,
-  FarmDashboardData
+  FarmDashboardData,
+  HouseSensorData,
+  RealTimeFarmData
 } from '../types/rotem';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8002/api';
@@ -289,6 +291,135 @@ class RotemApiService {
     
     const sum = filtered.reduce((acc, point) => acc + point.value, 0);
     return sum / filtered.length;
+  }
+
+  // Real-time sensor data methods
+  async getRealTimeFarmData(farmId: string): Promise<RealTimeFarmData> {
+    try {
+      // Get all data points for the farm
+      const dataPoints = await this.getDataByFarm(farmId);
+      
+      // Group data points by house and data type
+      const houseData: { [houseNumber: string]: any } = {};
+      
+      dataPoints.forEach((point: RotemDataPoint) => {
+        const houseMatch = point.data_type.match(/_house_(\d+)$/);
+        if (houseMatch) {
+          const houseNumber = houseMatch[1];
+          const dataType = point.data_type.replace(/_house_\d+$/, '');
+          
+          if (!houseData[houseNumber]) {
+            houseData[houseNumber] = { house_number: parseInt(houseNumber) };
+          }
+          
+          houseData[houseNumber][dataType] = point.value;
+        }
+      });
+      
+      // Convert to HouseSensorData format
+      const houses: HouseSensorData[] = Object.values(houseData).map((house: any) => ({
+        house_number: house.house_number,
+        temperature: house.temperature || 0,
+        outside_temperature: house.outside_temperature || 0,
+        humidity: house.humidity || 0,
+        pressure: house.pressure || 0,
+        ventilation_level: house.ventilation_level || 0,
+        target_temperature: house.target_temperature || 0,
+        feed_consumption: house.feed_consumption || 0,
+        water_consumption: house.water_consumption || 0,
+        airflow_cfm: house.airflow_cfm || 0,
+        airflow_percentage: house.airflow_percentage || 0,
+        bird_count: house.bird_count || 0,
+        livability: house.livability || 0,
+        connection_status: house.connection_status || 0,
+        growth_day: house.growth_day || 0,
+        temperature_sensors: {
+          sensor_1: house.temp_sensor_1 || 0,
+          sensor_2: house.temp_sensor_2 || 0,
+          sensor_3: house.temp_sensor_3 || 0,
+          sensor_4: house.temp_sensor_4 || 0,
+          sensor_5: house.temp_sensor_5 || 0,
+          sensor_6: house.temp_sensor_6 || 0,
+          sensor_7: house.temp_sensor_7 || 0,
+          sensor_8: house.temp_sensor_8 || 0,
+          sensor_9: house.temp_sensor_9 || 0,
+        },
+        tunnel_temperature: house.tunnel_temperature || 0,
+        wind_chill_temperature: house.wind_chill_temperature || 0,
+        wind_speed: house.wind_speed || 0,
+        wind_direction: house.wind_direction || 0,
+      }));
+      
+      // Get farm info
+      const farm = await this.getFarm(farmId);
+      
+      return {
+        farm_id: farmId,
+        farm_name: farm.farm_name,
+        houses,
+        last_updated: new Date().toISOString(),
+        total_data_points: dataPoints.length
+      };
+    } catch (error) {
+      console.error('Error getting real-time farm data:', error);
+      throw error;
+    }
+  }
+
+  async getHouseSensorData(farmId: string, houseNumber: number): Promise<HouseSensorData | null> {
+    try {
+      const realTimeData = await this.getRealTimeFarmData(farmId);
+      return realTimeData.houses.find(house => house.house_number === houseNumber) || null;
+    } catch (error) {
+      console.error('Error getting house sensor data:', error);
+      return null;
+    }
+  }
+
+  async getTemperatureHistory(farmId: string, houseNumber: number, hours: number = 24): Promise<SensorChartData[]> {
+    try {
+      const dataPoints = await this.getDataByFarm(farmId);
+      const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+      
+      return dataPoints
+        .filter((point: RotemDataPoint) => 
+          point.data_type === `temperature_house_${houseNumber}` &&
+          new Date(point.timestamp) >= cutoff
+        )
+        .map((point: RotemDataPoint) => ({
+          timestamp: point.timestamp,
+          value: point.value,
+          data_type: point.data_type,
+          unit: point.unit
+        }))
+        .sort((a: SensorChartData, b: SensorChartData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    } catch (error) {
+      console.error('Error getting temperature history:', error);
+      return [];
+    }
+  }
+
+  async getHumidityHistory(farmId: string, houseNumber: number, hours: number = 24): Promise<SensorChartData[]> {
+    try {
+      const dataPoints = await this.getDataByFarm(farmId);
+      const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+      
+      return dataPoints
+        .filter((point: RotemDataPoint) => 
+          point.data_type === `humidity_house_${houseNumber}` &&
+          new Date(point.timestamp) >= cutoff
+        )
+        .map((point: RotemDataPoint) => ({
+          timestamp: point.timestamp,
+          value: point.value,
+          data_type: point.data_type,
+          unit: point.unit
+        }))
+        .sort((a: SensorChartData, b: SensorChartData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    } catch (error) {
+      console.error('Error getting humidity history:', error);
+      return [];
+    }
   }
 }
 

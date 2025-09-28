@@ -25,27 +25,49 @@ import {
   Schedule,
 } from '@mui/icons-material';
 import { useRotem } from '../../contexts/RotemContext';
-import { FarmDataSummary, RotemScrapeLog } from '../../types/rotem';
+import { FarmDataSummary, RotemScrapeLog, RealTimeFarmData } from '../../types/rotem';
 import FarmCard from './FarmCard';
 import DataSummaryCard from './DataSummaryCard';
 import RecentLogsCard from './RecentLogsCard';
 import AddFarmDialog from './AddFarmDialog';
+import RealTimeSensorCard from './RealTimeSensorCard';
+import TemperatureSensorsCard from './TemperatureSensorsCard';
+import { rotemApi } from '../../services/rotemApi';
 
 const RotemDashboard: React.FC = () => {
   const { state, refreshAllData, scrapeAllFarms, clearError } = useRotem();
   const [addFarmOpen, setAddFarmOpen] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
+  const [realTimeData, setRealTimeData] = useState<RealTimeFarmData | null>(null);
+  const [isLoadingRealTime, setIsLoadingRealTime] = useState(false);
 
   const handleRefresh = async () => {
     await refreshAllData();
+    await loadRealTimeData();
   };
 
   const handleScrapeAll = async () => {
     setIsScraping(true);
     try {
       await scrapeAllFarms();
+      await loadRealTimeData();
     } finally {
       setIsScraping(false);
+    }
+  };
+
+  const loadRealTimeData = async () => {
+    if (!Array.isArray(state.farms) || state.farms.length === 0) return;
+    
+    setIsLoadingRealTime(true);
+    try {
+      const farm = state.farms[0]; // Get first farm
+      const data = await rotemApi.getRealTimeFarmData(farm.farm_id);
+      setRealTimeData(data);
+    } catch (error) {
+      console.error('Error loading real-time data:', error);
+    } finally {
+      setIsLoadingRealTime(false);
     }
   };
 
@@ -90,6 +112,13 @@ const RotemDashboard: React.FC = () => {
     (sum, farm) => sum + farm.controllers,
     0
   );
+
+  // Load real-time data when farms are available
+  useEffect(() => {
+    if (Array.isArray(state.farms) && state.farms.length > 0) {
+      loadRealTimeData();
+    }
+  }, [state.farms]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -245,6 +274,46 @@ const RotemDashboard: React.FC = () => {
           </Box>
         </Grid>
       </Grid>
+
+      {/* Real-Time Sensor Data */}
+      {realTimeData && realTimeData.houses.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h5" component="h2" gutterBottom>
+            Real-Time Sensor Data - {realTimeData.farm_name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Last updated: {new Date(realTimeData.last_updated).toLocaleString()} | 
+            Total data points: {realTimeData.total_data_points.toLocaleString()}
+          </Typography>
+          
+          <Grid container spacing={3}>
+            {realTimeData.houses.map((house) => (
+              <Grid item xs={12} md={6} lg={4} key={house.house_number}>
+                <RealTimeSensorCard 
+                  houseData={house} 
+                  isLoading={isLoadingRealTime}
+                />
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Temperature Sensors Detail */}
+          {realTimeData.houses.length > 0 && (
+            <Box sx={{ mt: 4 }}>
+              <Typography variant="h6" component="h3" gutterBottom>
+                Detailed Temperature Sensors
+              </Typography>
+              <Grid container spacing={3}>
+                {realTimeData.houses.map((house) => (
+                  <Grid item xs={12} key={house.house_number}>
+                    <TemperatureSensorsCard houseData={house} />
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Add Farm Dialog */}
       <AddFarmDialog

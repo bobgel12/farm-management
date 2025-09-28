@@ -45,6 +45,9 @@ export interface RotemDataPoint {
   value: number;
   unit: string;
   quality: string;
+  target_value?: number;
+  low_alarm_value?: number;
+  high_alarm_value?: number;
   created_at: string;
 }
 
@@ -137,6 +140,48 @@ export interface FarmDashboardData {
   recent_data: RotemDataPoint[];
   summary: FarmDataSummary;
   last_scrape: RotemScrapeLog | null;
+}
+
+// Real Sensor Data Types
+export interface HouseSensorData {
+  house_number: number;
+  temperature: number;
+  outside_temperature: number;
+  humidity: number;
+  pressure: number;
+  ventilation_level: number;
+  target_temperature: number;
+  feed_consumption: number;
+  water_consumption: number;
+  airflow_cfm: number;
+  airflow_percentage: number;
+  bird_count: number;
+  livability: number;
+  connection_status: number;
+  growth_day: number;
+  temperature_sensors: {
+    sensor_1: number;
+    sensor_2: number;
+    sensor_3: number;
+    sensor_4: number;
+    sensor_5: number;
+    sensor_6: number;
+    sensor_7: number;
+    sensor_8: number;
+    sensor_9: number;
+  };
+  tunnel_temperature: number;
+  wind_chill_temperature: number;
+  wind_speed: number;
+  wind_direction: number;
+}
+
+export interface RealTimeFarmData {
+  farm_id: string;
+  farm_name: string;
+  houses: HouseSensorData[];
+  last_updated: string;
+  total_data_points: number;
 }
 
 // API Endpoint Types
