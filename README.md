@@ -225,16 +225,19 @@ This project is licensed under the MIT License.
 
 ---
 
-## 🆕 NEW: Rotem Integration (Phase 2 Complete)
+## 🆕 NEW: Rotem Integration (Phase 3 Complete)
 
-**✅ ROTEM INTEGRATION COMPLETE** - Multi-farm data collection system:
+**✅ ROTEM INTEGRATION COMPLETE** - Full-stack farm monitoring system:
 - Multi-farm support with individual credentials
 - Real-time data processing from RotemNetWeb API
 - Comprehensive sensor data collection (temperature, humidity, pressure, etc.)
 - RESTful API endpoints for frontend integration
 - Automated data scraping with Celery tasks
-- Machine learning pipeline ready
-- Database persistence for all farm data
+- **NEW: ML Dashboard with AI insights**
+- **NEW: Real-time sensor data visualization**
+- **NEW: Equipment failure prediction**
+- **NEW: Environmental optimization recommendations**
+- **NEW: System performance analysis**
 
 ### Quick Start with Rotem Integration
 ```bash
@@ -246,9 +249,19 @@ make rotem-test
 
 # View scraper logs
 make rotem-logs
+
+# Access the ML Dashboard
+# Navigate to: http://localhost:3002/rotem
 ```
 
-See [ROTEM_PHASE2_COMPLETION.md](ROTEM_PHASE2_COMPLETION.md) for detailed documentation.
+### New ML Features
+- **Anomaly Detection**: Real-time detection of unusual patterns
+- **Failure Prediction**: ML-based equipment failure predictions
+- **Optimization**: AI-powered environmental recommendations
+- **Performance Analysis**: System health and efficiency metrics
+- **Interactive Dashboard**: Complete ML insights interface
+
+See [ROTEM_PHASE3_COMPLETION.md](ROTEM_PHASE3_COMPLETION.md) for detailed documentation.
 
 ---
 
