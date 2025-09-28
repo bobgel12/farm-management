@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -63,7 +63,7 @@ const FarmDetailPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [isScraping, setIsScraping] = useState(false);
 
-  const loadFarmData = async () => {
+  const loadFarmData = useCallback(async () => {
     if (!farmId) return;
 
     try {
@@ -79,7 +79,7 @@ const FarmDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [farmId, getFarmDashboard]);
 
   const handleScrape = async () => {
     if (!farmId) return;
@@ -99,7 +99,7 @@ const FarmDetailPage: React.FC = () => {
 
   useEffect(() => {
     loadFarmData();
-  }, [farmId]);
+  }, [loadFarmData]); // Use memoized loadFarmData function
 
   if (loading) {
     return (

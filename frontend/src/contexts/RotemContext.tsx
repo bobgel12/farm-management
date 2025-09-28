@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import {
   RotemFarm,
   RotemDataPoint,
@@ -134,7 +134,7 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
   const { user } = useAuth();
 
   // Farm Management
-  const loadFarms = async () => {
+  const loadFarms = useCallback(async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const response = await rotemApi.getFarms();
@@ -144,7 +144,7 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load farms' });
     }
-  };
+  }, []);
 
   const addFarm = async (farmData: any) => {
     try {
@@ -179,23 +179,23 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
   };
 
   // Data Management
-  const loadDataSummary = async () => {
+  const loadDataSummary = useCallback(async () => {
     try {
       const summary = await rotemApi.getDataSummary();
       dispatch({ type: 'SET_DATA_SUMMARY', payload: summary });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load data summary' });
     }
-  };
+  }, []);
 
-  const loadRecentData = async () => {
+  const loadRecentData = useCallback(async () => {
     try {
       const data = await rotemApi.getRecentData();
       dispatch({ type: 'SET_RECENT_DATA', payload: data });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load recent data' });
     }
-  };
+  }, []);
 
   const loadFarmData = async (farmId: string): Promise<RotemDataPoint[]> => {
     try {
@@ -282,7 +282,7 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
     }
   };
 
-  const getFarmDashboard = async (farmId: string): Promise<FarmDashboardData> => {
+  const getFarmDashboard = useCallback(async (farmId: string): Promise<FarmDashboardData> => {
     try {
       console.log('DEBUG: getFarmDashboard called with farmId:', farmId);
       const result = await rotemApi.getFarmDashboard(farmId);
@@ -293,7 +293,7 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load farm dashboard' });
       throw error;
     }
-  };
+  }, []);
 
   const clearError = () => {
     dispatch({ type: 'SET_ERROR', payload: null });
@@ -309,14 +309,14 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
     }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
-  }, [state.farms.length]);
+  }, []); // Remove state.farms.length dependency to prevent infinite loop
 
   // Load initial data only when user is authenticated
   useEffect(() => {
     if (user) {
       refreshAllData();
     }
-  }, [user]);
+  }, [user?.id]); // Use user.id instead of entire user object to prevent infinite loop
 
   const value: RotemContextType = {
     state,
