@@ -4,8 +4,10 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Farm(models.Model):
-    name = models.CharField(max_length=100)
-    location = models.CharField(max_length=200)
+    # Basic farm information
+    name = models.CharField(max_length=200)
+    location = models.CharField(max_length=300)
+    description = models.TextField(blank=True, help_text="Optional description of the farm")
     contact_person = models.CharField(max_length=100)
     contact_phone = models.CharField(max_length=20)
     contact_email = models.EmailField()
@@ -13,6 +15,38 @@ class Farm(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # System integration fields
+    has_system_integration = models.BooleanField(default=False, help_text="Whether this farm has system integration")
+    integration_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('none', 'No Integration'),
+            ('rotem', 'Rotem System'),
+            ('future_system', 'Future System'),
+        ],
+        default='none',
+        help_text="Type of system integration"
+    )
+    integration_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('active', 'Active'),
+            ('inactive', 'Inactive'),
+            ('error', 'Error'),
+            ('not_configured', 'Not Configured'),
+        ],
+        default='not_configured',
+        help_text="Current status of the integration"
+    )
+    last_sync = models.DateTimeField(null=True, blank=True, help_text="Last successful data sync")
+    
+    # Rotem-specific fields (only used if integration_type='rotem')
+    rotem_farm_id = models.CharField(max_length=100, null=True, blank=True, help_text="Rotem system farm ID")
+    rotem_username = models.CharField(max_length=200, null=True, blank=True, help_text="Rotem system username")
+    rotem_password = models.CharField(max_length=200, null=True, blank=True, help_text="Rotem system password")
+    rotem_gateway_name = models.CharField(max_length=100, null=True, blank=True, help_text="Rotem gateway name")
+    rotem_gateway_alias = models.CharField(max_length=200, null=True, blank=True, help_text="Rotem gateway alias")
 
     def __str__(self):
         return self.name
@@ -24,6 +58,21 @@ class Farm(models.Model):
     @property
     def active_houses(self):
         return self.houses.filter(is_active=True).count()
+    
+    @property
+    def is_integrated(self):
+        """Check if farm has active system integration"""
+        return self.has_system_integration and self.integration_status == 'active'
+    
+    @property
+    def integration_display_name(self):
+        """Get human-readable integration type"""
+        return dict(self._meta.get_field('integration_type').choices)[self.integration_type]
+    
+    def save(self, *args, **kwargs):
+        # Auto-set has_system_integration based on integration_type
+        self.has_system_integration = self.integration_type != 'none'
+        super().save(*args, **kwargs)
 
 
 class Worker(models.Model):
