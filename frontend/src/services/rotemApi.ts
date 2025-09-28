@@ -6,6 +6,12 @@ import {
   RotemDataPoint,
   RotemScrapeLog,
   MLPrediction,
+  MLModel,
+  MLSummary,
+  AnomalyData,
+  FailureData,
+  OptimizationData,
+  PerformanceData,
   FarmDataSummary,
   ScraperResult,
   ScraperAllResult,
@@ -420,6 +426,78 @@ class RotemApiService {
       console.error('Error getting humidity history:', error);
       return [];
     }
+  }
+
+  // ML Prediction Methods
+  async getMLPredictions(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data.results;
+  }
+
+  async getActivePredictions(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/active_predictions/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getAnomalies(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/anomalies/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getFailures(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/failures/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getOptimizations(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/optimizations/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getPerformance(): Promise<MLPrediction[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/performance/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getMLSummary(): Promise<MLSummary> {
+    const response = await axios.get(`${this.baseURL}/rotem/predictions/summary/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  // ML Model Methods
+  async getMLModels(): Promise<MLModel[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/ml-models/`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data.results;
+  }
+
+  async trainMLModels(): Promise<{ message: string; task_id: string }> {
+    const response = await axios.post(`${this.baseURL}/rotem/ml-models/train_models/`, {}, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async runMLAnalysis(): Promise<{ message: string; task_id: string }> {
+    const response = await axios.post(`${this.baseURL}/rotem/ml-models/run_analysis/`, {}, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
   }
 }
 

@@ -64,3 +64,45 @@ def analyze_data():
     except Exception as e:
         logger.error(f"ML analysis failed: {str(e)}")
         raise
+
+
+@shared_task
+def train_ml_models():
+    """Train ML models with historical data"""
+    try:
+        logger.info("Starting ML model training task")
+        
+        # Initialize ML service
+        ml_service = MLAnalysisService()
+        
+        # Train models
+        success = ml_service.train_models()
+        
+        if success:
+            logger.info("ML model training completed successfully")
+        else:
+            logger.warning("ML model training completed with warnings")
+        
+    except Exception as e:
+        logger.error(f"ML model training failed: {str(e)}")
+        raise
+
+
+@shared_task
+def cleanup_old_predictions():
+    """Clean up old ML predictions to prevent database bloat"""
+    try:
+        from datetime import timedelta
+        from .models import MLPrediction
+        
+        # Delete predictions older than 30 days
+        cutoff_date = timezone.now() - timedelta(days=30)
+        deleted_count = MLPrediction.objects.filter(
+            predicted_at__lt=cutoff_date
+        ).delete()[0]
+        
+        logger.info(f"Cleaned up {deleted_count} old ML predictions")
+        
+    except Exception as e:
+        logger.error(f"Cleanup task failed: {str(e)}")
+        raise

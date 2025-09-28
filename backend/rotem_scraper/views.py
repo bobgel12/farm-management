@@ -3,12 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-from .models import RotemDataPoint, MLPrediction, RotemController, RotemFarm, RotemUser, RotemScrapeLog
+from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog
 from .serializers import (
-    RotemDataPointSerializer, MLPredictionSerializer, RotemControllerSerializer,
+    RotemDataPointSerializer, MLPredictionSerializer, MLModelSerializer, RotemControllerSerializer,
     RotemFarmSerializer, RotemUserSerializer, RotemScrapeLogSerializer
 )
 from .services.scraper_service import DjangoRotemScraperService
+from .services.ml_service import MLAnalysisService
 from django.utils import timezone
 from datetime import timedelta
 
@@ -242,6 +243,150 @@ class RotemScraperViewSet(viewsets.ViewSet):
             return Response({
                 'results': results,
                 'total_farms': len(results)
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MLPredictionViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for ML predictions and insights"""
+    queryset = MLPrediction.objects.filter(is_active=True)
+    serializer_class = MLPredictionSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['prediction_type', 'controller', 'is_active']
+    search_fields = ['prediction_type', 'controller__controller_name']
+    ordering_fields = ['predicted_at', 'confidence_score']
+    ordering = ['-predicted_at']
+    
+    @action(detail=False, methods=['get'])
+    def active_predictions(self, request):
+        """Get active predictions from last 24 hours"""
+        predictions = self.queryset.filter(
+            predicted_at__gte=timezone.now() - timedelta(hours=24)
+        ).order_by('-predicted_at')
+        
+        serializer = self.get_serializer(predictions, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def anomalies(self, request):
+        """Get anomaly predictions"""
+        anomalies = self.queryset.filter(
+            prediction_type='anomaly',
+            predicted_at__gte=timezone.now() - timedelta(hours=24)
+        ).order_by('-confidence_score')
+        
+        serializer = self.get_serializer(anomalies, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def failures(self, request):
+        """Get equipment failure predictions"""
+        failures = self.queryset.filter(
+            prediction_type='failure',
+            predicted_at__gte=timezone.now() - timedelta(days=7)
+        ).order_by('-confidence_score')
+        
+        serializer = self.get_serializer(failures, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def optimizations(self, request):
+        """Get environmental optimization suggestions"""
+        optimizations = self.queryset.filter(
+            prediction_type='optimization',
+            predicted_at__gte=timezone.now() - timedelta(hours=24)
+        ).order_by('-predicted_at')
+        
+        serializer = self.get_serializer(optimizations, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def performance(self, request):
+        """Get system performance analysis"""
+        performance = self.queryset.filter(
+            prediction_type='performance',
+            predicted_at__gte=timezone.now() - timedelta(hours=24)
+        ).order_by('-predicted_at')
+        
+        serializer = self.get_serializer(performance, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get ML predictions summary"""
+        now = timezone.now()
+        last_24h = now - timedelta(hours=24)
+        last_7d = now - timedelta(days=7)
+        
+        summary = {
+            'total_predictions': self.queryset.count(),
+            'last_24h': {
+                'total': self.queryset.filter(predicted_at__gte=last_24h).count(),
+                'anomalies': self.queryset.filter(
+                    prediction_type='anomaly', 
+                    predicted_at__gte=last_24h
+                ).count(),
+                'failures': self.queryset.filter(
+                    prediction_type='failure', 
+                    predicted_at__gte=last_24h
+                ).count(),
+                'optimizations': self.queryset.filter(
+                    prediction_type='optimization', 
+                    predicted_at__gte=last_24h
+                ).count(),
+                'performance': self.queryset.filter(
+                    prediction_type='performance', 
+                    predicted_at__gte=last_24h
+                ).count(),
+            },
+            'last_7d': {
+                'total': self.queryset.filter(predicted_at__gte=last_7d).count(),
+                'failures': self.queryset.filter(
+                    prediction_type='failure', 
+                    predicted_at__gte=last_7d
+                ).count(),
+            },
+            'high_confidence_predictions': self.queryset.filter(
+                confidence_score__gte=0.8,
+                predicted_at__gte=last_24h
+            ).count()
+        }
+        
+        return Response(summary)
+
+
+class MLModelViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for ML model information"""
+    queryset = MLModel.objects.filter(is_active=True)
+    serializer_class = MLModelSerializer
+    
+    @action(detail=False, methods=['post'])
+    def train_models(self, request):
+        """Trigger ML model training"""
+        try:
+            from .tasks import train_ml_models
+            task = train_ml_models.delay()
+            
+            return Response({
+                'message': 'Model training started',
+                'task_id': task.id
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def run_analysis(self, request):
+        """Trigger ML analysis"""
+        try:
+            from .tasks import analyze_data
+            task = analyze_data.delay()
+            
+            return Response({
+                'message': 'ML analysis started',
+                'task_id': task.id
             })
         except Exception as e:
             return Response({'error': str(e)}, 

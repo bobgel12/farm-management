@@ -184,6 +184,89 @@ export interface RealTimeFarmData {
   total_data_points: number;
 }
 
+// ML Prediction Types
+export interface MLPrediction {
+  id: number;
+  controller: number;
+  controller_name: string;
+  farm_name: string;
+  prediction_type: 'anomaly' | 'failure' | 'optimization' | 'performance';
+  predicted_at: string;
+  confidence_score: number;
+  prediction_data: any;
+  is_active: boolean;
+}
+
+export interface MLModel {
+  id: number;
+  name: string;
+  version: string;
+  model_type: string;
+  is_active: boolean;
+  accuracy_score?: number;
+  training_data_size?: number;
+  last_trained?: string;
+  created_at: string;
+}
+
+export interface MLSummary {
+  total_predictions: number;
+  last_24h: {
+    total: number;
+    anomalies: number;
+    failures: number;
+    optimizations: number;
+    performance: number;
+  };
+  last_7d: {
+    total: number;
+    failures: number;
+  };
+  high_confidence_predictions: number;
+}
+
+export interface AnomalyData {
+  data_type: string;
+  value: number;
+  unit: string;
+  timestamp: string;
+  anomaly_score: number;
+  severity: 'low' | 'medium' | 'high';
+}
+
+export interface FailureData {
+  failure_probability: number;
+  indicators: {
+    error_rate: number;
+    warning_rate: number;
+    temperature_variance: number;
+    extreme_temperature_rate: number;
+    humidity_variance: number;
+    data_gap_rate: number;
+  };
+  predicted_failure_time: string;
+  recommended_actions: string[];
+}
+
+export interface OptimizationData {
+  type: string;
+  current: number;
+  optimal_range: [number, number];
+  action: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+export interface PerformanceData {
+  performance_score: number;
+  data_completeness: number;
+  efficiency_score: number;
+  total_data_points: number;
+  good_quality_points: number;
+  warning_quality_points: number;
+  error_quality_points: number;
+  recommendations: string[];
+}
+
 // API Endpoint Types
 export interface RotemApiEndpoints {
   farms: string;

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import RotemDataPoint, MLPrediction, RotemController, RotemFarm, RotemUser, RotemScrapeLog
+from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog
 
 
 class RotemDataPointSerializer(serializers.ModelSerializer):
@@ -53,3 +53,9 @@ class RotemScrapeLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = RotemScrapeLog
         fields = ['id', 'scrape_id', 'status', 'data_points_collected', 'started_at', 'completed_at', 'error_message']
+
+
+class MLModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MLModel
+        fields = ['id', 'name', 'version', 'model_type', 'is_active', 'accuracy_score', 'training_data_size', 'last_trained', 'created_at']
