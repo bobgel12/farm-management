@@ -99,6 +99,30 @@ email-daily: ## Send daily task emails
 	@echo "📧 Sending daily task emails..."
 	docker-compose exec backend python manage.py send_daily_tasks
 
+# Rotem Scraper Commands
+rotem-test: ## Test Rotem scraper
+	@echo "🔍 Testing Rotem scraper..."
+	docker-compose exec backend python manage.py test_scraper
+
+rotem-setup: ## Setup Rotem credentials
+	@echo "⚙️ Setting up Rotem credentials..."
+	@if [ ! -f .env ]; then \
+		echo "📋 Creating .env file from template..."; \
+		cp env.example .env; \
+		echo "✅ .env file created!"; \
+		echo "📝 Please edit .env file and add your Rotem credentials:"; \
+		echo "   ROTEM_USERNAME=your-rotem-username"; \
+		echo "   ROTEM_PASSWORD=your-rotem-password"; \
+	else \
+		echo "✅ .env file already exists"; \
+		echo "📝 Current Rotem settings:"; \
+		grep ROTEM .env || echo "   No Rotem credentials found in .env"; \
+	fi
+
+rotem-logs: ## Show Rotem scraper logs
+	@echo "📋 Showing Rotem scraper logs..."
+	docker-compose logs -f backend | grep -i rotem
+
 # Testing Commands
 test: ## Run tests
 	@echo "🧪 Running tests..."
@@ -191,6 +215,13 @@ help-email: ## Show email help
 	@echo "  make email-test   - Send test email"
 	@echo "  make email-daily  - Send daily task emails"
 	@echo "  make test-email-config - Test email configuration"
+
+help-rotem: ## Show Rotem scraper help
+	@echo "Rotem Scraper Commands:"
+	@echo "======================"
+	@echo "  make rotem-setup  - Setup Rotem credentials"
+	@echo "  make rotem-test   - Test Rotem scraper"
+	@echo "  make rotem-logs   - Show Rotem scraper logs"
 
 help-deploy: ## Show deployment help
 	@echo "Deployment Commands:"

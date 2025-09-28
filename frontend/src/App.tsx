@@ -7,6 +7,7 @@ import { FarmProvider } from './contexts/FarmContext';
 import { TaskProvider } from './contexts/TaskContext';
 import { WorkerProvider } from './contexts/WorkerContext';
 import { ProgramProvider } from './contexts/ProgramContext';
+import { RotemProvider } from './contexts/RotemContext';
 import Login from './components/Login';
 import ProfessionalDashboard from './components/dashboard/ProfessionalDashboard';
 import ProfessionalFarmList from './components/farms/ProfessionalFarmList';
@@ -16,8 +17,13 @@ import ProfessionalTaskList from './components/tasks/ProfessionalTaskList';
 import ProfessionalProgramManager from './components/programs/ProfessionalProgramManager';
 import ProfessionalWorkerList from './components/workers/ProfessionalWorkerList';
 import EmailManager from './components/EmailManager';
+import PasswordResetRequest from './components/PasswordResetRequest';
+import PasswordResetForm from './components/PasswordResetForm';
+import SecuritySettings from './components/SecuritySettings';
 import ProtectedRoute from './components/ProtectedRoute';
 import ProfessionalLayout from './components/layout/ProfessionalLayout';
+import RotemDashboard from './components/rotem/RotemDashboard';
+import FarmDetailPage from './components/rotem/FarmDetailPage';
 import theme from './theme';
 
 function App() {
@@ -29,16 +35,19 @@ function App() {
           <TaskProvider>
             <WorkerProvider>
               <ProgramProvider>
-                <Router>
+                <RotemProvider>
+                  <Router>
               <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={
-                  <ProtectedRoute>
-                    <ProfessionalLayout>
-                      <ProfessionalDashboard />
-                    </ProfessionalLayout>
-                  </ProtectedRoute>
-                } />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/forgot-password" element={<PasswordResetRequest />} />
+                        <Route path="/reset-password" element={<PasswordResetForm />} />
+                        <Route path="/" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <ProfessionalDashboard />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
                 <Route path="/farms" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
@@ -88,16 +97,38 @@ function App() {
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />
-                <Route path="/email" element={
-                  <ProtectedRoute>
-                    <ProfessionalLayout>
-                      <EmailManager />
-                    </ProfessionalLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="/email" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <EmailManager />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/security" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <SecuritySettings />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/rotem" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <RotemDashboard />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/rotem/farms/:farmId" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <FarmDetailPage />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-                </Router>
+                  </Router>
+                </RotemProvider>
               </ProgramProvider>
             </WorkerProvider>
           </TaskProvider>

@@ -45,6 +45,9 @@ services:
       - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
       - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@chickenmanagement.com}
+      # Rotem Scraper Configuration
+      - ROTEM_USERNAME=${ROTEM_USERNAME:-}
+      - ROTEM_PASSWORD=${ROTEM_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

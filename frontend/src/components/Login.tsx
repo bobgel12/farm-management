@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -97,6 +97,15 @@ const Login: React.FC = () => {
             >
               {loading ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>
+            
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Link
+                to="/forgot-password"
+                style={{ textDecoration: 'none', color: '#2c5aa0' }}
+              >
+                Forgot your password?
+              </Link>
+            </Box>
           </Box>
           
           <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 2 }}>

@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'tasks',
     'authentication',
     'health',
+    'rotem_scraper',
 ]
 
 MIDDLEWARE = [
@@ -140,6 +141,8 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -148,6 +151,8 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
 ]
 
 # Email settings
@@ -163,6 +168,9 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@chickenmanage
 # Email timeout settings
 EMAIL_TIMEOUT = 30
 EMAIL_USE_SSL = False
+
+# Frontend URL for password reset links
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3002')
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -199,6 +207,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        'rotem_scraper': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
 
@@ -212,10 +225,29 @@ ADMIN_USERNAME = config('ADMIN_USERNAME', default='admin')
 ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='admin123')
 ADMIN_EMAIL = config('ADMIN_EMAIL', default='admin@chickenmanagement.com')
 
-# Celery settings (for future task scheduling)
+# Rotem Scraper Settings
+ROTEM_USERNAME = config('ROTEM_USERNAME', default='')
+ROTEM_PASSWORD = config('ROTEM_PASSWORD', default='')
+
+# Celery settings
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat schedule
+CELERY_BEAT_SCHEDULE = {
+    'scrape-rotem-data-every-5-minutes': {
+        'task': 'rotem_scraper.tasks.scrape_rotem_data',
+        'schedule': 300.0,  # Every 5 minutes (300 seconds)
+    },
+    'analyze-data-every-hour': {
+        'task': 'rotem_scraper.tasks.analyze_data',
+        'schedule': 3600.0,  # Every hour (3600 seconds)
+    },
+}
+
+# ML Models Directory
+ML_MODELS_DIR = os.path.join(BASE_DIR, 'ml_models')
