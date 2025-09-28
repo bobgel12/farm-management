@@ -167,33 +167,6 @@ class RotemApiService {
   }
 
   // Predictions
-  async getPredictions(): Promise<MLPrediction[]> {
-    const response = await axios.get(`${this.baseURL}/predictions/`, {
-      headers: this.getAuthHeaders()
-    });
-    return response.data;
-  }
-
-  async getActivePredictions(): Promise<MLPrediction[]> {
-    const response = await axios.get(`${this.baseURL}/predictions/active_predictions/`, {
-      headers: this.getAuthHeaders()
-    });
-    return response.data;
-  }
-
-  async getAnomalies(): Promise<MLPrediction[]> {
-    const response = await axios.get(`${this.baseURL}/predictions/anomalies/`, {
-      headers: this.getAuthHeaders()
-    });
-    return response.data;
-  }
-
-  async getPredictionsByFarm(farmId: string): Promise<MLPrediction[]> {
-    const response = await axios.get(`${this.baseURL}/predictions/by_farm/?farm_id=${farmId}`, {
-      headers: this.getAuthHeaders()
-    });
-    return response.data;
-  }
 
   // Utility Methods
   async getFarmDashboard(farmId: string): Promise<FarmDashboardData> {

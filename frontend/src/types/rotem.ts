@@ -79,10 +79,10 @@ export interface MLModel {
   version: string;
   model_type: string;
   is_active: boolean;
-  accuracy_score: number | null;
-  training_data_size: number | null;
-  last_trained: string | null;
-  model_file_path: string;
+  accuracy_score?: number;
+  training_data_size?: number;
+  last_trained?: string;
+  model_file_path?: string;
   created_at: string;
 }
 
@@ -197,17 +197,6 @@ export interface MLPrediction {
   is_active: boolean;
 }
 
-export interface MLModel {
-  id: number;
-  name: string;
-  version: string;
-  model_type: string;
-  is_active: boolean;
-  accuracy_score?: number;
-  training_data_size?: number;
-  last_trained?: string;
-  created_at: string;
-}
 
 export interface MLSummary {
   total_predictions: number;
