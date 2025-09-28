@@ -1,6 +1,10 @@
-# Implementation Guide: Rotem Scraper + Django + ML
+# Implementation Guide: Optional Farm System Integration + Django + ML
 
-## 🚀 Quick Start Implementation
+## 🎯 Overview
+
+This guide covers the implementation of a flexible farm management system that supports both integrated and non-integrated farms, with Rotem as an optional integration system.
+
+## 🚀 Enhanced Quick Start Implementation
 
 ### Step 1: Install Dependencies
 
@@ -19,7 +23,7 @@ sudo apt-get install redis-server
 redis-server
 ```
 
-### Step 2: Add to Django Settings
+### Step 2: Enhanced Django Settings
 
 ```python
 # settings.py
@@ -27,13 +31,24 @@ redis-server
 # Add to INSTALLED_APPS
 INSTALLED_APPS = [
     # ... existing apps
-    'rotem_scraper',
+    'farms',  # Core farm management
+    'houses',  # House management
+    'integrations',  # Integration services
+    'rotem_scraper',  # Rotem integration
     'celery',
 ]
 
-# Add Rotem configuration
-ROTEM_USERNAME = os.environ.get('ROTEM_USERNAME', 'your_username')
-ROTEM_PASSWORD = os.environ.get('ROTEM_PASSWORD', 'your_password')
+# Integration settings
+INTEGRATION_SETTINGS = {
+    'ROTEM': {
+        'ENABLED': True,
+        'DEFAULT_SYNC_INTERVAL': 300,  # 5 minutes
+        'MAX_RETRY_ATTEMPTS': 3,
+    },
+    'FUTURE_SYSTEMS': {
+        'ENABLED': False,
+    }
+}
 
 # Celery configuration
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
@@ -43,10 +58,10 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
-# Celery Beat schedule
+# Enhanced Celery Beat schedule
 CELERY_BEAT_SCHEDULE = {
-    'scrape-rotem-data': {
-        'task': 'rotem_scraper.tasks.scrape_rotem_data',
+    'sync-integrated-farms': {
+        'task': 'integrations.tasks.sync_farm_data',
         'schedule': crontab(minute='*/5'),  # Every 5 minutes
     },
 }
@@ -680,7 +695,367 @@ coverage report
 - **Console Cleanup**: Removed debug statements
 - **Import Optimization**: Cleaned up unused imports
 
-## 🚀 Next Implementation Phases
+## 🚀 Enhanced Implementation Phases
+
+### Phase 1: Core Farm Management Foundation (Next Priority)
+
+#### 1. Enhanced Farm Model Implementation
+```python
+# farms/models.py
+class Farm(models.Model):
+    """Enhanced farm model with optional system integration"""
+    # Basic farm information
+    name = models.CharField(max_length=200)
+    location = models.CharField(max_length=300)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # System integration fields
+    has_system_integration = models.BooleanField(default=False)
+    integration_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('none', 'No Integration'),
+            ('rotem', 'Rotem System'),
+            ('future_system', 'Future System'),
+        ],
+        default='none'
+    )
+    integration_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('active', 'Active'),
+            ('inactive', 'Inactive'),
+            ('error', 'Error'),
+            ('not_configured', 'Not Configured'),
+        ],
+        default='not_configured'
+    )
+    last_sync = models.DateTimeField(null=True, blank=True)
+    
+    # Rotem-specific fields (only if integration_type='rotem')
+    rotem_farm_id = models.CharField(max_length=100, null=True, blank=True)
+    rotem_username = models.CharField(max_length=200, null=True, blank=True)
+    rotem_password = models.CharField(max_length=200, null=True, blank=True)
+    rotem_gateway_name = models.CharField(max_length=100, null=True, blank=True)
+    rotem_gateway_alias = models.CharField(max_length=200, null=True, blank=True)
+
+class House(models.Model):
+    """Enhanced house model with integration support"""
+    farm = models.ForeignKey(Farm, on_delete=models.CASCADE, related_name='houses')
+    house_number = models.IntegerField()
+    capacity = models.IntegerField(default=1000)
+    
+    # Integration fields
+    is_integrated = models.BooleanField(default=False)
+    system_house_id = models.CharField(max_length=100, null=True, blank=True)
+    last_system_sync = models.DateTimeField(null=True, blank=True)
+    
+    # Age tracking (for both integrated and non-integrated)
+    current_age_days = models.IntegerField(default=0)
+    batch_start_date = models.DateField(null=True, blank=True)
+    expected_harvest_date = models.DateField(null=True, blank=True)
+    
+    # House status
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+```
+
+#### 2. Integration Service Architecture
+```python
+# integrations/base.py
+from abc import ABC, abstractmethod
+
+class FarmSystemIntegration(ABC):
+    """Base class for farm system integrations"""
+    
+    @abstractmethod
+    def test_connection(self) -> bool:
+        """Test if the system is accessible"""
+        pass
+    
+    @abstractmethod
+    def sync_house_data(self, farm_id: str) -> dict:
+        """Sync house data from the system"""
+        pass
+    
+    @abstractmethod
+    def get_house_count(self, farm_id: str) -> int:
+        """Get number of houses from the system"""
+        pass
+    
+    @abstractmethod
+    def get_house_age(self, farm_id: str, house_number: int) -> int:
+        """Get house age in days from the system"""
+        pass
+
+# integrations/rotem.py
+class RotemIntegration(FarmSystemIntegration):
+    """Rotem system integration implementation"""
+    
+    def __init__(self, farm):
+        self.farm = farm
+        self.scraper = RotemScraper(
+            username=farm.rotem_username,
+            password=farm.rotem_password
+        )
+    
+    def test_connection(self) -> bool:
+        return self.scraper.login()
+    
+    def sync_house_data(self, farm_id: str) -> dict:
+        # Implementation to sync Rotem data
+        pass
+    
+    def get_house_count(self, farm_id: str) -> int:
+        # Get house count from Rotem
+        return 8  # Rotem typically has 8 houses
+    
+    def get_house_age(self, farm_id: str, house_number: int) -> int:
+        # Get house age from Rotem data
+        pass
+```
+
+### Phase 2: Frontend Integration Enhancement (Next Priority)
+
+#### 1. Enhanced Farm Creation Form
+```typescript
+// components/farms/FarmForm.tsx
+interface FarmFormData {
+  name: string;
+  location: string;
+  integration_type: 'none' | 'rotem' | 'future_system';
+  rotem_credentials?: {
+    username: string;
+    password: string;
+  };
+}
+
+const FarmForm: React.FC = () => {
+  const [integrationType, setIntegrationType] = useState<'none' | 'rotem'>('none');
+  const [rotemCredentials, setRotemCredentials] = useState({ username: '', password: '' });
+  const [testingConnection, setTestingConnection] = useState(false);
+
+  const handleIntegrationTypeChange = (type: string) => {
+    setIntegrationType(type as 'none' | 'rotem');
+  };
+
+  const testRotemConnection = async () => {
+    setTestingConnection(true);
+    try {
+      const response = await farmApi.testRotemConnection(rotemCredentials);
+      if (response.success) {
+        alert('Connection successful!');
+      } else {
+        alert('Connection failed: ' + response.error);
+      }
+    } catch (error) {
+      alert('Connection failed');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  return (
+    <form>
+      {/* Basic farm info */}
+      <TextField name="name" label="Farm Name" required />
+      <TextField name="location" label="Location" required />
+      
+      {/* Integration type selection */}
+      <FormControl component="fieldset">
+        <FormLabel component="legend">System Integration</FormLabel>
+        <RadioGroup value={integrationType} onChange={(e) => handleIntegrationTypeChange(e.target.value)}>
+          <FormControlLabel value="none" control={<Radio />} label="No Integration (Manual Management)" />
+          <FormControlLabel value="rotem" control={<Radio />} label="Rotem System Integration" />
+        </RadioGroup>
+      </FormControl>
+
+      {/* Rotem credentials (only if Rotem selected) */}
+      {integrationType === 'rotem' && (
+        <Card sx={{ mt: 2, p: 2 }}>
+          <Typography variant="h6" gutterBottom>Rotem System Configuration</Typography>
+          <TextField
+            label="Rotem Username"
+            value={rotemCredentials.username}
+            onChange={(e) => setRotemCredentials({...rotemCredentials, username: e.target.value})}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Rotem Password"
+            type="password"
+            value={rotemCredentials.password}
+            onChange={(e) => setRotemCredentials({...rotemCredentials, password: e.target.value})}
+            fullWidth
+            margin="normal"
+          />
+          <Button
+            variant="outlined"
+            onClick={testRotemConnection}
+            disabled={testingConnection}
+            sx={{ mt: 2 }}
+          >
+            {testingConnection ? 'Testing...' : 'Test Connection'}
+          </Button>
+        </Card>
+      )}
+    </form>
+  );
+};
+```
+
+#### 2. Unified Farm Dashboard
+```typescript
+// components/farms/FarmDashboard.tsx
+const FarmDashboard: React.FC<{ farm: Farm }> = ({ farm }) => {
+  return (
+    <Grid container spacing={3}>
+      {/* Farm basic info */}
+      <Grid item xs={12} md={6}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6">{farm.name}</Typography>
+            <Typography color="textSecondary">{farm.location}</Typography>
+            
+            {/* Integration status */}
+            <Box sx={{ mt: 2 }}>
+              <Chip
+                label={farm.integration_type === 'none' ? 'Manual Management' : 'System Integrated'}
+                color={farm.integration_type === 'none' ? 'default' : 'primary'}
+                icon={farm.integration_type === 'none' ? <Settings /> : <IntegrationInstructions />}
+              />
+              {farm.integration_type === 'rotem' && (
+                <Chip
+                  label={`Rotem: ${farm.integration_status}`}
+                  color={farm.integration_status === 'active' ? 'success' : 'warning'}
+                  sx={{ ml: 1 }}
+                />
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      {/* Houses */}
+      <Grid item xs={12}>
+        <Typography variant="h6" gutterBottom>Houses</Typography>
+        <Grid container spacing={2}>
+          {farm.houses.map(house => (
+            <Grid item xs={12} sm={6} md={3} key={house.id}>
+              <HouseCard house={house} />
+            </Grid>
+          ))}
+        </Grid>
+      </Grid>
+
+      {/* Integration-specific content */}
+      {farm.integration_type === 'rotem' && (
+        <Grid item xs={12}>
+          <RotemIntegrationPanel farm={farm} />
+        </Grid>
+      )}
+    </Grid>
+  );
+};
+```
+
+### Phase 3: Data Synchronization & ML (Next Priority)
+
+#### 1. Automatic Data Sync
+```python
+# integrations/tasks.py
+@shared_task
+def sync_farm_data():
+    """Sync data for all farms with integrations"""
+    farms = Farm.objects.filter(
+        has_system_integration=True,
+        integration_status='active'
+    )
+    
+    for farm in farms:
+        if farm.integration_type == 'rotem':
+            sync_rotem_farm_data.delay(farm.id)
+
+@shared_task
+def sync_rotem_farm_data(farm_id):
+    """Sync data for a specific Rotem farm"""
+    farm = Farm.objects.get(id=farm_id)
+    integration = RotemIntegration(farm)
+    
+    # Sync house data
+    house_data = integration.sync_house_data(farm.id)
+    
+    # Update house ages and other data
+    for house_number, data in house_data.items():
+        house = House.objects.get(farm=farm, house_number=house_number)
+        house.current_age_days = data.get('age_days', house.current_age_days)
+        house.last_system_sync = timezone.now()
+        house.save()
+    
+    farm.last_sync = timezone.now()
+    farm.save()
+```
+
+#### 2. ML Analysis Enhancement
+```python
+# integrations/ml_service.py
+class EnhancedMLAnalysisService:
+    """Enhanced ML analysis for all farm types"""
+    
+    def analyze_farm_data(self, farm_id: str):
+        """Analyze data for any farm type"""
+        farm = Farm.objects.get(id=farm_id)
+        
+        if farm.integration_type == 'rotem':
+            # Use real-time data from Rotem
+            return self._analyze_integrated_farm(farm)
+        else:
+            # Use manual data for non-integrated farms
+            return self._analyze_manual_farm(farm)
+    
+    def _analyze_integrated_farm(self, farm):
+        """Analyze integrated farm with real-time data"""
+        # Implementation for Rotem farms
+        pass
+    
+    def _analyze_manual_farm(self, farm):
+        """Analyze manual farm with user-entered data"""
+        # Implementation for manual farms
+        pass
+```
+
+### Phase 4: Advanced Integration Features (Future)
+
+#### 1. Multi-System Support
+- Plugin architecture for new integrations
+- API for third-party system integration
+- Custom integration builder
+- Integration marketplace
+
+#### 2. Advanced Analytics
+- Cross-farm analytics and benchmarking
+- Integration performance metrics
+- Predictive maintenance across systems
+- Business intelligence dashboard
+
+### Phase 5: Production Features (Future)
+
+#### 1. Enterprise Capabilities
+- Multi-tenant support
+- Role-based access control
+- Advanced security features
+- Audit logging and compliance
+
+#### 2. Scalability & Performance
+- Performance optimization
+- Data backup and disaster recovery
+- API rate limiting and management
+- Advanced caching strategies
+
+## 🚀 Legacy Next Implementation Phases
 
 ### Phase 4: Advanced Features (Next Priority)
 1. **WebSocket Integration**
