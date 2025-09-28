@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    RotemDataViewSet, MLPredictionViewSet, RotemControllerViewSet,
+    RotemDataViewSet, MLPredictionViewSet, MLModelViewSet, RotemControllerViewSet,
     RotemFarmViewSet, RotemUserViewSet, RotemScrapeLogViewSet, RotemScraperViewSet
 )
 from django.shortcuts import get_object_or_404
@@ -13,6 +13,7 @@ from .serializers import RotemFarmSerializer
 router = DefaultRouter()
 router.register(r'data', RotemDataViewSet)
 router.register(r'predictions', MLPredictionViewSet)
+router.register(r'ml-models', MLModelViewSet)
 router.register(r'controllers', RotemControllerViewSet)
 router.register(r'farms', RotemFarmViewSet, basename='rotem-farm')
 router.register(r'users', RotemUserViewSet)

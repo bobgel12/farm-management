@@ -247,6 +247,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'rotem_scraper.tasks.analyze_data',
         'schedule': 3600.0,  # Every hour (3600 seconds)
     },
+    'train-ml-models-daily': {
+        'task': 'rotem_scraper.tasks.train_ml_models',
+        'schedule': 86400.0,  # Every day (86400 seconds)
+    },
+    'cleanup-old-predictions-weekly': {
+        'task': 'rotem_scraper.tasks.cleanup_old_predictions',
+        'schedule': 604800.0,  # Every week (604800 seconds)
+    },
 }
 
 # ML Models Directory

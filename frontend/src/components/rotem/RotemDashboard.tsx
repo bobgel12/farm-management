@@ -32,6 +32,7 @@ import RecentLogsCard from './RecentLogsCard';
 import AddFarmDialog from './AddFarmDialog';
 import RealTimeSensorCard from './RealTimeSensorCard';
 import TemperatureSensorsCard from './TemperatureSensorsCard';
+import MLDashboard from './MLDashboard';
 import { rotemApi } from '../../services/rotemApi';
 
 const RotemDashboard: React.FC = () => {
@@ -314,6 +315,11 @@ const RotemDashboard: React.FC = () => {
           )}
         </Box>
       )}
+
+      {/* ML Insights Dashboard */}
+      <Box sx={{ mt: 4 }}>
+        <MLDashboard />
+      </Box>
 
       {/* Add Farm Dialog */}
       <AddFarmDialog
