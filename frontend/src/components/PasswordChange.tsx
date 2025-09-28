@@ -84,7 +84,24 @@ const PasswordChange: React.FC<PasswordChangeProps> = ({ onSuccess, onCancel }) 
         }, 2000);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to change password');
+      console.error('Password change error:', err);
+      
+      if (err.response?.status === 400) {
+        setError(err.response?.data?.error || 'Invalid password or validation failed');
+      } else if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+        // Clear auth token and redirect to login
+        localStorage.removeItem('authToken');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+      } else if (err.response?.status === 500) {
+        setError('Server error. Please try again later.');
+      } else if (err.code === 'NETWORK_ERROR' || !err.response) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(err.response?.data?.error || 'Failed to change password. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

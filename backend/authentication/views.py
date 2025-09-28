@@ -50,25 +50,11 @@ def login_view(request):
     if rate_limit_check['limited']:
         return JsonResponse({'error': rate_limit_check['message']}, status=429)
     
-    # Check against fixed admin credentials
-    if (username == settings.ADMIN_USERNAME and 
-        password == settings.ADMIN_PASSWORD):
-        
+    # Authenticate user using Django's authentication system
+    user = authenticate(request, username=username, password=password)
+    
+    if user is not None:
         try:
-            # Get or create admin user
-            user, created = User.objects.get_or_create(
-                username=settings.ADMIN_USERNAME,
-                defaults={
-                    'email': settings.ADMIN_EMAIL,
-                    'is_staff': True,
-                    'is_superuser': True
-                }
-            )
-            
-            if created:
-                user.set_password(settings.ADMIN_PASSWORD)
-                user.save()
-            
             # Create or get token for API authentication
             token, created = Token.objects.get_or_create(user=user)
             
@@ -231,37 +217,56 @@ def reset_password(request):
 def change_password(request):
     """Change password for authenticated user"""
     try:
+        logger.info(f"Password change request from user: {request.user.username}")
         data = json.loads(request.body)
         current_password = data.get('current_password')
         new_password = data.get('new_password')
         
+        logger.info(f"Password change data received - current_password: {'*' * len(current_password) if current_password else 'None'}, new_password: {'*' * len(new_password) if new_password else 'None'}")
+        
         if not current_password or not new_password:
+            logger.warning("Password change failed: Missing current_password or new_password")
             return Response({'error': 'Current password and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Verify current password
         if not request.user.check_password(current_password):
+            logger.warning(f"Password change failed: Incorrect current password for user {request.user.username}")
             return Response({'error': 'Current password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"Current password verified for user {request.user.username}")
         
         # Validate new password strength
         password_validation = PasswordResetService._validate_password_strength(new_password)
         if not password_validation['valid']:
+            logger.warning(f"Password change failed: Password validation failed for user {request.user.username} - {password_validation['message']}")
             return Response({'error': password_validation['message']}, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"Password validation passed for user {request.user.username}")
         
         # Change password
         request.user.set_password(new_password)
         request.user.save()
+        logger.info(f"Password successfully changed for user {request.user.username}")
         
         # Log security event
-        ip_address = request.META.get('REMOTE_ADDR', 'Unknown')
+        ip_address = request.META.get('REMOTE_ADDR', '127.0.0.1')
         user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
         
-        SecurityEvent.objects.create(
-            user=request.user,
-            event_type='password_changed',
-            description=f'Password changed for {request.user.username}',
-            ip_address=ip_address,
-            user_agent=user_agent
-        )
+        # Ensure IP address is valid for the model
+        if not ip_address or ip_address == 'Unknown':
+            ip_address = '127.0.0.1'
+        
+        try:
+            SecurityEvent.objects.create(
+                user=request.user,
+                event_type='password_changed',
+                description=f'Password changed for {request.user.username}',
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log security event: {str(e)}")
+            # Don't fail the password change if logging fails
         
         return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
         

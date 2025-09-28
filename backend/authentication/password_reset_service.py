@@ -53,13 +53,21 @@ class PasswordResetService:
             
             if success:
                 # Log security event
-                SecurityEvent.objects.create(
-                    user=user,
-                    event_type='password_reset_requested',
-                    description=f'Password reset requested for {user.username}',
-                    ip_address=ip_address or 'Unknown',
-                    user_agent=user_agent or 'Unknown'
-                )
+                event_ip = ip_address or '127.0.0.1'
+                if event_ip == 'Unknown':
+                    event_ip = '127.0.0.1'
+                
+                try:
+                    SecurityEvent.objects.create(
+                        user=user,
+                        event_type='password_reset_requested',
+                        description=f'Password reset requested for {user.username}',
+                        ip_address=event_ip,
+                        user_agent=user_agent or 'Unknown'
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log security event: {str(e)}")
+                    # Don't fail the password reset request if logging fails
                 
                 return {
                     'success': True,
@@ -202,13 +210,21 @@ Chicken House Management Team
                 ).update(used=True)
                 
                 # Log security event
-                SecurityEvent.objects.create(
-                    user=user,
-                    event_type='password_reset_completed',
-                    description=f'Password reset completed for {user.username}',
-                    ip_address=ip_address or 'Unknown',
-                    user_agent=user_agent or 'Unknown'
-                )
+                event_ip = ip_address or '127.0.0.1'
+                if event_ip == 'Unknown':
+                    event_ip = '127.0.0.1'
+                
+                try:
+                    SecurityEvent.objects.create(
+                        user=user,
+                        event_type='password_reset_completed',
+                        description=f'Password reset completed for {user.username}',
+                        ip_address=event_ip,
+                        user_agent=user_agent or 'Unknown'
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log security event: {str(e)}")
+                    # Don't fail the password reset if logging fails
             
             logger.info(f"Password reset completed for user {user.username}")
             return {
