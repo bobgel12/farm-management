@@ -445,20 +445,20 @@ def get_house_sensor_data(request, farm_id):
                             'status': wind_reading.get('Status', 'Normal')
                         }
 
-            # Extract consumption data (water/feed)
+            # Extract consumption data (water/feed) - using correct parameter names
             consumption_data = ds_data.get('Consumption', [])
             if consumption_data and len(consumption_data) > 0:
                 for consumption_item in consumption_data:
-                    param_name = consumption_item.get('ParameterKeyName', '').lower()
+                    param_name = consumption_item.get('ParameterKeyName', '')
                     param_value = safe_float_convert(consumption_item.get('ParameterValue', 0))
                     
-                    if param_name == 'daily_water':
+                    if param_name == 'Daily_Water':
                         sensor_data['water'] = {
                             'current': param_value,
                             'unit': 'L',
                             'status': 'Normal'
                         }
-                    elif param_name == 'daily_feed':
+                    elif param_name == 'Daily_Feed':
                         sensor_data['feed_consumption'] = {
                             'current': param_value,
                             'unit': 'LB',
@@ -535,16 +535,69 @@ def get_house_sensor_data(request, farm_id):
                     'status': vent_reading.get('Status', 'Normal')
                 }
 
-            # Extract livability data
-            livability_data = ds_data.get('Livability', [])
-            if livability_data and len(livability_data) > 0:
-                livability_reading = livability_data[0]
-                sensor_data['livability'] = {
-                    'percentage': safe_float_convert(livability_reading.get('ParameterValue', 0)),
-                    'bird_count': safe_float_convert(livability_reading.get('BirdCount', 0)),
-                    'unit': '%',
-                    'status': 'Normal'
-                }
+                # Extract livability data
+                livability_data = ds_data.get('Livability', [])
+                if livability_data and len(livability_data) > 0:
+                    livability_reading = livability_data[0]
+                    sensor_data['livability'] = {
+                        'percentage': safe_float_convert(livability_reading.get('ParameterValue', 0)),
+                        'bird_count': safe_float_convert(livability_reading.get('BirdCount', 0)),
+                        'unit': '%',
+                        'status': 'Normal'
+                    }
+
+                # Extract Growth_Day from General array (correct structure)
+                general_data = ds_data.get('General', [])
+                growth_day = 0
+                
+                for general_item in general_data:
+                    param_name = general_item.get('ParameterKeyName', '')
+                    if param_name == 'Growth_Day':
+                        growth_day_str = general_item.get('ParameterValue', '0')
+                        try:
+                            growth_day = int(growth_day_str)
+                            sensor_data['growth_day'] = {
+                                'current': growth_day,
+                                'unit': 'days',
+                                'status': 'Normal'
+                            }
+                            break
+                        except (ValueError, TypeError):
+                            sensor_data['growth_day'] = {
+                                'current': 0,
+                                'unit': 'days',
+                                'status': 'Unknown'
+                            }
+                            break
+                
+                # If no Growth_Day found, check consumption activity
+                if growth_day == 0:
+                    consumption_data = ds_data.get('Consumption', [])
+                    has_activity = False
+                    
+                    for consumption_item in consumption_data:
+                        param_name = consumption_item.get('ParameterKeyName', '')
+                        param_value = safe_float_convert(consumption_item.get('ParameterValue', 0))
+                        
+                        if param_name == 'Daily_Water' and param_value > 0:
+                            has_activity = True
+                            break
+                        elif param_name == 'Daily_Feed' and param_value > 0:
+                            has_activity = True
+                            break
+                    
+                    if has_activity:
+                        sensor_data['growth_day'] = {
+                            'current': 1,  # Default age for active houses
+                            'unit': 'days',
+                            'status': 'Estimated'
+                        }
+                    else:
+                        sensor_data['growth_day'] = {
+                            'current': 0,
+                            'unit': 'days',
+                            'status': 'Empty'
+                        }
             
             processed_data[house_number] = {
                 'house_number': house_number,

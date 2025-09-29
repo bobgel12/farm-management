@@ -6,5 +6,6 @@ urlpatterns = [
     path('houses/<int:pk>/', views.HouseDetailView.as_view(), name='house-detail'),
     path('houses/dashboard/', views.house_dashboard, name='house-dashboard'),
     path('farms/<int:farm_id>/houses/', views.farm_houses, name='farm-houses'),
+    path('farms/<int:farm_id>/houses/<int:house_id>/', views.farm_house_detail, name='farm-house-detail'),
     path('farms/<int:farm_id>/task-summary/', views.farm_task_summary, name='farm-task-summary'),
 ]

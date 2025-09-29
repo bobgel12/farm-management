@@ -16,6 +16,7 @@ class FarmSerializer(serializers.ModelSerializer):
     total_houses = serializers.ReadOnlyField()
     active_houses = serializers.ReadOnlyField()
     workers = WorkerSerializer(many=True, read_only=True)
+    houses = serializers.SerializerMethodField()
     is_integrated = serializers.ReadOnlyField()
     integration_display_name = serializers.ReadOnlyField()
 
@@ -24,7 +25,7 @@ class FarmSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'location', 'description', 'contact_person',
             'contact_phone', 'contact_email', 'is_active',
-            'total_houses', 'active_houses', 'workers',
+            'total_houses', 'active_houses', 'workers', 'houses',
             'has_system_integration', 'integration_type', 'integration_status',
             'last_sync', 'is_integrated', 'integration_display_name',
             'rotem_farm_id', 'rotem_username', 'rotem_password',
@@ -35,6 +36,27 @@ class FarmSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'rotem_password': {'write_only': True}
         }
+
+    def get_houses(self, obj):
+        """Get houses for this farm"""
+        from houses.models import House
+        houses = House.objects.filter(farm=obj)
+        return [
+            {
+                'id': house.id,
+                'house_number': house.house_number,
+                'capacity': house.capacity,
+                'is_integrated': house.is_integrated,
+                'current_age_days': house.current_age_days,
+                'batch_start_date': house.batch_start_date,
+                'expected_harvest_date': house.expected_harvest_date,
+                'is_active': house.is_active,
+                'last_system_sync': house.last_system_sync,
+                'created_at': house.created_at,
+                'updated_at': house.updated_at
+            }
+            for house in houses
+        ]
 
 
 class FarmListSerializer(serializers.ModelSerializer):

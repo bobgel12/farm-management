@@ -99,6 +99,15 @@ def farm_houses(request, farm_id):
 
 
 @api_view(['GET'])
+def farm_house_detail(request, farm_id, house_id):
+    """Get a specific house within a farm context"""
+    farm = get_object_or_404(Farm, id=farm_id)
+    house = get_object_or_404(House, id=house_id, farm=farm)
+    serializer = HouseSerializer(house)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
 def farm_task_summary(request, farm_id):
     """Get task summary for all houses in a farm"""
     farm = get_object_or_404(Farm, id=farm_id)

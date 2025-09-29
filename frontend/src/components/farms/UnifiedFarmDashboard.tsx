@@ -17,6 +17,14 @@ import {
   DialogActions,
   LinearProgress,
   Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
 } from '@mui/material';
 import {
   Settings,
@@ -37,9 +45,15 @@ import {
   Restaurant,
   WaterDrop,
   Air,
+  ExpandMore as ExpandMoreIcon,
+  Schedule as ScheduleIcon,
+  Today as TodayIcon,
+  TouchApp as ClickIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import EmailManager from '../EmailManager';
+import WorkerList from '../WorkerList';
 
 interface Farm {
   id: number;
@@ -109,6 +123,9 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [syncing, setSyncing] = useState(false);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null);
   const [houseSensorData, setHouseSensorData] = useState<{[key: string]: any}>({});
   const [mlPredictions, setMlPredictions] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -236,6 +253,47 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     }
   };
 
+  const handleGenerateHousesAndTasks = async () => {
+    if (!farm) return;
+    
+    setGenerating(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new (Error as any)('No authentication token found');
+      }
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8002/api'}/farms/${farm.id}/sync_data/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new (Error as any)(errorData.message || 'House generation failed');
+      }
+      
+      const result = await response.json();
+      setGenerateMessage(result.message || 'Houses and tasks generated successfully');
+      
+      setGenerateDialogOpen(false);
+      if (onRefresh) onRefresh();
+      
+      // Refresh farm data to show the new houses
+      await fetchFarmData();
+      
+    } catch (error) {
+      console.error('House generation failed:', error);
+      const errorMessage = (error as Error)?.message || 'Unknown error';
+      setGenerateMessage(`House generation failed: ${errorMessage}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const getIntegrationStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'success';
@@ -335,14 +393,25 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                 Refresh
               </Button>
               {farm.has_system_integration && (
-                <Button
-                  variant="outlined"
-                  startIcon={<Sync />}
-                  onClick={() => setSyncDialogOpen(true)}
-                  size="small"
-                >
-                  Sync Data
-                </Button>
+                <>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Sync />}
+                    onClick={() => setSyncDialogOpen(true)}
+                    size="small"
+                  >
+                    Sync Data
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<Home />}
+                    onClick={() => setGenerateDialogOpen(true)}
+                    size="small"
+                    color="primary"
+                  >
+                    Generate Houses & Tasks
+                  </Button>
+                </>
               )}
               <Button
                 variant="outlined"
@@ -426,10 +495,15 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
             <Button
               variant="outlined"
               startIcon={<Home />}
-              onClick={() => navigate(`/farms/${farm.id}/houses`)}
+              onClick={() => {
+                if (farm.houses && farm.houses.length > 0) {
+                  navigate(`/farms/${farm.id}/houses/${farm.houses[0].id}`);
+                }
+              }}
               size="small"
+              disabled={!farm.houses || farm.houses.length === 0}
             >
-              Manage Houses
+              View Houses
             </Button>
           </Box>
           
@@ -461,20 +535,37 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                       Capacity: {house.capacity.toLocaleString()}
                     </Typography>
                     
-                    <Typography color="textSecondary" variant="body2" gutterBottom>
-                      Age: {house.current_age_days} days
-                    </Typography>
-                    
-                    {house.batch_start_date && (
-                      <Typography color="textSecondary" variant="body2" gutterBottom>
-                        Started: {new Date(house.batch_start_date).toLocaleDateString()}
-                      </Typography>
-                    )}
-                    
-                    {house.expected_harvest_date && (
-                      <Typography color="textSecondary" variant="body2" gutterBottom>
-                        Harvest: {new Date(house.expected_harvest_date).toLocaleDateString()}
-                      </Typography>
+                    {/* Show real-time sensor data if available */}
+                    {houseSensorData[house.house_number.toString()]?.sensors ? (
+                      <>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Age: {houseSensorData[house.house_number.toString()].sensors.growth_day?.current || house.current_age_days} days
+                        </Typography>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Temperature: {houseSensorData[house.house_number.toString()].sensors.temperature?.current || 'N/A'}°C
+                        </Typography>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Water: {houseSensorData[house.house_number.toString()].sensors.water?.current || 'N/A'}L
+                        </Typography>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Feed: {houseSensorData[house.house_number.toString()].sensors.feed_consumption?.current || 'N/A'}LB
+                        </Typography>
+                      </>
+                    ) : (
+                      <>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Age: {house.current_age_days} days
+                        </Typography>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Temperature: Loading...
+                        </Typography>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Water: Loading...
+                        </Typography>
+                        <Typography color="textSecondary" variant="body2" gutterBottom>
+                          Feed: Loading...
+                        </Typography>
+                      </>
                     )}
                     
                     {house.is_integrated && house.last_system_sync && (
@@ -824,6 +915,16 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         </Alert>
       )}
 
+      {/* Email Management for this farm */}
+      <Box mb={4}>
+        <EmailManager farmId={farm?.id} farmName={farm?.name} />
+      </Box>
+
+      {/* Worker Management for this farm */}
+      <Box mb={4}>
+        <WorkerList farmId={farm?.id} farmName={farm?.name} />
+      </Box>
+
       {/* Sync Dialog */}
       <Dialog open={syncDialogOpen} onClose={() => setSyncDialogOpen(false)}>
         <DialogTitle>Sync Data</DialogTitle>
@@ -849,6 +950,57 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Generate Houses & Tasks Dialog */}
+      <Dialog open={generateDialogOpen} onClose={() => setGenerateDialogOpen(false)}>
+        <DialogTitle>Generate Houses & Tasks</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            This will generate houses and tasks based on the current Rotem system data:
+          </Typography>
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Typography variant="body2" color="textSecondary">
+              • Get house count from Rotem API (typically 8 houses)
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              • Extract house ages from Growth_Day field
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              • Create/update House objects with correct data
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              • Generate tasks based on house age and assigned programs
+            </Typography>
+          </Box>
+          {generating && (
+            <Box sx={{ mt: 2 }}>
+              <LinearProgress />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Generating houses and tasks...
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGenerateDialogOpen(false)} disabled={generating}>
+            Cancel
+          </Button>
+          <Button onClick={handleGenerateHousesAndTasks} variant="contained" disabled={generating}>
+            {generating ? 'Generating...' : 'Generate Now'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Generate Message */}
+      {generateMessage && (
+        <Alert 
+          severity={generateMessage.includes('failed') ? 'error' : 'success'} 
+          onClose={() => setGenerateMessage(null)}
+          sx={{ mb: 2 }}
+        >
+          {generateMessage}
+        </Alert>
+      )}
     </Box>
   );
 };
