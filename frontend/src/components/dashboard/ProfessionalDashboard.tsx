@@ -146,8 +146,8 @@ const ProfessionalDashboard: React.FC = () => {
   // Calculate statistics
   const totalFarms = farms?.length || 0;
   const activeFarms = farms?.filter(farm => farm.is_active).length || 0;
-  const totalHouses = farms?.reduce((sum, farm) => sum + farm.total_houses, 0) || 0;
-  const activeHouses = farms?.reduce((sum, farm) => sum + farm.active_houses, 0) || 0;
+  const totalHouses = farms?.reduce((sum, farm) => sum + (farm.total_houses || 0), 0) || 0;
+  const activeHouses = farms?.reduce((sum, farm) => sum + (farm.active_houses || 0), 0) || 0;
   const totalWorkers = workers?.length || 0;
   const activeWorkers = workers?.filter(worker => worker.is_active).length || 0;
   const totalTasks = Array.isArray(tasks) ? tasks.length : 0;

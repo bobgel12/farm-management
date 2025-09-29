@@ -37,7 +37,7 @@ import {
   Settings,
   IntegrationInstructions,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   Warning,
   Refresh,
   Sync,
@@ -195,6 +195,10 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   };
 
   const handleSaveConfiguration = async () => {
+    setTestingConnection(true);
+    setConnectionStatus('testing');
+    setConnectionError('');
+    
     try {
       const integrationData = {
         integration_type: integrationType,
@@ -205,9 +209,14 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
       };
       
       await onUpdateIntegration(farm.id, integrationData);
+      setConnectionStatus('success');
+      setConnectionError('');
       onClose();
     } catch (error) {
-      console.error('Failed to save configuration:', error);
+      setConnectionStatus('error');
+      setConnectionError(error instanceof Error ? error.message : 'Failed to save configuration');
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -236,10 +245,10 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'success': return <CheckCircle />;
-      case 'failed': return <Error />;
+      case 'failed': return <ErrorIcon />;
       case 'partial': return <Warning />;
       case 'in_progress': return <CircularProgress size={16} />;
-      default: return null;
+      default: return <Settings />;
     }
   };
 
@@ -389,27 +398,25 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
                     }}
                   />
                   <Box display="flex" gap={1}>
-                    <Button
-                      variant="outlined"
-                      onClick={handleTestConnection}
-                      disabled={testingConnection || !rotemCredentials.username || !rotemCredentials.password}
-                      startIcon={
-                        testingConnection ? (
-                          <CircularProgress size={20} />
-                        ) : connectionStatus === 'success' ? (
-                          <CheckCircle color="success" />
-                        ) : connectionStatus === 'error' ? (
-                          <Error color="error" />
-                        ) : null
-                      }
-                    >
-                      {testingConnection ? 'Testing...' : 'Test Connection'}
-                    </Button>
                     {connectionStatus === 'success' && (
                       <Chip
                         label="Connection Verified"
                         color="success"
                         icon={<CheckCircle />}
+                      />
+                    )}
+                    {connectionStatus === 'error' && (
+                      <Chip
+                        label="Connection Failed"
+                        color="error"
+                        icon={<ErrorIcon />}
+                      />
+                    )}
+                    {connectionStatus === 'testing' && (
+                      <Chip
+                        label="Testing Connection..."
+                        color="info"
+                        icon={<CircularProgress size={16} />}
                       />
                     )}
                   </Box>
@@ -453,7 +460,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
                         }
                         icon={
                           farm.integration_status === 'active' ? <CheckCircle /> :
-                          farm.integration_status === 'error' ? <Error /> :
+                          farm.integration_status === 'error' ? <ErrorIcon /> :
                           farm.integration_status === 'inactive' ? <Warning /> : <Settings />
                         }
                       />
@@ -580,9 +587,10 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
           <Button
             onClick={handleSaveConfiguration}
             variant="contained"
-            disabled={integrationType === 'rotem' && connectionStatus !== 'success'}
+            disabled={testingConnection || (integrationType === 'rotem' && (!rotemCredentials.username || !rotemCredentials.password))}
+            startIcon={testingConnection ? <CircularProgress size={20} /> : undefined}
           >
-            Save Configuration
+            {testingConnection ? 'Testing & Saving...' : 'Save Configuration'}
           </Button>
         )}
       </DialogActions>

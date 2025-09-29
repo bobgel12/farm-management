@@ -135,6 +135,12 @@ class RotemIntegration(FarmSystemIntegration):
         try:
             start_time = time.time()
             
+            # Ensure scraper is logged in before making API calls
+            if not self.scraper.user_token:
+                login_success = self.scraper.login()
+                if not login_success:
+                    raise Exception("Failed to login to Rotem system")
+            
             # Use the scraper to get command data for the house
             command_data = self.scraper.get_command_data(house_number)
             

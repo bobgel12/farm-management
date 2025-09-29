@@ -43,18 +43,22 @@ import {
   Schedule as ScheduleIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useFarm } from '../../contexts/FarmContext';
 import { useProgram } from '../../contexts/ProgramContext';
+import IntegrationManagement from './IntegrationManagement';
+import api from '../../services/api';
 
 interface FarmCardProps {
   farm: any;
-  onEdit: (_farm: any) => void;
-  onDelete: (_farm: any) => void;
-  onView: (_farm: any) => void;
+  onEdit: (farm: any) => void;
+  onDelete: (farm: any) => void;
+  onView: (farm: any) => void;
+  onConfigure: (farm: any) => void;
 }
 
-const FarmCard: React.FC<FarmCardProps> = ({ farm, onEdit, onDelete, onView }) => {
+const FarmCard: React.FC<FarmCardProps> = ({ farm, onEdit, onDelete, onView, onConfigure }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -212,6 +216,12 @@ const FarmCard: React.FC<FarmCardProps> = ({ farm, onEdit, onDelete, onView }) =
             </ListItemIcon>
             <ListItemText>Edit Farm</ListItemText>
           </MenuItemComponent>
+          <MenuItemComponent onClick={() => onConfigure(farm)}>
+            <ListItemIcon>
+              <SettingsIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Configure Integration</ListItemText>
+          </MenuItemComponent>
           <Divider />
           <MenuItemComponent onClick={handleDelete} sx={{ color: 'error.main' }}>
             <ListItemIcon>
@@ -232,6 +242,8 @@ const ProfessionalFarmList: React.FC = () => {
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingFarm, setEditingFarm] = useState<any>(null);
+  const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
+  const [selectedFarm, setSelectedFarm] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -303,6 +315,11 @@ const ProfessionalFarmList: React.FC = () => {
     navigate(`/farms/${farm.id}`);
   };
 
+  const handleConfigure = (farm: any) => {
+    setSelectedFarm(farm);
+    setIntegrationDialogOpen(true);
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -370,6 +387,7 @@ const ProfessionalFarmList: React.FC = () => {
                 onEdit={handleOpenDialog}
                 onDelete={handleDelete}
                 onView={handleView}
+                onConfigure={handleConfigure}
               />
             </Grid>
           ))}
@@ -465,6 +483,34 @@ const ProfessionalFarmList: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Integration Management Dialog */}
+      {selectedFarm && (
+        <IntegrationManagement
+          farm={selectedFarm}
+          open={integrationDialogOpen}
+          onClose={() => {
+            setIntegrationDialogOpen(false);
+            setSelectedFarm(null);
+          }}
+          onUpdateIntegration={async (farmId, integrationData) => {
+            await api.post(`/farms/${farmId}/configure_integration/`, integrationData);
+            await fetchFarms();
+          }}
+          onTestConnection={async (farmId) => {
+            try {
+              await api.post(`/farms/${farmId}/test_connection/`);
+              return true;
+            } catch (error) {
+              return false;
+            }
+          }}
+          onSyncData={async (farmId) => {
+            await api.post(`/farms/${farmId}/sync_data/`);
+            await fetchFarms();
+          }}
+        />
+      )}
     </Box>
   );
 };

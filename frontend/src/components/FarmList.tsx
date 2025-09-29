@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -21,7 +20,7 @@ import {
   Settings,
   IntegrationInstructions,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   Warning,
 } from '@mui/icons-material';
 import { useFarm } from '../contexts/FarmContext';
@@ -30,7 +29,6 @@ import UnifiedFarmDashboard from './farms/UnifiedFarmDashboard';
 import IntegrationManagement from './farms/IntegrationManagement';
 
 const FarmList: React.FC = () => {
-  const navigate = useNavigate();
   const { farms, loading, error, fetchFarms, createFarm, updateFarm, deleteFarm } = useFarm();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingFarm, setEditingFarm] = useState<any>(null);
@@ -62,7 +60,7 @@ const FarmList: React.FC = () => {
       }
       handleCloseDialog();
     } catch (error) {
-      console.error('Error saving farm:', error);
+      // Error handling is done in the context
     } finally {
       setFormLoading(false);
     }
@@ -81,25 +79,20 @@ const FarmList: React.FC = () => {
   };
 
   const handleUpdateIntegration = async (farmId: number, integrationData: any) => {
-    try {
-      const response = await fetch(`/api/farms/${farmId}/configure_integration/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(integrationData),
-      });
-      
-      if (response.ok) {
-        await fetchFarms(); // Refresh farms list
-        setIntegrationDialogOpen(false);
-      } else {
-        throw new Error('Failed to update integration');
-      }
-    } catch (error) {
-      console.error('Error updating integration:', error);
-      throw error;
+    const response = await fetch(`/api/farms/${farmId}/configure_integration/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify(integrationData),
+    });
+    
+    if (response.ok) {
+      await fetchFarms(); // Refresh farms list
+      setIntegrationDialogOpen(false);
+    } else {
+      throw new Error('Failed to update integration');
     }
   };
 
@@ -113,28 +106,23 @@ const FarmList: React.FC = () => {
       });
       return response.ok;
     } catch (error) {
-      console.error('Error testing connection:', error);
+      // Error handling is done in the context
       return false;
     }
   };
 
   const handleSyncData = async (farmId: number) => {
-    try {
-      const response = await fetch(`/api/farms/${farmId}/sync_data/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (response.ok) {
-        await fetchFarms(); // Refresh farms list
-      } else {
-        throw new Error('Failed to sync data');
-      }
-    } catch (error) {
-      console.error('Error syncing data:', error);
-      throw error;
+    const response = await fetch(`/api/farms/${farmId}/sync_data/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${localStorage.getItem('token')}`,
+      },
+    });
+    
+    if (response.ok) {
+      await fetchFarms(); // Refresh farms list
+    } else {
+      throw new Error('Failed to sync data');
     }
   };
 
@@ -269,7 +257,7 @@ const FarmList: React.FC = () => {
                         }
                         icon={
                           farm.integration_status === 'active' ? <CheckCircle /> :
-                          farm.integration_status === 'error' ? <Error /> :
+                          farm.integration_status === 'error' ? <ErrorIcon /> :
                           farm.integration_status === 'inactive' ? <Warning /> : <Settings />
                         }
                         size="small"
