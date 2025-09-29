@@ -5,12 +5,40 @@ interface Farm {
   id: number;
   name: string;
   location: string;
-  contact_person: string;
+  description?: string;
+  contact_person?: string;
   contact_phone: string;
   contact_email: string;
   is_active: boolean;
-  total_houses: number;
-  active_houses: number;
+  total_houses?: number;
+  active_houses?: number;
+  workers?: Worker[];
+  created_at: string;
+  updated_at: string;
+  owner: number;
+  // Integration fields
+  has_system_integration: boolean;
+  integration_type: 'none' | 'rotem' | 'future_system';
+  integration_status: 'active' | 'inactive' | 'error' | 'not_configured';
+  last_sync?: string;
+  is_integrated?: boolean;
+  integration_display_name?: string;
+  // Rotem-specific fields
+  rotem_farm_id?: string;
+  rotem_username?: string;
+  rotem_password?: string;
+  rotem_gateway_name?: string;
+  rotem_gateway_alias?: string;
+}
+
+interface Worker {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  is_active: boolean;
+  receive_daily_tasks: boolean;
   created_at: string;
   updated_at: string;
 }

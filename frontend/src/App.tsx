@@ -12,6 +12,7 @@ import Login from './components/Login';
 import ProfessionalDashboard from './components/dashboard/ProfessionalDashboard';
 import ProfessionalFarmList from './components/farms/ProfessionalFarmList';
 import FarmDetail from './components/FarmDetail';
+import UnifiedFarmDashboard from './components/farms/UnifiedFarmDashboard';
 import HouseDetail from './components/HouseDetail';
 import ProfessionalTaskList from './components/tasks/ProfessionalTaskList';
 import ProfessionalProgramManager from './components/programs/ProfessionalProgramManager';
@@ -58,7 +59,7 @@ function App() {
                 <Route path="/farms/:farmId" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
-                      <FarmDetail />
+                      <UnifiedFarmDashboard />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />

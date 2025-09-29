@@ -10,4 +10,7 @@ urlpatterns = [
     path('ml/farms/<int:farm_id>/summary/', views.get_ml_summary, name='get_ml_summary'),
     path('ml/global-summary/', views.get_global_ml_summary, name='get_global_ml_summary'),
     path('ml/trigger-daily-report/', views.trigger_daily_report, name='trigger_daily_report'),
+    
+    # House sensor data endpoint
+    path('farms/<int:farm_id>/house-sensor-data/', views.get_house_sensor_data, name='get_house_sensor_data'),
 ]

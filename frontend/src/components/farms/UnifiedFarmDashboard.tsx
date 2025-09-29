@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -30,8 +31,15 @@ import {
   Water,
   Thermostat,
   Speed,
+  Visibility,
+  Assessment,
+  Timeline,
+  Restaurant,
+  WaterDrop,
+  Air,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 
 interface Farm {
   id: number;
@@ -80,42 +88,73 @@ interface IntegrationHealth {
 }
 
 interface UnifiedFarmDashboardProps {
-  farm: Farm;
+  farm?: Farm;
   onRefresh?: () => void;
   onConfigureIntegration?: (farmId: number) => void;
   onSyncData?: (farmId: number) => void;
 }
 
 const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
-  farm,
+  farm: propFarm,
   onRefresh,
   onConfigureIntegration,
   onSyncData,
 }) => {
+  const { farmId } = useParams<{ farmId: string }>();
   const navigate = useNavigate();
+  const [farm, setFarm] = useState<Farm | null>(propFarm || null);
+  const [loading, setLoading] = useState(!propFarm);
   const [integrationHealth, setIntegrationHealth] = useState<IntegrationHealth | null>(null);
   const [loadingHealth, setLoadingHealth] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [houseSensorData, setHouseSensorData] = useState<{[key: string]: any}>({});
+  const [mlPredictions, setMlPredictions] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
 
   useEffect(() => {
-    if (farm.has_system_integration) {
+    if (farmId && !propFarm) {
+      fetchFarmData();
+    }
+  }, [farmId, propFarm]);
+
+  useEffect(() => {
+    if (farm?.has_system_integration) {
       fetchIntegrationHealth();
     }
-  }, [farm.id, farm.has_system_integration]);
+  }, [farm?.id, farm?.has_system_integration]);
+
+  useEffect(() => {
+    if (farm?.integration_type === 'rotem') {
+      fetchHouseSensorData();
+      fetchMlPredictions();
+    }
+  }, [farm?.id, farm?.integration_type]);
+
+  const fetchFarmData = async () => {
+    if (!farmId) return;
+    
+    setLoading(true);
+    try {
+      console.log('Fetching farm data for ID:', farmId);
+      const response = await api.get(`/farms/${farmId}/`);
+      console.log('Farm data received:', response.data);
+      setFarm(response.data);
+    } catch (error) {
+      console.error('Error fetching farm data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchIntegrationHealth = async () => {
+    if (!farm) return;
+    
     setLoadingHealth(true);
     try {
-      const response = await fetch(`/api/farms/${farm.id}/integration_status/`, {
-        headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setIntegrationHealth(data.health_details);
-      }
+      const response = await api.get(`/farms/${farm.id}/integration_status/`);
+      setIntegrationHealth(response.data.health_details);
     } catch (error) {
       console.error('Failed to fetch integration health:', error);
     } finally {
@@ -123,16 +162,75 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     }
   };
 
+  const fetchHouseSensorData = async () => {
+    if (!farm) return;
+    
+    setLoadingData(true);
+    try {
+      const response = await api.get(`/farms/${farm.id}/house-sensor-data/`);
+      setHouseSensorData(response.data.houses || {});
+    } catch (error) {
+      console.error('Error fetching house sensor data:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const fetchMlPredictions = async () => {
+    if (!farm) return;
+    
+    try {
+      const response = await api.get(`/rotem/predictions/?farm_name=${encodeURIComponent(farm.name)}&limit=10`);
+      setMlPredictions(response.data.results || []);
+    } catch (error) {
+      console.error('Error fetching ML predictions:', error);
+    }
+  };
+
   const handleSyncData = async () => {
-    if (!onSyncData) return;
+    if (!farm) return;
     
     setSyncing(true);
     try {
-      await onSyncData(farm.id);
+      // If onSyncData prop is provided, use it (for embedded usage)
+      if (onSyncData) {
+        await onSyncData(farm.id);
+      } else {
+        // Otherwise, call the backend API directly (for standalone usage)
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          throw new (Error as any)('No authentication token found');
+        }
+        
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8002/api'}/farms/${farm.id}/sync_data/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new (Error as any)(errorData.message || 'Sync failed');
+        }
+        
+        const result = await response.json();
+        setSyncMessage(result.message || 'Data synced successfully');
+      }
+      
       setSyncDialogOpen(false);
       if (onRefresh) onRefresh();
+      
+      // Refresh house sensor data after sync
+      if (farm.integration_type === 'rotem') {
+        await fetchHouseSensorData();
+        await fetchMlPredictions();
+      }
     } catch (error) {
       console.error('Sync failed:', error);
+      const errorMessage = (error as Error)?.message || 'Unknown error';
+      setSyncMessage(`Sync failed: ${errorMessage}`);
     } finally {
       setSyncing(false);
     }
@@ -178,6 +276,24 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     return 'default';
   };
 
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!farm) {
+    return (
+      <Box>
+        <Alert severity="error">
+          Farm not found
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       {/* Farm Header */}
@@ -201,7 +317,19 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
               <Button
                 variant="outlined"
                 startIcon={<Refresh />}
-                onClick={onRefresh}
+                onClick={() => {
+                  if (onRefresh) {
+                    onRefresh();
+                  } else {
+                    // Refresh farm data directly when used standalone
+                    fetchFarmData();
+                    fetchIntegrationHealth();
+                    if (farm?.integration_type === 'rotem') {
+                      fetchHouseSensorData();
+                      fetchMlPredictions();
+                    }
+                  }
+                }}
                 size="small"
               >
                 Refresh
@@ -293,7 +421,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6">
-              Houses ({farm.houses.length})
+              Houses ({farm.houses?.length || 0})
             </Typography>
             <Button
               variant="outlined"
@@ -306,7 +434,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           </Box>
           
           <Grid container spacing={2}>
-            {farm.houses.map((house) => (
+            {(farm.houses || []).map((house) => (
               <Grid item xs={12} sm={6} md={4} key={house.id}>
                 <Card 
                   variant="outlined" 
@@ -376,7 +504,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6">
-              Workers ({farm.workers.length})
+              Workers ({farm.workers?.length || 0})
             </Typography>
             <Button
               variant="outlined"
@@ -388,7 +516,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           </Box>
           
           <Grid container spacing={2}>
-            {farm.workers.map((worker) => (
+            {(farm.workers || []).map((worker) => (
               <Grid item xs={12} sm={6} md={4} key={worker.id}>
                 <Card variant="outlined">
                   <CardContent>
@@ -419,36 +547,281 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         </CardContent>
       </Card>
 
-      {/* Integration-specific content */}
+      {/* Rotem Integration Data */}
       {farm.integration_type === 'rotem' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Rotem Integration
-            </Typography>
-            <Typography color="textSecondary" gutterBottom>
-              This farm is connected to the Rotem monitoring system for automated data collection.
-            </Typography>
-            <Box display="flex" gap={1} mt={2}>
-              <Button
-                variant="contained"
-                startIcon={<TrendingUp />}
-                onClick={() => navigate(`/rotem/farms/farm_${farm.contact_email}`)}
-                size="small"
-              >
-                View Rotem Dashboard
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<Water />}
-                onClick={() => navigate(`/rotem/farms/farm_${farm.contact_email}/sensors`)}
-                size="small"
-              >
-                Sensor Data
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
+        <>
+          {/* Real-time Sensor Data */}
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">
+                  Real-time Sensor Data
+                </Typography>
+                <Box display="flex" gap={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Refresh />}
+                    onClick={() => {
+                      fetchHouseSensorData();
+                      fetchMlPredictions();
+                    }}
+                    disabled={loadingData}
+                  >
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<Sync />}
+                    onClick={() => setSyncDialogOpen(true)}
+                  >
+                    Sync Data
+                  </Button>
+                </Box>
+              </Box>
+              
+              {loadingData ? (
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
+              ) : Object.keys(houseSensorData).length > 0 ? (
+                <Grid container spacing={2}>
+                  {Object.entries(houseSensorData).map(([houseNumber, houseData]) => (
+                    <Grid item xs={12} sm={6} md={4} key={houseNumber}>
+                      <Card variant="outlined" sx={{ height: '100%' }}>
+                        <CardContent>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                            <Typography variant="h6">House {houseNumber}</Typography>
+                            <Chip 
+                              label={houseData.status} 
+                              color={houseData.status === 'active' ? 'success' : 'default'}
+                              size="small"
+                            />
+                          </Box>
+                          
+                          {/* Environmental Data */}
+                          <Typography variant="subtitle2" color="primary" gutterBottom sx={{ mt: 2 }}>
+                            Environmental
+                          </Typography>
+                          <Grid container spacing={1} sx={{ mb: 2 }}>
+                            {/* Main Temperature */}
+                            {houseData.sensors?.temperature && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <Thermostat color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Tunnel</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.temperature.current?.toFixed(1) || 'N/A'}{houseData.sensors.temperature.unit}
+                                </Typography>
+                              </Grid>
+                            )}
+                            
+                            {/* Wind Chill */}
+                            {houseData.sensors?.individual_temperatures?.['Wind_Chill_Temperature'] && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <Air color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Wind Chill</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.individual_temperatures['Wind_Chill_Temperature'].value?.toFixed(1) || 'N/A'}°C
+                                </Typography>
+                              </Grid>
+                            )}
+                            
+                            {/* Humidity */}
+                            {houseData.sensors?.humidity && houseData.sensors.humidity.current > 0 && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <Water color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Humidity</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.humidity.current?.toFixed(1) || 'N/A'}{houseData.sensors.humidity.unit}
+                                </Typography>
+                              </Grid>
+                            )}
+                            
+                            {/* Static Pressure */}
+                            {houseData.sensors?.static_pressure && houseData.sensors.static_pressure.current > 0 && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <Air color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Pressure</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.static_pressure.current?.toFixed(3) || 'N/A'}{houseData.sensors.static_pressure.unit}
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
+
+                          {/* Consumption Data */}
+                          <Typography variant="subtitle2" color="primary" gutterBottom>
+                            Consumption
+                          </Typography>
+                          <Grid container spacing={1} sx={{ mb: 2 }}>
+                            {/* Feed Consumption */}
+                            {houseData.sensors?.feed_consumption && houseData.sensors.feed_consumption.current > 0 && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <Restaurant color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Feed</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.feed_consumption.current?.toFixed(0) || 'N/A'}{houseData.sensors.feed_consumption.unit}
+                                </Typography>
+                              </Grid>
+                            )}
+                            
+                            {/* Water Consumption */}
+                            {houseData.sensors?.water && houseData.sensors.water.current > 0 && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <WaterDrop color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Water</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.water.current?.toFixed(0) || 'N/A'}{houseData.sensors.water.unit}
+                                </Typography>
+                              </Grid>
+                            )}
+                            
+                            {/* Average Weight */}
+                            {houseData.sensors?.avg_weight && houseData.sensors.avg_weight.current > 0 && (
+                              <Grid item xs={6}>
+                                <Box display="flex" alignItems="center" mb={1}>
+                                  <Restaurant color="primary" sx={{ mr: 0.5, fontSize: 16 }} />
+                                  <Typography variant="caption">Avg Weight</Typography>
+                                </Box>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {houseData.sensors.avg_weight.current?.toFixed(1) || 'N/A'}{houseData.sensors.avg_weight.unit}
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
+
+                          {/* System Components */}
+                          {houseData.sensors?.system_components && Object.keys(houseData.sensors.system_components).length > 0 && (
+                            <>
+                              <Typography variant="subtitle2" color="primary" gutterBottom>
+                                Equipment Status
+                              </Typography>
+                              <Grid container spacing={1} sx={{ mb: 2 }}>
+                                {Object.entries(houseData.sensors.system_components).slice(0, 4).map(([component, data]) => (
+                                  <Grid item xs={6} key={component}>
+                                    <Box display="flex" alignItems="center" mb={1}>
+                                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                        {component.replace(/_/g, ' ')}
+                                      </Typography>
+                                    </Box>
+                                    <Chip
+                                      label={(data as any).status}
+                                      color={(data as any).status === 'On' ? 'success' : 'default'}
+                                      size="small"
+                                      sx={{ fontSize: '0.7rem', height: 20 }}
+                                    />
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            </>
+                          )}
+
+                          {/* Control Settings */}
+                          {houseData.sensors?.control_settings && Object.keys(houseData.sensors.control_settings).length > 0 && (
+                            <>
+                              <Typography variant="subtitle2" color="primary" gutterBottom>
+                                Controls
+                              </Typography>
+                              <Grid container spacing={1}>
+                                {Object.entries(houseData.sensors.control_settings).slice(0, 3).map(([control, data]) => (
+                                  <Grid item xs={4} key={control}>
+                                    <Box display="flex" alignItems="center" mb={1}>
+                                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                        {control.replace(/_/g, ' ').replace(/Position/g, '').trim()}
+                                      </Typography>
+                                    </Box>
+                                    <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
+                                      {(data as any).current?.toFixed(0) || '0'}{(data as any).unit}
+                                    </Typography>
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            </>
+                          )}
+                          
+                          <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block' }}>
+                            Last updated: {new Date(houseData.last_updated).toLocaleTimeString()}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              ) : (
+                <Alert severity="warning">
+                  <Typography variant="body2">
+                    <strong>Sensor data not available</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    The Rotem system may not be properly authenticated or the houses may not have active sensor data.
+                    Click &quot;Sync Data&quot; to attempt to refresh the connection and collect the latest information.
+                  </Typography>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ML Predictions */}
+          {(mlPredictions || []).length > 0 && (
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  AI Insights & Predictions
+                </Typography>
+                <Grid container spacing={2}>
+                  {mlPredictions.slice(0, 6).map((prediction, index) => (
+                    <Grid item xs={12} sm={6} md={4} key={prediction.id}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box display="flex" alignItems="center" mb={1}>
+                            {prediction.prediction_type === 'anomaly' && <Warning color="error" sx={{ mr: 1 }} />}
+                            {prediction.prediction_type === 'optimization' && <TrendingUp color="warning" sx={{ mr: 1 }} />}
+                            {prediction.prediction_type === 'performance' && <Assessment color="success" sx={{ mr: 1 }} />}
+                            <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>
+                              {prediction.prediction_type}
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2" gutterBottom>
+                            {prediction.prediction_data?.action || prediction.prediction_data?.recommendations?.[0] || 'Analysis available'}
+                          </Typography>
+                          <Chip
+                            label={`${(prediction.confidence_score * 100).toFixed(0)}% confidence`}
+                            size="small"
+                            color={prediction.confidence_score > 0.8 ? 'success' : prediction.confidence_score > 0.6 ? 'warning' : 'default'}
+                          />
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Sync Message */}
+      {syncMessage && (
+        <Alert 
+          severity={syncMessage.includes('failed') ? 'error' : 'success'} 
+          onClose={() => setSyncMessage(null)}
+          sx={{ mb: 2 }}
+        >
+          {syncMessage}
+        </Alert>
       )}
 
       {/* Sync Dialog */}

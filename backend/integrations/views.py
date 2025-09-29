@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .tasks import run_ml_analysis, run_farm_ml_analysis, sync_and_analyze_farm, generate_daily_report
 from .ml_service import EnhancedMLAnalysisService
+from .rotem import RotemIntegration
 from farms.models import Farm
 from rotem_scraper.models import MLPrediction, RotemController
 import logging
@@ -304,4 +305,265 @@ def trigger_daily_report(request):
         return Response({
             'status': 'error',
             'message': f'Failed to start daily report generation: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_house_sensor_data(request, farm_id):
+    """Get real-time sensor data for all houses in a farm"""
+    try:
+        farm = get_object_or_404(Farm, id=farm_id)
+        
+        if not farm.has_system_integration or farm.integration_type != 'rotem':
+            return Response({
+                'status': 'error',
+                'message': 'Farm does not have Rotem integration enabled'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create Rotem integration instance
+        integration = RotemIntegration(farm)
+        
+        # Get sensor data for all houses
+        all_house_data = integration.get_all_sensor_data()
+        
+        # Process the data to make it more frontend-friendly
+        processed_data = {}
+        for house_key, house_data in all_house_data.items():
+            house_number = house_key.replace('house_', '')
+            
+            # Extract relevant sensor data from the command data
+            sensor_data = {}
+            if house_data and isinstance(house_data, dict):
+                # Check for both possible keys (reponseObj with typo and responseObj)
+                response_obj = house_data.get('reponseObj') or house_data.get('responseObj')
+                if response_obj and isinstance(response_obj, dict):
+                    ds_data = response_obj.get('dsData', {})
+                else:
+                    ds_data = {}
+            else:
+                ds_data = {}
+            
+            # Extract comprehensive sensor data from all available data sources
+            sensor_data = {}
+            
+            # Helper function to safely convert parameter values to float
+            def safe_float_convert(value, default=0):
+                if value is None:
+                    return default
+                try:
+                    # Handle string values like '- - -', 'N/A', etc.
+                    if isinstance(value, str):
+                        value = value.strip()
+                        if value in ['- - -', 'N/A', '---', '', 'null']:
+                            return default
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+            
+            # Extract temperature data from TempSensor
+            temp_sensor_data = ds_data.get('TempSensor', [])
+            if temp_sensor_data and len(temp_sensor_data) > 0:
+                # Get tunnel temperature (first reading)
+                tunnel_temp = temp_sensor_data[0]
+                temp_value = safe_float_convert(tunnel_temp.get('ParameterValue', 0))
+                
+                sensor_data['temperature'] = {
+                    'current': temp_value,
+                    'unit': '°C',
+                    'status': 'Normal'
+                }
+                
+                # Extract all individual temperature readings
+                individual_temps = {}
+                for i, temp_reading in enumerate(temp_sensor_data):
+                    temp_name = temp_reading.get('ParameterKeyName', f'Temp_{i+1}')
+                    temp_value = safe_float_convert(temp_reading.get('ParameterValue', 0))
+                    individual_temps[temp_name] = {
+                        'value': temp_value,
+                        'unit': '°C',
+                        'display_name': temp_reading.get('ParameterDisplayName', temp_name)
+                    }
+                
+                sensor_data['individual_temperatures'] = individual_temps
+
+            # Extract humidity data
+            humidity_data = ds_data.get('Humidity', [])
+            if humidity_data and len(humidity_data) > 0:
+                humidity_reading = humidity_data[0]
+                sensor_data['humidity'] = {
+                    'current': safe_float_convert(humidity_reading.get('ParameterValue', 0)),
+                    'unit': '%',
+                    'status': humidity_reading.get('Status', 'Normal')
+                }
+
+            # Extract pressure data (Static Pressure)
+            pressure_data = ds_data.get('Pressure', [])
+            if pressure_data and len(pressure_data) > 0:
+                pressure_reading = pressure_data[0]
+                sensor_data['static_pressure'] = {
+                    'current': safe_float_convert(pressure_reading.get('ParameterValue', 0)),
+                    'unit': 'BAR',
+                    'status': pressure_reading.get('Status', 'Normal')
+                }
+
+            # Extract CO2 data
+            co2_data = ds_data.get('CO2', [])
+            if co2_data and len(co2_data) > 0:
+                co2_reading = co2_data[0]
+                sensor_data['co2'] = {
+                    'current': safe_float_convert(co2_reading.get('ParameterValue', 0)),
+                    'unit': 'PPM',
+                    'status': co2_reading.get('Status', 'Normal')
+                }
+
+            # Extract ammonia data
+            ammonia_data = ds_data.get('Ammonia', [])
+            if ammonia_data and len(ammonia_data) > 0:
+                ammonia_reading = ammonia_data[0]
+                sensor_data['ammonia'] = {
+                    'current': safe_float_convert(ammonia_reading.get('ParameterValue', 0)),
+                    'unit': 'PPM',
+                    'status': ammonia_reading.get('Status', 'Normal')
+                }
+
+            # Extract wind speed and direction
+            wind_data = ds_data.get('Wind', [])
+            if wind_data and len(wind_data) > 0:
+                for wind_reading in wind_data:
+                    wind_type = wind_reading.get('ParameterKeyName', '').lower()
+                    if 'speed' in wind_type:
+                        sensor_data['wind_speed'] = {
+                            'current': safe_float_convert(wind_reading.get('ParameterValue', 0)),
+                            'unit': 'MPH',
+                            'status': wind_reading.get('Status', 'Normal')
+                        }
+                    elif 'direction' in wind_type:
+                        sensor_data['wind_direction'] = {
+                            'current': safe_float_convert(wind_reading.get('ParameterValue', 0)),
+                            'unit': 'degrees',
+                            'status': wind_reading.get('Status', 'Normal')
+                        }
+
+            # Extract consumption data (water/feed)
+            consumption_data = ds_data.get('Consumption', [])
+            if consumption_data and len(consumption_data) > 0:
+                for consumption_item in consumption_data:
+                    param_name = consumption_item.get('ParameterKeyName', '').lower()
+                    param_value = safe_float_convert(consumption_item.get('ParameterValue', 0))
+                    
+                    if param_name == 'daily_water':
+                        sensor_data['water'] = {
+                            'current': param_value,
+                            'unit': 'L',
+                            'status': 'Normal'
+                        }
+                    elif param_name == 'daily_feed':
+                        sensor_data['feed_consumption'] = {
+                            'current': param_value,
+                            'unit': 'LB',
+                            'status': 'Normal'
+                        }
+
+            # Extract feed inventory data
+            feed_inv_data = ds_data.get('FeedInv', [])
+            if feed_inv_data and len(feed_inv_data) > 0:
+                silo_inventory = {}
+                for i, silo_reading in enumerate(feed_inv_data):
+                    silo_name = silo_reading.get('ParameterKeyName', f'Silo_{i+1}')
+                    silo_value = safe_float_convert(silo_reading.get('ParameterValue', 0))
+                    silo_inventory[silo_name] = {
+                        'current': silo_value,
+                        'unit': 'LB',
+                        'status': 'Normal'
+                    }
+                sensor_data['feed_inventory'] = silo_inventory
+
+            # Extract average weight data
+            avg_weight_data = ds_data.get('AvgWeight', [])
+            if avg_weight_data and len(avg_weight_data) > 0:
+                weight_reading = avg_weight_data[0]
+                sensor_data['avg_weight'] = {
+                    'current': safe_float_convert(weight_reading.get('ParameterValue', 0)),
+                    'unit': 'LB',
+                    'status': 'Normal'
+                }
+
+            # Extract system component status from DigitalOut
+            digital_out_data = ds_data.get('DigitalOut', [])
+            if digital_out_data and len(digital_out_data) > 0:
+                system_components = {}
+                for component in digital_out_data:
+                    comp_name = component.get('ParameterKeyName', '')
+                    comp_value = component.get('ParameterValue', 0)
+                    comp_status = component.get('Status', 'Off')
+                    
+                    if comp_name:
+                        system_components[comp_name] = {
+                            'status': comp_status,
+                            'value': comp_value,
+                            'unit': component.get('Unit', '')
+                        }
+                
+                sensor_data['system_components'] = system_components
+
+            # Extract control settings from AnalogOut
+            analog_out_data = ds_data.get('AnalogOut', [])
+            if analog_out_data and len(analog_out_data) > 0:
+                control_settings = {}
+                for control in analog_out_data:
+                    control_name = control.get('ParameterKeyName', '')
+                    control_value = safe_float_convert(control.get('ParameterValue', 0))
+                    
+                    if control_name:
+                        control_settings[control_name] = {
+                            'current': control_value,
+                            'unit': control.get('Unit', '%'),
+                            'status': control.get('Status', 'Normal')
+                        }
+                
+                sensor_data['control_settings'] = control_settings
+
+            # Extract ventilation level
+            vent_data = ds_data.get('Ventilation', [])
+            if vent_data and len(vent_data) > 0:
+                vent_reading = vent_data[0]
+                sensor_data['ventilation'] = {
+                    'level': safe_float_convert(vent_reading.get('ParameterValue', 0)),
+                    'unit': '%',
+                    'cfm': safe_float_convert(vent_reading.get('CFM', 0)),
+                    'status': vent_reading.get('Status', 'Normal')
+                }
+
+            # Extract livability data
+            livability_data = ds_data.get('Livability', [])
+            if livability_data and len(livability_data) > 0:
+                livability_reading = livability_data[0]
+                sensor_data['livability'] = {
+                    'percentage': safe_float_convert(livability_reading.get('ParameterValue', 0)),
+                    'bird_count': safe_float_convert(livability_reading.get('BirdCount', 0)),
+                    'unit': '%',
+                    'status': 'Normal'
+                }
+            
+            processed_data[house_number] = {
+                'house_number': house_number,
+                'sensors': sensor_data,
+                'last_updated': timezone.now().isoformat(),
+                'status': 'active' if sensor_data else 'inactive'
+            }
+        
+        return Response({
+            'status': 'success',
+            'farm_name': farm.name,
+            'farm_id': farm.id,
+            'houses': processed_data,
+            'total_houses': len(processed_data)
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Failed to get house sensor data for farm {farm_id}: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': f'Failed to get house sensor data: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
