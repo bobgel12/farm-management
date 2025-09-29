@@ -108,6 +108,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [loadingHealth, setLoadingHealth] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [houseSensorData, setHouseSensorData] = useState<{[key: string]: any}>({});
   const [mlPredictions, setMlPredictions] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -187,13 +188,40 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   };
 
   const handleSyncData = async () => {
-    if (!onSyncData || !farm) return;
+    if (!farm) return;
     
     setSyncing(true);
     try {
-      await onSyncData(farm.id);
+      // If onSyncData prop is provided, use it (for embedded usage)
+      if (onSyncData) {
+        await onSyncData(farm.id);
+      } else {
+        // Otherwise, call the backend API directly (for standalone usage)
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          throw new (Error as any)('No authentication token found');
+        }
+        
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8002/api'}/farms/${farm.id}/sync_data/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new (Error as any)(errorData.message || 'Sync failed');
+        }
+        
+        const result = await response.json();
+        setSyncMessage(result.message || 'Data synced successfully');
+      }
+      
       setSyncDialogOpen(false);
       if (onRefresh) onRefresh();
+      
       // Refresh house sensor data after sync
       if (farm.integration_type === 'rotem') {
         await fetchHouseSensorData();
@@ -201,6 +229,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       }
     } catch (error) {
       console.error('Sync failed:', error);
+      const errorMessage = (error as Error)?.message || 'Unknown error';
+      setSyncMessage(`Sync failed: ${errorMessage}`);
     } finally {
       setSyncing(false);
     }
@@ -287,7 +317,19 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
               <Button
                 variant="outlined"
                 startIcon={<Refresh />}
-                onClick={onRefresh}
+                onClick={() => {
+                  if (onRefresh) {
+                    onRefresh();
+                  } else {
+                    // Refresh farm data directly when used standalone
+                    fetchFarmData();
+                    fetchIntegrationHealth();
+                    if (farm?.integration_type === 'rotem') {
+                      fetchHouseSensorData();
+                      fetchMlPredictions();
+                    }
+                  }
+                }}
                 size="small"
               >
                 Refresh
@@ -769,6 +811,17 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
             </Card>
           )}
         </>
+      )}
+
+      {/* Sync Message */}
+      {syncMessage && (
+        <Alert 
+          severity={syncMessage.includes('failed') ? 'error' : 'success'} 
+          onClose={() => setSyncMessage(null)}
+          sx={{ mb: 2 }}
+        >
+          {syncMessage}
+        </Alert>
       )}
 
       {/* Sync Dialog */}
