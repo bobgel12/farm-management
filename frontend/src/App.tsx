@@ -11,7 +11,6 @@ import { RotemProvider } from './contexts/RotemContext';
 import Login from './components/Login';
 import ProfessionalDashboard from './components/dashboard/ProfessionalDashboard';
 import ProfessionalFarmList from './components/farms/ProfessionalFarmList';
-import FarmDetail from './components/FarmDetail';
 import UnifiedFarmDashboard from './components/farms/UnifiedFarmDashboard';
 import HouseDetail from './components/HouseDetail';
 import ProfessionalTaskList from './components/tasks/ProfessionalTaskList';
@@ -60,6 +59,13 @@ function App() {
                   <ProtectedRoute>
                     <ProfessionalLayout>
                       <UnifiedFarmDashboard />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/farms/:farmId/houses/:houseId" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <HouseDetail />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />

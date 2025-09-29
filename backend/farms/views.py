@@ -126,13 +126,18 @@ class FarmViewSet(ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def sync_data(self, request, pk=None):
-        """Sync data from integrated system"""
+        """Sync data from integrated system and generate houses/tasks"""
         farm = self.get_object()
         
         if farm.integration_type == 'rotem':
             try:
                 integration = RotemIntegration(farm)
+                
+                # Sync house data (sensor data)
                 data = integration.sync_house_data(farm.id)
+                
+                # Generate/update houses and tasks
+                self._sync_rotem_houses(farm)
                 
                 # Update last sync time
                 farm.last_sync = timezone.now()
@@ -140,7 +145,7 @@ class FarmViewSet(ModelViewSet):
                 
                 return Response({
                     'status': 'success',
-                    'message': 'Data synced successfully',
+                    'message': 'Data synced successfully and houses/tasks generated',
                     'data_points': len(data.get('houses', []))
                 })
                 
@@ -188,7 +193,7 @@ class FarmViewSet(ModelViewSet):
         return Response(status_data)
     
     def _sync_rotem_houses(self, farm):
-        """Sync houses from Rotem system"""
+        """Sync houses from Rotem system and generate tasks"""
         try:
             integration = RotemIntegration(farm)
             house_count = integration.get_house_count(farm.id)
@@ -207,11 +212,38 @@ class FarmViewSet(ModelViewSet):
                         'current_age_days': 0
                     }
                 )
-                if created:
-                    # Set initial age from Rotem
-                    age = integration.get_house_age(farm.id, i)
-                    house.current_age_days = age
-                    house.save()
+                
+                # Get age from Rotem system (returns 0 if not available)
+                age = integration.get_house_age(farm.id, i)
+                house.current_age_days = age
+                
+                # Calculate batch start date based on age
+                if age > 0:
+                    # Calculate the actual chicken in date based on current age
+                    house.batch_start_date = timezone.now().date() - timezone.timedelta(days=age)
+                    house.chicken_in_date = house.batch_start_date  # Set chicken_in_date to the calculated batch start date
+                    house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=49)  # Typical 7-week cycle
+                else:
+                    # If age is 0, set default dates for new batch
+                    house.batch_start_date = timezone.now().date()
+                    house.chicken_in_date = house.batch_start_date
+                    house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=49)
+                
+                house.save()
+                
+                # Generate tasks for this house based on its age and assigned program
+                # Only generate tasks if age > 0 (house has birds)
+                if age > 0:
+                    self._generate_house_tasks(house, farm)
+                
+                # Log successful house sync
+                IntegrationLog.objects.create(
+                    farm=farm,
+                    integration_type='rotem',
+                    action='sync_house',
+                    status='success',
+                    message=f'Synced house {i} with age {age} days'
+                )
                     
         except Exception as e:
             # Log error but don't fail the integration setup
@@ -219,7 +251,113 @@ class FarmViewSet(ModelViewSet):
                 farm=farm,
                 integration_type='rotem',
                 error_type='house_sync',
-                error_message=f'Failed to sync houses: {str(e)}'
+                error_message=f'Failed to sync houses: {str(e)}',
+                error_code='HOUSE_SYNC_FAILED'
+            )
+    
+    def _generate_house_tasks(self, house, farm):
+        """Generate tasks for a house based on its age and assigned program"""
+        try:
+            # Get the farm's assigned program
+            program = farm.programs.first()  # Assuming farm has programs relationship
+            if not program:
+                # If no program assigned, create a default broiler program
+                program = Program.objects.create(
+                    farm=farm,
+                    name=f"Default Broiler Program - {farm.name}",
+                    description="Default broiler management program",
+                    program_type='broiler',
+                    duration_days=49,
+                    is_active=True
+                )
+                
+                # Create default program tasks
+                self._create_default_program_tasks(program)
+            
+            # Get tasks for the house's current age
+            current_age = house.current_age_days
+            relevant_tasks = program.tasks.filter(
+                start_day__lte=current_age,
+                end_day__gte=current_age,
+                is_active=True
+            )
+            
+            # Create ProgramTask instances for this house
+            for task_template in relevant_tasks:
+                # Check if task already exists for this house
+                existing_task = ProgramTask.objects.filter(
+                    program=program,
+                    house=house,
+                    task_name=task_template.task_name,
+                    scheduled_date__date=timezone.now().date()
+                ).first()
+                
+                if not existing_task:
+                    ProgramTask.objects.create(
+                        program=program,
+                        house=house,
+                        task_name=task_template.task_name,
+                        description=task_template.description,
+                        task_type=task_template.task_type,
+                        priority=task_template.priority,
+                        estimated_duration=task_template.estimated_duration,
+                        scheduled_date=timezone.now(),
+                        status='pending',
+                        assigned_to=None,  # Will be assigned later
+                        notes=f"Auto-generated for house {house.house_number} (age {current_age} days)"
+                    )
+            
+            # Log task generation
+            IntegrationLog.objects.create(
+                farm=farm,
+                integration_type='rotem',
+                action='generate_tasks',
+                status='success',
+                message=f'Generated {relevant_tasks.count()} tasks for house {house.house_number}'
+            )
+            
+        except Exception as e:
+            IntegrationError.objects.create(
+                farm=farm,
+                integration_type='rotem',
+                error_type='task_generation',
+                error_message=f'Failed to generate tasks for house {house.house_number}: {str(e)}',
+                error_code='TASK_GENERATION_FAILED'
+            )
+    
+    def _create_default_program_tasks(self, program):
+        """Create default broiler program tasks"""
+        default_tasks = [
+            # Week 1 (Days 1-7)
+            {'task_name': 'Daily Health Check', 'description': 'Check bird health, temperature, and behavior', 'task_type': 'health_check', 'priority': 'high', 'start_day': 1, 'end_day': 49, 'estimated_duration': 30},
+            {'task_name': 'Feed Management', 'description': 'Monitor feed consumption and adjust feeders', 'task_type': 'feeding', 'priority': 'high', 'start_day': 1, 'end_day': 49, 'estimated_duration': 45},
+            {'task_name': 'Water System Check', 'description': 'Check water lines, nipples, and pressure', 'task_type': 'water_management', 'priority': 'high', 'start_day': 1, 'end_day': 49, 'estimated_duration': 20},
+            {'task_name': 'Temperature Monitoring', 'description': 'Monitor house temperature and adjust heating', 'task_type': 'environmental', 'priority': 'high', 'start_day': 1, 'end_day': 14, 'estimated_duration': 15},
+            
+            # Week 2-3 (Days 8-21)
+            {'task_name': 'Ventilation Check', 'description': 'Check ventilation system and air quality', 'task_type': 'environmental', 'priority': 'medium', 'start_day': 8, 'end_day': 49, 'estimated_duration': 25},
+            {'task_name': 'Litter Management', 'description': 'Check litter condition and add fresh bedding if needed', 'task_type': 'housekeeping', 'priority': 'medium', 'start_day': 8, 'end_day': 49, 'estimated_duration': 60},
+            
+            # Week 4-5 (Days 22-35)
+            {'task_name': 'Weight Check', 'description': 'Sample birds for weight monitoring', 'task_type': 'monitoring', 'priority': 'medium', 'start_day': 22, 'end_day': 49, 'estimated_duration': 30},
+            {'task_name': 'Feed Adjustment', 'description': 'Adjust feed type based on bird age', 'task_type': 'feeding', 'priority': 'medium', 'start_day': 22, 'end_day': 35, 'estimated_duration': 20},
+            
+            # Week 6-7 (Days 36-49)
+            {'task_name': 'Pre-Harvest Preparation', 'description': 'Prepare for harvest - reduce feed, check equipment', 'task_type': 'harvest_prep', 'priority': 'high', 'start_day': 36, 'end_day': 49, 'estimated_duration': 45},
+            {'task_name': 'Equipment Check', 'description': 'Check all equipment for harvest readiness', 'task_type': 'maintenance', 'priority': 'medium', 'start_day': 42, 'end_day': 49, 'estimated_duration': 30},
+        ]
+        
+        for task_data in default_tasks:
+            ProgramTask.objects.create(
+                program=program,
+                task_name=task_data['task_name'],
+                description=task_data['description'],
+                task_type=task_data['task_type'],
+                priority=task_data['priority'],
+                start_day=task_data['start_day'],
+                end_day=task_data['end_day'],
+                estimated_duration=task_data['estimated_duration'],
+                is_active=True
             )
 
 

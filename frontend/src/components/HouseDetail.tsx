@@ -17,7 +17,7 @@ import EmailManager from './EmailManager';
 import api from '../services/api';
 
 const HouseDetail: React.FC = () => {
-  const { houseId } = useParams<{ houseId: string }>();
+  const { houseId, farmId } = useParams<{ houseId: string; farmId?: string }>();
   const [house, setHouse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,8 @@ const HouseDetail: React.FC = () => {
 
   const fetchHouseDetails = useCallback(async () => {
     try {
-      const response = await api.get(`/houses/${houseId}/`);
+      const url = farmId ? `/farms/${farmId}/houses/${houseId}/` : `/houses/${houseId}/`;
+      const response = await api.get(url);
       setHouse(response.data);
     } catch (err) {
       setError('Failed to fetch house details');
@@ -33,7 +34,7 @@ const HouseDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [houseId]);
+  }, [houseId, farmId]);
 
   useEffect(() => {
     if (houseId) {
@@ -225,7 +226,7 @@ const HouseDetail: React.FC = () => {
 
       {/* Email Management for this house */}
       <Box mb={4}>
-        <EmailManager farmId={house?.farm_id} farmName={house?.farm_name} />
+        <EmailManager farmId={farmId ? parseInt(farmId) : house?.farm_id} farmName={house?.farm_name} />
       </Box>
 
       <Box 

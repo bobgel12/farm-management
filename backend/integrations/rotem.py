@@ -121,14 +121,98 @@ class RotemIntegration(FarmSystemIntegration):
             return 0
     
     def get_house_age(self, farm_id: str, house_number: int) -> int:
-        """Get house age in days from Rotem data"""
+        """Get house age in days from Rotem data using Growth_Day field"""
         try:
-            # This would query the specific house data from Rotem
-            # For now, return a default value
+            # Get sensor data for the house to extract Growth_Day
+            sensor_data = self.get_sensor_data(house_number)
+            
+            if sensor_data and isinstance(sensor_data, dict):
+                # Check for both possible keys (reponseObj with typo and responseObj)
+                response_obj = sensor_data.get('reponseObj') or sensor_data.get('responseObj')
+                if response_obj and isinstance(response_obj, dict):
+                    ds_data = response_obj.get('dsData', {})
+                else:
+                    ds_data = {}
+            else:
+                ds_data = {}
+            
+            # Extract Growth_Day from General array (correct structure)
+            general_data = ds_data.get('General', [])
+            growth_day = 0
+            
+            for general_item in general_data:
+                param_name = general_item.get('ParameterKeyName', '')
+                if param_name == 'Growth_Day':
+                    growth_day_str = general_item.get('ParameterValue', '0')
+                    try:
+                        growth_day = int(growth_day_str)
+                        self.log_activity(
+                            action='get_house_age',
+                            status='success',
+                            message=f'Retrieved house {house_number} age as {growth_day} days from Rotem Growth_Day field'
+                        )
+                        return growth_day
+                    except (ValueError, TypeError):
+                        self.log_activity(
+                            action='get_house_age',
+                            status='warning',
+                            message=f'Invalid Growth_Day value "{growth_day_str}" for house {house_number}'
+                        )
+                        growth_day = 0
+                        break
+            
+            # If no Growth_Day found, check if there's activity (water/feed consumption)
+            # to determine if house has birds
+            consumption_data = ds_data.get('Consumption', [])
+            has_activity = False
+            
+            for consumption_item in consumption_data:
+                param_name = consumption_item.get('ParameterKeyName', '')
+                param_value = self.safe_float_convert(consumption_item.get('ParameterValue', 0))
+                
+                if param_name == 'Daily_Water' and param_value > 0:
+                    has_activity = True
+                    break
+                elif param_name == 'Daily_Feed' and param_value > 0:
+                    has_activity = True
+                    break
+            
+            if has_activity:
+                # If there's activity but no Growth_Day, use a default age
+                # This should be updated manually by the user
+                default_age = 1  # Default to day 1 for active houses
+                self.log_activity(
+                    action='get_house_age',
+                    status='info',
+                    message=f'House {house_number} has activity but no Growth_Day data - using default age {default_age} days'
+                )
+                return default_age
+            
+            # No activity detected - house might be empty
+            self.log_activity(
+                action='get_house_age',
+                status='info',
+                message=f'House {house_number} appears empty (no Growth_Day or consumption data)'
+            )
             return 0
+            
         except Exception as e:
             self.log_error('data_query', f'Failed to get house age for house {house_number}: {str(e)}')
             return 0
+    
+    def safe_float_convert(self, value, default=0):
+        """Safely convert value to float"""
+        if value is None:
+            return default
+        try:
+            # Handle string values like '- - -', 'N/A', etc.
+            if isinstance(value, str):
+                value = value.strip()
+                if value in ['- - -', 'N/A', '---', '', 'null']:
+                    return default
+            return float(value)
+        except (ValueError, TypeError):
+            return default
     
     def get_sensor_data(self, house_number: int) -> Dict[str, Any]:
         """Get real-time sensor data for a specific house"""
