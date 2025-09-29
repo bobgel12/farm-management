@@ -1,10 +1,18 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 
+# Create router for ViewSets
+router = DefaultRouter()
+router.register(r'farms', views.FarmViewSet, basename='farm')
+
 urlpatterns = [
-    # Farm URLs
-    path('farms/', views.FarmListCreateView.as_view(), name='farm-list-create'),
-    path('farms/<int:pk>/', views.FarmDetailView.as_view(), name='farm-detail'),
+    # Include router URLs
+    path('', include(router.urls)),
+    
+    # Legacy Farm URLs (for backward compatibility)
+    path('farms-legacy/', views.FarmListCreateView.as_view(), name='farm-list-create-legacy'),
+    path('farms-legacy/<int:pk>/', views.FarmDetailView.as_view(), name='farm-detail-legacy'),
     path('dashboard/', views.farm_dashboard, name='farm-dashboard'),
     
     # Worker URLs

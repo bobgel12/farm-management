@@ -8,86 +8,133 @@ import {
   CardContent,
   Grid,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   Alert,
   CircularProgress,
   Chip,
+  Dialog,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Home as HomeIcon,
+  Settings,
+  IntegrationInstructions,
+  CheckCircle,
+  Error,
+  Warning,
 } from '@mui/icons-material';
 import { useFarm } from '../contexts/FarmContext';
+import EnhancedFarmForm from './farms/EnhancedFarmForm';
+import UnifiedFarmDashboard from './farms/UnifiedFarmDashboard';
+import IntegrationManagement from './farms/IntegrationManagement';
 
 const FarmList: React.FC = () => {
   const navigate = useNavigate();
   const { farms, loading, error, fetchFarms, createFarm, updateFarm, deleteFarm } = useFarm();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingFarm, setEditingFarm] = useState<any>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    location: '',
-    contact_person: '',
-    contact_phone: '',
-    contact_email: '',
-  });
+  const [selectedFarm, setSelectedFarm] = useState<any>(null);
+  const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
 
   useEffect(() => {
     fetchFarms();
   }, [fetchFarms]);
 
   const handleOpenDialog = (farm?: any) => {
-    if (farm) {
-      setEditingFarm(farm);
-      setFormData({
-        name: farm.name,
-        location: farm.location,
-        contact_person: farm.contact_person,
-        contact_phone: farm.contact_phone,
-        contact_email: farm.contact_email,
-      });
-    } else {
-      setEditingFarm(null);
-      setFormData({
-        name: '',
-        location: '',
-        contact_person: '',
-        contact_phone: '',
-        contact_email: '',
-      });
-    }
+    setEditingFarm(farm || null);
     setDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingFarm(null);
-    setFormData({
-      name: '',
-      location: '',
-      contact_person: '',
-      contact_phone: '',
-      contact_email: '',
-    });
   };
 
-  const handleSubmit = async () => {
-    if (editingFarm) {
-      const success = await updateFarm(editingFarm.id, formData);
-      if (success) {
-        handleCloseDialog();
+  const handleSubmit = async (formData: any) => {
+    setFormLoading(true);
+    try {
+      if (editingFarm) {
+        await updateFarm(editingFarm.id, formData);
+      } else {
+        await createFarm(formData);
       }
-    } else {
-      const success = await createFarm(formData);
-      if (success) {
-        handleCloseDialog();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Error saving farm:', error);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleFarmClick = (farm: any) => {
+    setSelectedFarm(farm);
+  };
+
+  const handleConfigureIntegration = (farmId: number) => {
+    const farm = farms.find(f => f.id === farmId);
+    if (farm) {
+      setSelectedFarm(farm);
+      setIntegrationDialogOpen(true);
+    }
+  };
+
+  const handleUpdateIntegration = async (farmId: number, integrationData: any) => {
+    try {
+      const response = await fetch(`/api/farms/${farmId}/configure_integration/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(integrationData),
+      });
+      
+      if (response.ok) {
+        await fetchFarms(); // Refresh farms list
+        setIntegrationDialogOpen(false);
+      } else {
+        throw new Error('Failed to update integration');
       }
+    } catch (error) {
+      console.error('Error updating integration:', error);
+      throw error;
+    }
+  };
+
+  const handleTestConnection = async (farmId: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/farms/${farmId}/test_connection/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+        },
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      return false;
+    }
+  };
+
+  const handleSyncData = async (farmId: number) => {
+    try {
+      const response = await fetch(`/api/farms/${farmId}/sync_data/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        await fetchFarms(); // Refresh farms list
+      } else {
+        throw new Error('Failed to sync data');
+      }
+    } catch (error) {
+      console.error('Error syncing data:', error);
+      throw error;
     }
   };
 
@@ -205,20 +252,56 @@ const FarmList: React.FC = () => {
                       size="small"
                       sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
                     />
+                    <Chip
+                      label={farm.integration_type === 'none' ? 'Manual' : 'Integrated'}
+                      color={farm.integration_type === 'none' ? 'default' : 'primary'}
+                      icon={farm.integration_type === 'none' ? <Settings /> : <IntegrationInstructions />}
+                      size="small"
+                      sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                    />
+                    {farm.has_system_integration && (
+                      <Chip
+                        label={farm.integration_status}
+                        color={
+                          farm.integration_status === 'active' ? 'success' :
+                          farm.integration_status === 'error' ? 'error' :
+                          farm.integration_status === 'inactive' ? 'warning' : 'default'
+                        }
+                        icon={
+                          farm.integration_status === 'active' ? <CheckCircle /> :
+                          farm.integration_status === 'error' ? <Error /> :
+                          farm.integration_status === 'inactive' ? <Warning /> : <Settings />
+                        }
+                        size="small"
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                      />
+                    )}
                   </Box>
                   
-                  <Box display="flex" gap={1} mt="auto">
+                  <Box display="flex" gap={1} mt="auto" flexWrap="wrap">
                     <Button
                       size="small"
                       variant="outlined"
                       startIcon={<HomeIcon />}
-                      onClick={() => navigate(`/farms/${farm.id}`)}
+                      onClick={() => handleFarmClick(farm)}
                       sx={{ 
                         fontSize: { xs: '0.75rem', sm: '0.875rem' },
                         minHeight: { xs: 40, sm: 32 }
                       }}
                     >
-                      View Houses
+                      View Dashboard
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Settings />}
+                      onClick={() => handleConfigureIntegration(farm.id)}
+                      sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        minHeight: { xs: 40, sm: 32 }
+                      }}
+                    >
+                      Configure
                     </Button>
                   </Box>
                 </CardContent>
@@ -237,123 +320,49 @@ const FarmList: React.FC = () => {
         </Box>
       )}
 
-      {/* Add/Edit Farm Dialog */}
-      <Dialog 
-        open={dialogOpen} 
-        onClose={handleCloseDialog} 
-        maxWidth="sm" 
-        fullWidth
-        fullScreen={false}
-        sx={{
-          '& .MuiDialog-paper': {
-            m: { xs: 1, sm: 2 },
-            maxHeight: { xs: '95vh', sm: '90vh' }
-          }
-        }}
-      >
-        <DialogTitle sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' }, fontWeight: 600 }}>
-          {editingFarm ? 'Edit Farm' : 'Add New Farm'}
-        </DialogTitle>
-        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Farm Name"
-            fullWidth
-            variant="outlined"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            sx={{ mb: 2 }}
-            InputProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-            InputLabelProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
+      {/* Enhanced Farm Form Dialog */}
+      <EnhancedFarmForm
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        editingFarm={editingFarm}
+        loading={formLoading}
+      />
+
+      {/* Farm Dashboard Dialog */}
+      {selectedFarm && (
+        <Dialog
+          open={!!selectedFarm}
+          onClose={() => setSelectedFarm(null)}
+          maxWidth="lg"
+          fullWidth
+          PaperProps={{
+            sx: {
+              maxHeight: '90vh',
+              minHeight: '70vh'
+            }
+          }}
+        >
+          <UnifiedFarmDashboard
+            farm={selectedFarm}
+            onRefresh={fetchFarms}
+            onConfigureIntegration={handleConfigureIntegration}
+            onSyncData={handleSyncData}
           />
-          <TextField
-            margin="dense"
-            label="Location"
-            fullWidth
-            variant="outlined"
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-            sx={{ mb: 2 }}
-            InputProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-            InputLabelProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-          />
-          <TextField
-            margin="dense"
-            label="Contact Person"
-            fullWidth
-            variant="outlined"
-            value={formData.contact_person}
-            onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-            sx={{ mb: 2 }}
-            InputProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-            InputLabelProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-          />
-          <TextField
-            margin="dense"
-            label="Contact Phone"
-            fullWidth
-            variant="outlined"
-            value={formData.contact_phone}
-            onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-            sx={{ mb: 2 }}
-            InputProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-            InputLabelProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-          />
-          <TextField
-            margin="dense"
-            label="Contact Email"
-            fullWidth
-            variant="outlined"
-            type="email"
-            value={formData.contact_email}
-            onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-            InputProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-            InputLabelProps={{
-              sx: { fontSize: { xs: '0.875rem', sm: '1rem' } }
-            }}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: { xs: 2, sm: 3 }, gap: 1 }}>
-          <Button 
-            onClick={handleCloseDialog}
-            sx={{ 
-              fontSize: { xs: '0.875rem', sm: '0.875rem' },
-              minHeight: { xs: 44, sm: 36 }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            variant="contained"
-            sx={{ 
-              fontSize: { xs: '0.875rem', sm: '0.875rem' },
-              minHeight: { xs: 44, sm: 36 }
-            }}
-          >
-            {editingFarm ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Dialog>
+      )}
+
+      {/* Integration Management Dialog */}
+      {selectedFarm && (
+        <IntegrationManagement
+          open={integrationDialogOpen}
+          onClose={() => setIntegrationDialogOpen(false)}
+          farm={selectedFarm}
+          onUpdateIntegration={handleUpdateIntegration}
+          onTestConnection={handleTestConnection}
+          onSyncData={handleSyncData}
+        />
+      )}
     </Box>
   );
 };

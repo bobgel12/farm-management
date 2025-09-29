@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'tasks',
     'authentication',
     'health',
+    'integrations',  # New integration service
     'rotem_scraper',
 ]
 
@@ -225,6 +226,19 @@ ADMIN_USERNAME = config('ADMIN_USERNAME', default='admin')
 ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='admin123')
 ADMIN_EMAIL = config('ADMIN_EMAIL', default='admin@chickenmanagement.com')
 
+# Integration Settings
+INTEGRATION_SETTINGS = {
+    'ROTEM': {
+        'ENABLED': True,
+        'DEFAULT_SYNC_INTERVAL': 300,  # 5 minutes
+        'MAX_RETRY_ATTEMPTS': 3,
+        'CONNECTION_TIMEOUT': 30,
+    },
+    'FUTURE_SYSTEMS': {
+        'ENABLED': False,
+    }
+}
+
 # Rotem Scraper Settings
 ROTEM_USERNAME = config('ROTEM_USERNAME', default='')
 ROTEM_PASSWORD = config('ROTEM_PASSWORD', default='')
@@ -239,6 +253,7 @@ CELERY_TIMEZONE = TIME_ZONE
 
 # Celery Beat schedule
 CELERY_BEAT_SCHEDULE = {
+    # Legacy Rotem scraper tasks (for existing farms)
     'scrape-rotem-data-every-5-minutes': {
         'task': 'rotem_scraper.tasks.scrape_rotem_data',
         'schedule': 300.0,  # Every 5 minutes (300 seconds)
@@ -254,6 +269,38 @@ CELERY_BEAT_SCHEDULE = {
     'cleanup-old-predictions-weekly': {
         'task': 'rotem_scraper.tasks.cleanup_old_predictions',
         'schedule': 604800.0,  # Every week (604800 seconds)
+    },
+    
+    # New integration tasks
+    'sync-integrated-farms-every-5-minutes': {
+        'task': 'integrations.tasks.sync_farm_data',
+        'schedule': 300.0,  # Every 5 minutes (300 seconds)
+    },
+    'test-integration-connections-every-hour': {
+        'task': 'integrations.tasks.test_integration_connections',
+        'schedule': 3600.0,  # Every hour (3600 seconds)
+    },
+    'update-integration-health-every-hour': {
+        'task': 'integrations.tasks.update_integration_health_metrics',
+        'schedule': 3600.0,  # Every hour (3600 seconds)
+    },
+    'cleanup-integration-logs-daily': {
+        'task': 'integrations.tasks.cleanup_old_integration_logs',
+        'schedule': 86400.0,  # Every day (86400 seconds)
+    },
+    
+    # Enhanced ML Analysis tasks
+    'run-ml-analysis-every-15-minutes': {
+        'task': 'integrations.tasks.run_ml_analysis',
+        'schedule': 900.0,  # Every 15 minutes (900 seconds)
+    },
+    'cleanup-old-predictions-daily': {
+        'task': 'integrations.tasks.cleanup_old_predictions',
+        'schedule': 86400.0,  # Every day (86400 seconds)
+    },
+    'generate-daily-report': {
+        'task': 'integrations.tasks.generate_daily_report',
+        'schedule': 86400.0,  # Every day at midnight (86400 seconds)
     },
 }
 

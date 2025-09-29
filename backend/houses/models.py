@@ -7,12 +7,23 @@ from farms.models import Farm
 class House(models.Model):
     farm = models.ForeignKey(Farm, on_delete=models.CASCADE, related_name='houses')
     house_number = models.IntegerField()
+    capacity = models.IntegerField(default=1000, help_text="Maximum chicken capacity")
     chicken_in_date = models.DateField()
     chicken_out_date = models.DateField(null=True, blank=True)
     chicken_out_day = models.IntegerField(default=40)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Integration fields
+    is_integrated = models.BooleanField(default=False, help_text="Whether this house is integrated with external system")
+    system_house_id = models.CharField(max_length=100, null=True, blank=True, help_text="External system house ID")
+    last_system_sync = models.DateTimeField(null=True, blank=True, help_text="Last sync with external system")
+    
+    # Age tracking (for both integrated and non-integrated)
+    current_age_days = models.IntegerField(default=0, help_text="Current chicken age in days")
+    batch_start_date = models.DateField(null=True, blank=True, help_text="Date when current batch started")
+    expected_harvest_date = models.DateField(null=True, blank=True, help_text="Expected harvest date")
 
     class Meta:
         unique_together = ['farm', 'house_number']
@@ -36,6 +47,13 @@ class House(models.Model):
         # This ensures that if chickens arrive on day X, then on day X it's day 0
         days_since_in = (today - self.chicken_in_date).days
         return days_since_in
+    
+    @property
+    def age_days(self):
+        """Get current age in days - use current_age_days if set, otherwise calculate from dates"""
+        if self.current_age_days > 0:
+            return self.current_age_days
+        return self.current_day or 0
 
     @property
     def days_remaining(self):

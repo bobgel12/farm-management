@@ -16,27 +16,40 @@ class FarmSerializer(serializers.ModelSerializer):
     total_houses = serializers.ReadOnlyField()
     active_houses = serializers.ReadOnlyField()
     workers = WorkerSerializer(many=True, read_only=True)
+    is_integrated = serializers.ReadOnlyField()
+    integration_display_name = serializers.ReadOnlyField()
 
     class Meta:
         model = Farm
         fields = [
-            'id', 'name', 'location', 'contact_person',
+            'id', 'name', 'location', 'description', 'contact_person',
             'contact_phone', 'contact_email', 'is_active',
             'total_houses', 'active_houses', 'workers',
+            'has_system_integration', 'integration_type', 'integration_status',
+            'last_sync', 'is_integrated', 'integration_display_name',
+            'rotem_farm_id', 'rotem_username', 'rotem_password',
+            'rotem_gateway_name', 'rotem_gateway_alias',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'rotem_password': {'write_only': True}
+        }
 
 
 class FarmListSerializer(serializers.ModelSerializer):
     total_houses = serializers.ReadOnlyField()
     active_houses = serializers.ReadOnlyField()
+    is_integrated = serializers.ReadOnlyField()
+    integration_display_name = serializers.ReadOnlyField()
 
     class Meta:
         model = Farm
         fields = [
-            'id', 'name', 'location', 'is_active',
-            'total_houses', 'active_houses'
+            'id', 'name', 'location', 'description', 'is_active',
+            'total_houses', 'active_houses', 'has_system_integration',
+            'integration_type', 'integration_status', 'last_sync',
+            'is_integrated', 'integration_display_name'
         ]
 
 

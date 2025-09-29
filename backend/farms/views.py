@@ -1,8 +1,10 @@
 from rest_framework import generics, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.utils import timezone
 from .models import Farm, Worker, Program, ProgramTask, ProgramChangeLog
 from .serializers import (
     FarmSerializer, FarmListSerializer, WorkerSerializer,
@@ -10,8 +12,218 @@ from .serializers import (
     FarmWithProgramSerializer
 )
 from .program_change_service import ProgramChangeService
+from integrations.rotem import RotemIntegration
+from integrations.models import IntegrationLog, IntegrationError
 
 
+class FarmViewSet(ModelViewSet):
+    queryset = Farm.objects.all()
+    serializer_class = FarmSerializer
+    
+    @action(detail=True, methods=['post'])
+    def configure_integration(self, request, pk=None):
+        """Configure system integration for a farm"""
+        farm = self.get_object()
+        integration_type = request.data.get('integration_type')
+        
+        if integration_type == 'rotem':
+            # Validate Rotem credentials
+            username = request.data.get('username')
+            password = request.data.get('password')
+            
+            if not username or not password:
+                return Response({
+                    'error': 'Username and password are required for Rotem integration'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Test connection
+            try:
+                # Temporarily set credentials for testing
+                farm.rotem_username = username
+                farm.rotem_password = password
+                farm.save()
+                
+                integration = RotemIntegration(farm)
+                if integration.test_connection():
+                    farm.integration_type = 'rotem'
+                    farm.integration_status = 'active'
+                    farm.save()
+                    
+                    # Sync house data
+                    self._sync_rotem_houses(farm)
+                    
+                    return Response({
+                        'status': 'success',
+                        'message': 'Rotem integration configured successfully',
+                        'integration_type': 'rotem',
+                        'integration_status': 'active'
+                    })
+                else:
+                    farm.integration_status = 'error'
+                    farm.save()
+                    return Response({
+                        'error': 'Invalid Rotem credentials or connection failed'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except Exception as e:
+                farm.integration_status = 'error'
+                farm.save()
+                return Response({
+                    'error': f'Integration configuration failed: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        elif integration_type == 'none':
+            farm.integration_type = 'none'
+            farm.integration_status = 'not_configured'
+            farm.has_system_integration = False
+            farm.save()
+            return Response({
+                'status': 'success',
+                'message': 'Integration disabled',
+                'integration_type': 'none',
+                'integration_status': 'not_configured'
+            })
+        
+        return Response({
+            'error': 'Invalid integration type'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def test_connection(self, request, pk=None):
+        """Test connection for integrated farms"""
+        farm = self.get_object()
+        
+        if farm.integration_type == 'rotem':
+            try:
+                integration = RotemIntegration(farm)
+                success = integration.test_connection()
+                
+                if success:
+                    farm.integration_status = 'active'
+                    farm.last_sync = timezone.now()
+                    farm.save()
+                    return Response({
+                        'status': 'success',
+                        'message': 'Connection test successful'
+                    })
+                else:
+                    farm.integration_status = 'error'
+                    farm.save()
+                    return Response({
+                        'status': 'error',
+                        'message': 'Connection test failed'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except Exception as e:
+                return Response({
+                    'status': 'error',
+                    'message': f'Connection test failed: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'error': 'No integration configured for this farm'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def sync_data(self, request, pk=None):
+        """Sync data from integrated system"""
+        farm = self.get_object()
+        
+        if farm.integration_type == 'rotem':
+            try:
+                integration = RotemIntegration(farm)
+                data = integration.sync_house_data(farm.id)
+                
+                # Update last sync time
+                farm.last_sync = timezone.now()
+                farm.save()
+                
+                return Response({
+                    'status': 'success',
+                    'message': 'Data synced successfully',
+                    'data_points': len(data.get('houses', []))
+                })
+                
+            except Exception as e:
+                return Response({
+                    'status': 'error',
+                    'message': f'Data sync failed: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'error': 'No integration configured for this farm'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def integration_status(self, request, pk=None):
+        """Get integration status and health"""
+        farm = self.get_object()
+        
+        status_data = {
+            'integration_type': farm.integration_type,
+            'integration_status': farm.integration_status,
+            'has_system_integration': farm.has_system_integration,
+            'last_sync': farm.last_sync,
+            'is_healthy': False,
+            'health_details': {}
+        }
+        
+        if farm.integration_type == 'rotem':
+            try:
+                integration = RotemIntegration(farm)
+                health = integration.get_health_status()
+                
+                if health:
+                    status_data['is_healthy'] = health.is_healthy
+                    status_data['health_details'] = {
+                        'success_rate_24h': health.success_rate_24h,
+                        'consecutive_failures': health.consecutive_failures,
+                        'average_response_time': health.average_response_time,
+                        'last_successful_sync': health.last_successful_sync,
+                        'last_attempted_sync': health.last_attempted_sync
+                    }
+            except Exception as e:
+                status_data['health_details']['error'] = str(e)
+        
+        return Response(status_data)
+    
+    def _sync_rotem_houses(self, farm):
+        """Sync houses from Rotem system"""
+        try:
+            integration = RotemIntegration(farm)
+            house_count = integration.get_house_count(farm.id)
+            
+            # Create or update houses
+            for i in range(1, house_count + 1):
+                from houses.models import House
+                house, created = House.objects.get_or_create(
+                    farm=farm,
+                    house_number=i,
+                    defaults={
+                        'capacity': 1000,  # Default capacity
+                        'is_integrated': True,
+                        'system_house_id': f'house_{i}',
+                        'chicken_in_date': timezone.now().date(),  # Default date
+                        'current_age_days': 0
+                    }
+                )
+                if created:
+                    # Set initial age from Rotem
+                    age = integration.get_house_age(farm.id, i)
+                    house.current_age_days = age
+                    house.save()
+                    
+        except Exception as e:
+            # Log error but don't fail the integration setup
+            IntegrationError.objects.create(
+                farm=farm,
+                integration_type='rotem',
+                error_type='house_sync',
+                error_message=f'Failed to sync houses: {str(e)}'
+            )
+
+
+# Legacy views for backward compatibility
 class FarmListCreateView(generics.ListCreateAPIView):
     queryset = Farm.objects.all()
     serializer_class = FarmSerializer
