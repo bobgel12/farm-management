@@ -60,7 +60,7 @@ interface IntegrationManagementProps {
     rotem_username?: string;
     rotem_password?: string;
   };
-  onUpdateIntegration: (farmId: number, integrationData: any) => Promise<void>;
+  onUpdateIntegration: (farmId: number, integrationData: { integration_type: 'none' | 'rotem' | 'future_system'; rotem_farm_id?: string; rotem_username?: string; rotem_password?: string; rotem_gateway_name?: string; rotem_gateway_alias?: string }) => Promise<void>;
   onTestConnection: (farmId: number) => Promise<boolean>;
   onSyncData: (farmId: number) => Promise<void>;
 }
@@ -103,7 +103,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [connectionError, setConnectionError] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const [integrationHealth, setIntegrationHealth] = useState<any>(null);
+  const [integrationHealth, setIntegrationHealth] = useState<{ is_healthy: boolean; success_rate_24h: number; consecutive_failures: number; average_response_time?: number; last_successful_sync?: string; last_attempted_sync?: string } | null>(null);
   const [integrationLogs, setIntegrationLogs] = useState<IntegrationLog[]>([]);
   const [integrationErrors, setIntegrationErrors] = useState<IntegrationError[]>([]);
   const [loadingHealth, setLoadingHealth] = useState(false);
@@ -226,7 +226,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
       await onSyncData(farm.id);
       await fetchIntegrationData(); // Refresh data after sync
     } catch (error) {
-      console.error('Sync failed:', error);
+      logger.error('Sync failed:', error);
     } finally {
       setSyncing(false);
     }
@@ -329,7 +329,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
               </FormLabel>
               <RadioGroup
                 value={integrationType}
-                onChange={(e) => setIntegrationType(e.target.value as any)}
+                onChange={(e) => setIntegrationType(e.target.value as 'none' | 'rotem' | 'future_system')}
               >
                 <FormControlLabel
                   value="none"

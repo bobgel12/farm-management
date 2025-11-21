@@ -21,6 +21,7 @@ import {
 import { Assignment as TaskIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
 import { useTask } from '../contexts/TaskContext';
 import api from '../services/api';
+import logger from '../utils/logger';
 
 const TaskList: React.FC = () => {
   const { houseId } = useParams<{ houseId: string }>();
@@ -46,7 +47,7 @@ const TaskList: React.FC = () => {
       setHouse(response.data);
     } catch (err) {
       setError('Failed to fetch house details');
-      console.error('Error fetching house details:', err);
+      logger.error('Error fetching house details:', err);
     } finally {
       setLoading(false);
     }

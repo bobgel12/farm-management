@@ -181,24 +181,24 @@ const WorkerList: React.FC<WorkerListProps> = ({ farmId, farmName }) => {
                         </Box>
                       }
                       secondary={
-                        <Box>
-                          <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                        <Box component="div">
+                          <Box component="div" display="flex" alignItems="center" gap={1} mb={0.5}>
                             <EmailIcon fontSize="small" color="action" />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary" component="span">
                               {worker.email}
                             </Typography>
                           </Box>
                           {worker.phone && (
-                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                            <Box component="div" display="flex" alignItems="center" gap={1} mb={0.5}>
                               <PhoneIcon fontSize="small" color="action" />
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography variant="body2" color="text.secondary" component="span">
                                 {worker.phone}
                               </Typography>
                             </Box>
                           )}
-                          <Box display="flex" alignItems="center" gap={1}>
+                          <Box component="div" display="flex" alignItems="center" gap={1}>
                             <WorkIcon fontSize="small" color="action" />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary" component="span">
                               {worker.role || 'Worker'}
                             </Typography>
                             {worker.receive_daily_tasks && (

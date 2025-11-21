@@ -19,7 +19,7 @@ const getApiUrl = () => {
 const API_BASE_URL = getApiUrl();
 
 // Debug logging
-// console.log('API Configuration:', {
+// Removed console.log - use logger utility if needed
 //   NODE_ENV: process.env.NODE_ENV,
 //   REACT_APP_API_URL: process.env.REACT_APP_API_URL,
 //   API_BASE_URL

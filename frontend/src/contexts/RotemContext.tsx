@@ -284,12 +284,11 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
 
   const getFarmDashboard = useCallback(async (farmId: string): Promise<FarmDashboardData> => {
     try {
-      console.log('DEBUG: getFarmDashboard called with farmId:', farmId);
+      // Removed debug console.log statements
       const result = await rotemApi.getFarmDashboard(farmId);
-      console.log('DEBUG: getFarmDashboard result:', result);
       return result;
     } catch (error) {
-      console.error('DEBUG: getFarmDashboard error:', error);
+      logger.error('getFarmDashboard error:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load farm dashboard' });
       throw error;
     }

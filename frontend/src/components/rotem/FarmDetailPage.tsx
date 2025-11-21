@@ -33,6 +33,7 @@ import ControllerStatusCard from './ControllerStatusCard';
 import RealTimeSensorCard from './RealTimeSensorCard';
 import TemperatureSensorsCard from './TemperatureSensorsCard';
 import { rotemApi } from '../../services/rotemApi';
+import logger from '../../utils/logger';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -72,17 +73,15 @@ const FarmDetailPage: React.FC = () => {
     if (!farmId) return;
 
     try {
-      console.log('DEBUG: FarmDetailPage loadFarmData called with farmId:', farmId);
       setLoading(true);
       setError(null);
       const data = await getFarmDashboard(farmId);
-      console.log('DEBUG: FarmDetailPage data loaded:', data);
       setFarmData(data);
       
       // Load real-time data
       await loadRealTimeData();
     } catch (err) {
-      console.error('DEBUG: FarmDetailPage error:', err);
+      logger.error('FarmDetailPage error:', err);
       setError('Failed to load farm data');
     } finally {
       setLoading(false);
@@ -97,7 +96,7 @@ const FarmDetailPage: React.FC = () => {
       const data = await rotemApi.getRealTimeFarmData(farmId);
       setRealTimeData(data);
     } catch (error) {
-      console.error('Error loading real-time data:', error);
+      logger.error('Error loading real-time data:', error);
     } finally {
       setIsLoadingRealTime(false);
     }

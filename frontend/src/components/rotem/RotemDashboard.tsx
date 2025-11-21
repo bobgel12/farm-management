@@ -34,6 +34,7 @@ import RealTimeSensorCard from './RealTimeSensorCard';
 import TemperatureSensorsCard from './TemperatureSensorsCard';
 import MLDashboard from './MLDashboard';
 import { rotemApi } from '../../services/rotemApi';
+import logger from '../../utils/logger';
 
 const RotemDashboard: React.FC = () => {
   const { state, refreshAllData, scrapeAllFarms, clearError } = useRotem();
@@ -66,7 +67,7 @@ const RotemDashboard: React.FC = () => {
       const data = await rotemApi.getRealTimeFarmData(farm.farm_id);
       setRealTimeData(data);
     } catch (error) {
-      console.error('Error loading real-time data:', error);
+      logger.error('Error loading real-time data:', error);
     } finally {
       setIsLoadingRealTime(false);
     }

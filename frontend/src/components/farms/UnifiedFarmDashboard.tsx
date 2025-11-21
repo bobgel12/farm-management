@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Box,
@@ -56,6 +56,7 @@ import EmailManager from '../EmailManager';
 import WorkerList from '../WorkerList';
 import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
 import monitoringApi from '../../services/monitoringApi';
+import logger from '../../utils/logger';
 
 interface Farm {
   id: number;
@@ -103,6 +104,72 @@ interface IntegrationHealth {
   last_attempted_sync?: string;
 }
 
+interface HouseSensorData {
+  status: string;
+  sensors: {
+    temperature?: {
+      current: number;
+      unit: string;
+    };
+    humidity?: {
+      current: number;
+      unit: string;
+    };
+    water?: {
+      current: number;
+      unit: string;
+    };
+    feed_consumption?: {
+      current: number;
+      unit: string;
+    };
+    avg_weight?: {
+      current: number;
+      unit: string;
+    };
+    static_pressure?: {
+      current: number;
+      unit: string;
+    };
+    individual_temperatures?: Record<string, { value: number; unit: string }>;
+    system_components?: Record<string, { status: string }>;
+    control_settings?: Record<string, { current: number; unit: string }>;
+  };
+  last_updated: string;
+}
+
+interface MLPrediction {
+  id: number;
+  farm_name: string;
+  prediction_date: string;
+  prediction_type: string;
+  value: number;
+  confidence: number;
+}
+
+interface MonitoringHouse {
+  id: number;
+  house_number: number;
+  status: string;
+  alerts_count: number;
+  last_update: string;
+}
+
+interface MonitoringDashboard {
+  total_houses: number;
+  alerts_summary: {
+    total_active: number;
+    critical: number;
+    warning: number;
+    info: number;
+  };
+  connection_summary: {
+    connected: number;
+    disconnected: number;
+  };
+  houses: MonitoringHouse[];
+}
+
 interface UnifiedFarmDashboardProps {
   farm?: Farm;
   onRefresh?: () => void;
@@ -129,10 +196,10 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generateMessage, setGenerateMessage] = useState<string | null>(null);
-  const [houseSensorData, setHouseSensorData] = useState<{[key: string]: any}>({});
-  const [mlPredictions, setMlPredictions] = useState<any[]>([]);
+  const [houseSensorData, setHouseSensorData] = useState<{[key: string]: HouseSensorData}>({});
+  const [mlPredictions, setMlPredictions] = useState<MLPrediction[]>([]);
   const [loadingData, setLoadingData] = useState(false);
-  const [monitoringDashboard, setMonitoringDashboard] = useState<any>(null);
+  const [monitoringDashboard, setMonitoringDashboard] = useState<MonitoringDashboard | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
 
   useEffect(() => {
@@ -164,7 +231,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const data = await monitoringApi.getFarmMonitoringDashboard(farm.id);
       setMonitoringDashboard(data);
     } catch (error) {
-      console.error('Error fetching monitoring dashboard:', error);
+      logger.error('Error fetching monitoring dashboard:', error);
     } finally {
       setLoadingMonitoring(false);
     }
@@ -176,13 +243,16 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     setLoading(true);
     setError(null);
     try {
-      console.log('Fetching farm data for ID:', farmId);
+      logger.debug('Fetching farm data for ID:', farmId);
       const response = await api.get(`/farms/${farmId}/`);
-      console.log('Farm data received:', response.data);
+      logger.debug('Farm data received:', response.data);
       setFarm(response.data);
-    } catch (error: any) {
-      console.error('Error fetching farm data:', error);
-      const errorMessage = error.response?.data?.detail || error.response?.data?.error || error.message || 'Failed to load farm data';
+    } catch (error: unknown) {
+      logger.error('Error fetching farm data:', error);
+      const errorMessage = (error as { response?: { data?: { detail?: string; error?: string } }; message?: string })?.response?.data?.detail || 
+                          (error as { response?: { data?: { detail?: string; error?: string } }; message?: string })?.response?.data?.error || 
+                          (error as { message?: string })?.message || 
+                          'Failed to load farm data';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -197,7 +267,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const response = await api.get(`/farms/${farm.id}/integration_status/`);
       setIntegrationHealth(response.data.health_details);
     } catch (error) {
-      console.error('Failed to fetch integration health:', error);
+      logger.error('Failed to fetch integration health:', error);
     } finally {
       setLoadingHealth(false);
     }
@@ -211,7 +281,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const response = await api.get(`/farms/${farm.id}/house-sensor-data/`);
       setHouseSensorData(response.data.houses || {});
     } catch (error) {
-      console.error('Error fetching house sensor data:', error);
+      logger.error('Error fetching house sensor data:', error);
     } finally {
       setLoadingData(false);
     }
@@ -224,7 +294,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const response = await api.get(`/rotem/predictions/?farm_name=${encodeURIComponent(farm.name)}&limit=10`);
       setMlPredictions(response.data.results || []);
     } catch (error) {
-      console.error('Error fetching ML predictions:', error);
+      logger.error('Error fetching ML predictions:', error);
     }
   };
 
@@ -240,7 +310,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         // Otherwise, call the backend API directly (for standalone usage)
         const token = localStorage.getItem('authToken');
         if (!token) {
-          throw new (Error as any)('No authentication token found');
+          throw new Error('No authentication token found');
         }
         
         const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8002/api'}/farms/${farm.id}/sync_data/`, {
@@ -253,7 +323,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         
         if (!response.ok) {
           const errorData = await response.json();
-          throw new (Error as any)(errorData.message || 'Sync failed');
+          throw new Error(errorData.message || 'Sync failed');
         }
         
         const result = await response.json();
@@ -269,7 +339,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         await fetchMlPredictions();
       }
     } catch (error) {
-      console.error('Sync failed:', error);
+      logger.error('Sync failed:', error);
       const errorMessage = (error as Error)?.message || 'Unknown error';
       setSyncMessage(`Sync failed: ${errorMessage}`);
     } finally {
@@ -284,7 +354,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        throw new (Error as any)('No authentication token found');
+        throw new Error('No authentication token found');
       }
       
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8002/api'}/farms/${farm.id}/sync_data/`, {
@@ -297,7 +367,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new (Error as any)(errorData.message || 'House generation failed');
+        throw new Error(errorData.message || 'House generation failed');
       }
       
       const result = await response.json();
@@ -310,7 +380,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       await fetchFarmData();
       
     } catch (error) {
-      console.error('House generation failed:', error);
+      logger.error('House generation failed:', error);
       const errorMessage = (error as Error)?.message || 'Unknown error';
       setGenerateMessage(`House generation failed: ${errorMessage}`);
     } finally {
@@ -839,8 +909,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                                       </Typography>
                                     </Box>
                                     <Chip
-                                      label={(data as any).status}
-                                      color={(data as any).status === 'On' ? 'success' : 'default'}
+                                      label={(data as { status: string }).status}
+                                      color={(data as { status: string }).status === 'On' ? 'success' : 'default'}
                                       size="small"
                                       sx={{ fontSize: '0.7rem', height: 20 }}
                                     />
@@ -865,7 +935,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                                       </Typography>
                                     </Box>
                                     <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
-                                      {(data as any).current?.toFixed(0) || '0'}{(data as any).unit}
+                                      {(data as { current?: number; unit?: string }).current?.toFixed(0) || '0'}{(data as { current?: number; unit?: string }).unit}
                                     </Typography>
                                   </Grid>
                                 ))}
@@ -988,7 +1058,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
 
                   {/* Houses Grid (limited to first 4) */}
                   <Grid container spacing={2}>
-                    {monitoringDashboard.houses.slice(0, 4).map((house: any) => (
+                    {monitoringDashboard.houses.slice(0, 4).map((house: MonitoringHouse) => (
                       <Grid item xs={12} sm={6} md={3} key={house.house_id}>
                         <Card
                           variant="outlined"

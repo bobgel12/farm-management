@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import api from '../services/api';
+import logger from '../utils/logger';
 
 interface PasswordChangeProps {
   onSuccess?: () => void;
@@ -84,7 +85,7 @@ const PasswordChange: React.FC<PasswordChangeProps> = ({ onSuccess, onCancel }) 
         }, 2000);
       }
     } catch (err: any) {
-      console.error('Password change error:', err);
+      logger.error('Password change error:', err);
       
       if (err.response?.status === 400) {
         setError(err.response?.data?.error || 'Invalid password or validation failed');

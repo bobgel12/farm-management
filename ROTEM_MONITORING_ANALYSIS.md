@@ -714,3 +714,4 @@ The Rotem API provides rich sensor data that is currently underutilized. By impl
 - Foundation is solid, needs enhancement in data extraction and processing
 - ROI is high - better monitoring leads to better farm management and profitability
 
+
