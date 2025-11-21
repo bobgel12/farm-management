@@ -106,3 +106,76 @@ def cleanup_old_predictions():
     except Exception as e:
         logger.error(f"Cleanup task failed: {str(e)}")
         raise
+
+
+@shared_task(bind=True, max_retries=3)
+def collect_monitoring_data(self, farm_id=None):
+    """
+    Periodic task to collect monitoring data for all integrated farms
+    Runs every 5-15 minutes to create monitoring snapshots
+    """
+    try:
+        from farms.models import Farm
+        from integrations.rotem import RotemIntegration
+        from houses.services.monitoring_service import MonitoringService
+        
+        logger.info(f"Starting monitoring data collection for farm: {farm_id or 'all'}")
+        
+        # Get farms with Rotem integration
+        if farm_id:
+            farms = Farm.objects.filter(
+                id=farm_id,
+                has_system_integration=True,
+                integration_type='rotem',
+                is_active=True
+            )
+        else:
+            farms = Farm.objects.filter(
+                has_system_integration=True,
+                integration_type='rotem',
+                is_active=True
+            )
+        
+        total_snapshots = 0
+        errors = []
+        
+        monitoring_service = MonitoringService()
+        
+        for farm in farms:
+            try:
+                # Create Rotem integration instance
+                integration = RotemIntegration(farm)
+                
+                # Get sensor data for all houses
+                all_house_data = integration.get_all_sensor_data()
+                
+                if all_house_data:
+                    # Create monitoring snapshots
+                    snapshots_created = monitoring_service.create_snapshots_for_farm(
+                        farm, all_house_data
+                    )
+                    total_snapshots += snapshots_created
+                    
+                    logger.info(f"Created {snapshots_created} snapshots for farm {farm.name} (ID: {farm.id})")
+                else:
+                    logger.warning(f"No house data received for farm {farm.name}")
+                    
+            except Exception as e:
+                error_msg = f"Error collecting data for farm {farm.name} (ID: {farm.id}): {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+        
+        result = {
+            'status': 'success' if total_snapshots > 0 else 'partial',
+            'snapshots_created': total_snapshots,
+            'farms_processed': farms.count(),
+            'errors': errors,
+            'timestamp': timezone.now().isoformat()
+        }
+        
+        logger.info(f"Monitoring collection completed: {total_snapshots} snapshots created")
+        return result
+        
+    except Exception as exc:
+        logger.error(f"Monitoring collection task failed: {str(exc)}")
+        raise self.retry(exc=exc, countdown=300)  # Retry after 5 minutes

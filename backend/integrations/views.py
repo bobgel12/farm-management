@@ -311,7 +311,7 @@ def trigger_daily_report(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_house_sensor_data(request, farm_id):
-    """Get real-time sensor data for all houses in a farm"""
+    """Get real-time sensor data for all houses in a farm and save snapshots"""
     try:
         farm = get_object_or_404(Farm, id=farm_id)
         
@@ -326,6 +326,20 @@ def get_house_sensor_data(request, farm_id):
         
         # Get sensor data for all houses
         all_house_data = integration.get_all_sensor_data()
+        
+        # Create monitoring snapshots for all houses
+        from houses.services.monitoring_service import MonitoringService
+        monitoring_service = MonitoringService()
+        snapshots_created = monitoring_service.create_snapshots_for_farm(farm, all_house_data)
+        
+        if snapshots_created > 0:
+            # Log snapshot creation
+            integration.log_activity(
+                action='create_monitoring_snapshots',
+                status='success',
+                message=f'Created {snapshots_created} monitoring snapshots',
+                data_points=snapshots_created
+            )
         
         # Process the data to make it more frontend-friendly
         processed_data = {}

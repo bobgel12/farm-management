@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . /app/
 
-# Create directories for static and media files
-RUN mkdir -p /app/staticfiles /app/media
+# Create directories for static, media files, and logs
+RUN mkdir -p /app/staticfiles /app/media /app/logs
 
 # Expose port
 EXPOSE 8000

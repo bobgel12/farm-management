@@ -54,6 +54,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import EmailManager from '../EmailManager';
 import WorkerList from '../WorkerList';
+import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
+import monitoringApi from '../../services/monitoringApi';
 
 interface Farm {
   id: number;
@@ -118,6 +120,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const navigate = useNavigate();
   const [farm, setFarm] = useState<Farm | null>(propFarm || null);
   const [loading, setLoading] = useState(!propFarm);
+  const [error, setError] = useState<string | null>(null);
   const [integrationHealth, setIntegrationHealth] = useState<IntegrationHealth | null>(null);
   const [loadingHealth, setLoadingHealth] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -129,11 +132,14 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [houseSensorData, setHouseSensorData] = useState<{[key: string]: any}>({});
   const [mlPredictions, setMlPredictions] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [monitoringDashboard, setMonitoringDashboard] = useState<any>(null);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
 
   useEffect(() => {
     if (farmId && !propFarm) {
       fetchFarmData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farmId, propFarm]);
 
   useEffect(() => {
@@ -146,20 +152,38 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     if (farm?.integration_type === 'rotem') {
       fetchHouseSensorData();
       fetchMlPredictions();
+      fetchMonitoringDashboard();
     }
   }, [farm?.id, farm?.integration_type]);
+
+  const fetchMonitoringDashboard = async () => {
+    if (!farm) return;
+    
+    setLoadingMonitoring(true);
+    try {
+      const data = await monitoringApi.getFarmMonitoringDashboard(farm.id);
+      setMonitoringDashboard(data);
+    } catch (error) {
+      console.error('Error fetching monitoring dashboard:', error);
+    } finally {
+      setLoadingMonitoring(false);
+    }
+  };
 
   const fetchFarmData = async () => {
     if (!farmId) return;
     
     setLoading(true);
+    setError(null);
     try {
       console.log('Fetching farm data for ID:', farmId);
       const response = await api.get(`/farms/${farmId}/`);
       console.log('Farm data received:', response.data);
       setFarm(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching farm data:', error);
+      const errorMessage = error.response?.data?.detail || error.response?.data?.error || error.message || 'Failed to load farm data';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -342,12 +366,18 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     );
   }
 
-  if (!farm) {
+  if (error || !farm) {
     return (
-      <Box>
-        <Alert severity="error">
-          Farm not found
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error || 'Farm not found'}
         </Alert>
+        <Button
+          variant="contained"
+          onClick={() => navigate('/farms')}
+        >
+          Back to Farms
+        </Button>
       </Box>
     );
   }
@@ -860,6 +890,163 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                     The Rotem system may not be properly authenticated or the houses may not have active sensor data.
                     Click &quot;Sync Data&quot; to attempt to refresh the connection and collect the latest information.
                   </Typography>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Monitoring Dashboard */}
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">
+                  Monitoring Dashboard
+                </Typography>
+                <Box display="flex" gap={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Refresh />}
+                    onClick={fetchMonitoringDashboard}
+                    disabled={loadingMonitoring}
+                  >
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<Visibility />}
+                    onClick={() => navigate(`/farms/${farm.id}/monitoring`)}
+                  >
+                    View All Houses
+                  </Button>
+                </Box>
+              </Box>
+
+              {loadingMonitoring ? (
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
+              ) : monitoringDashboard ? (
+                <>
+                  {/* Summary Cards */}
+                  <Grid container spacing={2} mb={3}>
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="caption" color="text.secondary">
+                            Total Houses
+                          </Typography>
+                          <Typography variant="h5">
+                            {monitoringDashboard.total_houses}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="caption" color="text.secondary">
+                            Active Alarms
+                          </Typography>
+                          <Typography variant="h5" color={monitoringDashboard.alerts_summary.critical > 0 ? 'error' : 'text.primary'}>
+                            {monitoringDashboard.alerts_summary.total_active}
+                          </Typography>
+                          {monitoringDashboard.alerts_summary.critical > 0 && (
+                            <Typography variant="caption" color="error">
+                              {monitoringDashboard.alerts_summary.critical} critical
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="caption" color="text.secondary">
+                            Connected
+                          </Typography>
+                          <Typography variant="h5" color="success.main">
+                            {monitoringDashboard.connection_summary.connected}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="caption" color="text.secondary">
+                            Disconnected
+                          </Typography>
+                          <Typography variant="h5" color="error.main">
+                            {monitoringDashboard.connection_summary.disconnected}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+
+                  {/* Houses Grid (limited to first 4) */}
+                  <Grid container spacing={2}>
+                    {monitoringDashboard.houses.slice(0, 4).map((house: any) => (
+                      <Grid item xs={12} sm={6} md={3} key={house.house_id}>
+                        <Card
+                          variant="outlined"
+                          sx={{
+                            cursor: 'pointer',
+                            border: house.alarm_status === 'critical' ? '2px solid' : 'none',
+                            borderColor: house.alarm_status === 'critical' ? 'error.main' : 'transparent',
+                            '&:hover': { boxShadow: 2 },
+                          }}
+                          onClick={() => navigate(`/houses/${house.house_id}/monitoring`)}
+                        >
+                          <CardContent>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Typography variant="h6">House {house.house_number}</Typography>
+                              <Chip
+                                label={house.alarm_status}
+                                size="small"
+                                color={house.alarm_status === 'critical' ? 'error' : house.alarm_status === 'warning' ? 'warning' : 'success'}
+                              />
+                            </Box>
+                            {house.average_temperature !== null && (
+                              <Typography variant="body2">
+                                Temp: {house.average_temperature?.toFixed(1)}°C
+                              </Typography>
+                            )}
+                            {house.humidity !== null && (
+                              <Typography variant="body2">
+                                Humidity: {house.humidity?.toFixed(1)}%
+                              </Typography>
+                            )}
+                            {house.active_alarms_count > 0 && (
+                              <Chip
+                                label={`${house.active_alarms_count} alarm${house.active_alarms_count > 1 ? 's' : ''}`}
+                                size="small"
+                                color="error"
+                                sx={{ mt: 1 }}
+                              />
+                            )}
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                  
+                  {monitoringDashboard.houses.length > 4 && (
+                    <Box mt={2} textAlign="center">
+                      <Button
+                        variant="outlined"
+                        onClick={() => navigate(`/farms/${farm.id}/monitoring`)}
+                      >
+                        View All {monitoringDashboard.total_houses} Houses
+                      </Button>
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <Alert severity="info">
+                  No monitoring data available. Click &quot;Sync Data&quot; to collect monitoring snapshots.
                 </Alert>
               )}
             </CardContent>

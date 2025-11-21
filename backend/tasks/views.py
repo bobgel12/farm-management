@@ -188,22 +188,41 @@ def send_test_email(request):
 def send_daily_tasks(request):
     """Manually trigger daily task email sending for all farms or specific farm"""
     farm_id = request.data.get('farm_id')
+    force = request.data.get('force', False)  # Allow forcing resend even if already sent today
     
     try:
         if farm_id:
             # Send emails for specific farm
             from farms.models import Farm
             farm = Farm.objects.get(id=farm_id)
-            sent_count = TaskEmailService.send_farm_task_reminders(farm)
-            return Response({
-                'message': f'Successfully sent daily task reminder email for {farm.name}'
-            })
+            sent_count, message = TaskEmailService.send_farm_task_reminders(farm, force=force)
+            
+            if sent_count > 0:
+                return Response({
+                    'message': message,
+                    'sent': True
+                })
+            else:
+                # Return 200 with warning message instead of error
+                return Response({
+                    'message': message,
+                    'sent': False,
+                    'warning': True
+                })
         else:
             # Send emails for all farms
-            sent_count = TaskEmailService.send_daily_task_reminders()
-            return Response({
-                'message': f'Successfully sent {sent_count} daily task reminder emails'
-            })
+            sent_count = TaskEmailService.send_daily_task_reminders(force=force)
+            if sent_count > 0:
+                return Response({
+                    'message': f'Successfully sent {sent_count} daily task reminder emails',
+                    'sent': True
+                })
+            else:
+                return Response({
+                    'message': 'No emails were sent. This may be because emails were already sent today, no active workers found, or no tasks available.',
+                    'sent': False,
+                    'warning': True
+                })
     except Farm.DoesNotExist:
         return Response(
             {'error': 'Farm not found'}, 

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import House
+from .models import House, HouseMonitoringSnapshot, HouseAlarm
 from farms.serializers import FarmListSerializer
 
 
@@ -47,3 +47,66 @@ class HouseListSerializer(serializers.ModelSerializer):
             'chicken_out_date', 'current_day', 'days_remaining',
             'status', 'is_active'
         ]
+
+
+class HouseAlarmSerializer(serializers.ModelSerializer):
+    """Serializer for house alarms"""
+    
+    class Meta:
+        model = HouseAlarm
+        fields = [
+            'id', 'alarm_type', 'severity', 'message',
+            'parameter_name', 'parameter_value', 'threshold_value',
+            'is_active', 'is_resolved', 'resolved_at', 'resolved_by',
+            'timestamp'
+        ]
+        read_only_fields = ['id', 'timestamp']
+
+
+class HouseMonitoringSummarySerializer(serializers.ModelSerializer):
+    """Lightweight summary serializer for monitoring snapshots"""
+    has_alarms = serializers.ReadOnlyField()
+    is_connected = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = HouseMonitoringSnapshot
+        fields = [
+            'id', 'timestamp', 'average_temperature', 'outside_temperature',
+            'humidity', 'static_pressure', 'target_temperature',
+            'ventilation_level', 'growth_day', 'bird_count', 'livability',
+            'water_consumption', 'feed_consumption', 'airflow_cfm',
+            'airflow_percentage', 'connection_status', 'alarm_status',
+            'has_alarms', 'is_connected'
+        ]
+        read_only_fields = ['id', 'timestamp']
+
+
+class HouseMonitoringSnapshotSerializer(serializers.ModelSerializer):
+    """Full serializer for monitoring snapshots"""
+    has_alarms = serializers.ReadOnlyField()
+    is_connected = serializers.ReadOnlyField()
+    house_number = serializers.IntegerField(source='house.house_number', read_only=True)
+    farm_name = serializers.CharField(source='house.farm.name', read_only=True)
+    alarms = HouseAlarmSerializer(many=True, read_only=True, source='alarms.filter(is_active=True)')
+    
+    class Meta:
+        model = HouseMonitoringSnapshot
+        fields = [
+            'id', 'house', 'house_number', 'farm_name', 'timestamp',
+            'average_temperature', 'outside_temperature', 'humidity',
+            'static_pressure', 'target_temperature', 'ventilation_level',
+            'growth_day', 'bird_count', 'livability', 'water_consumption',
+            'feed_consumption', 'airflow_cfm', 'airflow_percentage',
+            'connection_status', 'alarm_status', 'has_alarms', 'is_connected',
+            'sensor_data', 'raw_data', 'alarms'
+        ]
+        read_only_fields = ['id', 'timestamp', 'alarms']
+
+
+class HouseMonitoringStatsSerializer(serializers.Serializer):
+    """Serializer for statistical aggregations"""
+    temperature = serializers.DictField()
+    humidity = serializers.DictField()
+    pressure = serializers.DictField()
+    total_snapshots = serializers.IntegerField()
+    period_days = serializers.IntegerField()

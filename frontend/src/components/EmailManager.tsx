@@ -45,20 +45,31 @@ const EmailManager: React.FC<EmailManagerProps> = ({ farmId, farmName }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [testEmailDialog, setTestEmailDialog] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [emailHistory, setEmailHistory] = useState<EmailHistory[]>([]);
   const [historyDialog, setHistoryDialog] = useState(false);
+  const [forceResend, setForceResend] = useState(false);
 
   const sendDailyTasks = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setWarning(null);
 
     try {
-      const requestData = farmId ? { farm_id: farmId } : {};
+      const requestData: any = farmId ? { farm_id: farmId } : {};
+      if (forceResend) {
+        requestData.force = true;
+      }
       const response = await api.post('/tasks/send-daily-tasks/', requestData);
-      setSuccess(response.data.message);
+      
+      if (response.data.warning || !response.data.sent) {
+        setWarning(response.data.message);
+      } else {
+        setSuccess(response.data.message);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to send daily tasks');
     } finally {
@@ -110,6 +121,7 @@ const EmailManager: React.FC<EmailManagerProps> = ({ farmId, farmName }) => {
   const handleCloseSnackbar = () => {
     setError(null);
     setSuccess(null);
+    setWarning(null);
   };
 
   return (
@@ -137,6 +149,16 @@ const EmailManager: React.FC<EmailManagerProps> = ({ farmId, farmName }) => {
               color="primary"
             >
               {farmId ? 'Send Farm Tasks' : 'Send All Farm Tasks'}
+            </Button>
+            
+            <Button
+              variant="outlined"
+              onClick={() => setForceResend(!forceResend)}
+              disabled={loading}
+              color={forceResend ? 'warning' : 'inherit'}
+              size="small"
+            >
+              {forceResend ? 'Force Resend ✓' : 'Force Resend'}
             </Button>
 
             <Button
@@ -253,19 +275,19 @@ const EmailManager: React.FC<EmailManagerProps> = ({ farmId, farmName }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Success/Error Snackbar */}
+      {/* Success/Error/Warning Snackbar */}
       <Snackbar
-        open={!!success || !!error}
+        open={!!success || !!error || !!warning}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert
           onClose={handleCloseSnackbar}
-          severity={success ? 'success' : 'error'}
+          severity={success ? 'success' : error ? 'error' : 'warning'}
           sx={{ width: '100%' }}
         >
-          {success || error}
+          {success || error || warning}
         </Alert>
       </Snackbar>
     </Box>

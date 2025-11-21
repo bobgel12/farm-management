@@ -16,6 +16,10 @@ app.conf.beat_schedule = {
         'task': 'rotem_scraper.tasks.scrape_rotem_data',
         'schedule': 300.0,  # Every 5 minutes (300 seconds)
     },
+    'collect-monitoring-data-every-5-minutes': {
+        'task': 'rotem_scraper.tasks.collect_monitoring_data',
+        'schedule': 300.0,  # Every 5 minutes (300 seconds) - configurable
+    },
     'analyze-data-every-hour': {
         'task': 'rotem_scraper.tasks.analyze_data',
         'schedule': 3600.0,  # Every hour (3600 seconds)

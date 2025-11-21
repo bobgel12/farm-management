@@ -59,6 +59,39 @@ class DjangoRotemScraperService:
             controller = self._process_controller_data(data, farm)
             self._process_data_points(data, controller)
             
+            # Create monitoring snapshots for houses (if using Farm model from farms app)
+            try:
+                from farms.models import Farm as FarmModel
+                from houses.services.monitoring_service import MonitoringService
+                
+                # Try to find matching Farm model from farms app
+                # This requires farm_id mapping or matching by name
+                django_farm = None
+                if hasattr(farm, 'farm_name'):
+                    try:
+                        django_farm = FarmModel.objects.filter(
+                            name__icontains=farm.farm_name,
+                            integration_type='rotem'
+                        ).first()
+                    except Exception as e:
+                        logger.warning(f"Could not find Django Farm model: {e}")
+                
+                if django_farm:
+                    monitoring_service = MonitoringService()
+                    # Extract house data from scraped data
+                    house_data_dict = {}
+                    for key in data.keys():
+                        if key.startswith('command_data_house_'):
+                            house_data_dict[key] = data[key]
+                    
+                    if house_data_dict:
+                        snapshots_created = monitoring_service.create_snapshots_for_farm(
+                            django_farm, house_data_dict
+                        )
+                        logger.info(f"Created {snapshots_created} monitoring snapshots for farm {django_farm.id}")
+            except Exception as e:
+                logger.warning(f"Failed to create monitoring snapshots: {e}")
+            
             # Update scrape log
             scrape_log.status = 'success'
             scrape_log.completed_at = timezone.now()

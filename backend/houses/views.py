@@ -1,10 +1,17 @@
 from rest_framework import generics, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
-from .models import House
-from .serializers import HouseSerializer, HouseListSerializer
+from django.db.models import Q, Avg, Max, Min
+from django.utils import timezone
+from datetime import timedelta, datetime
+from .models import House, HouseMonitoringSnapshot, HouseAlarm
+from .serializers import (
+    HouseSerializer, HouseListSerializer,
+    HouseMonitoringSnapshotSerializer, HouseMonitoringSummarySerializer,
+    HouseMonitoringStatsSerializer, HouseAlarmSerializer
+)
 from farms.models import Farm
 from tasks.task_scheduler import TaskScheduler
 
@@ -180,3 +187,173 @@ def farm_task_summary(request, farm_id):
         summary['houses'].append(house_data)
     
     return Response(summary)
+
+
+# Monitoring endpoints
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_monitoring_latest(request, house_id):
+    """Get latest monitoring snapshot for a house"""
+    house = get_object_or_404(House, id=house_id)
+    snapshot = house.get_latest_snapshot()
+    
+    if not snapshot:
+        return Response({
+            'status': 'no_data',
+            'message': 'No monitoring data available for this house'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = HouseMonitoringSnapshotSerializer(snapshot)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_monitoring_history(request, house_id):
+    """Get historical monitoring snapshots for a house"""
+    house = get_object_or_404(House, id=house_id)
+    
+    # Get query parameters
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+    limit = int(request.query_params.get('limit', 100))
+    
+    # Default to last 24 hours if no dates provided
+    if not end_date:
+        end_date = timezone.now()
+    else:
+        try:
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            end_date = timezone.now()
+    
+    if not start_date:
+        start_date = end_date - timedelta(hours=24)
+    else:
+        try:
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            start_date = end_date - timedelta(hours=24)
+    
+    snapshots = house.get_snapshots_for_range(start_date, end_date)[:limit]
+    
+    serializer = HouseMonitoringSummarySerializer(snapshots, many=True)
+    return Response({
+        'count': len(serializer.data),
+        'start_date': start_date.isoformat(),
+        'end_date': end_date.isoformat(),
+        'results': serializer.data
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_monitoring_stats(request, house_id):
+    """Get statistical aggregations for house monitoring data"""
+    house = get_object_or_404(House, id=house_id)
+    
+    # Get period parameter (default 7 days)
+    period = int(request.query_params.get('period', 7))
+    
+    stats = house.get_stats(days=period)
+    
+    if not stats:
+        return Response({
+            'status': 'no_data',
+            'message': f'No monitoring data available for the last {period} days'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = HouseMonitoringStatsSerializer(stats)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_houses_monitoring_all(request, farm_id):
+    """Get latest monitoring data for all houses in a farm"""
+    farm = get_object_or_404(Farm, id=farm_id)
+    houses = House.objects.filter(farm=farm, is_active=True)
+    
+    results = []
+    for house in houses:
+        snapshot = house.get_latest_snapshot()
+        if snapshot:
+            serializer = HouseMonitoringSummarySerializer(snapshot)
+            results.append(serializer.data)
+        else:
+            results.append({
+                'house_id': house.id,
+                'house_number': house.house_number,
+                'status': 'no_data',
+                'message': 'No monitoring data available'
+            })
+    
+    return Response({
+        'farm_id': farm_id,
+        'farm_name': farm.name,
+        'houses_count': len(results),
+        'houses': results
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_houses_monitoring_dashboard(request, farm_id):
+    """Get dashboard data with alerts and summaries for all houses"""
+    farm = get_object_or_404(Farm, id=farm_id)
+    houses = House.objects.filter(farm=farm, is_active=True)
+    
+    dashboard_data = {
+        'farm_id': farm_id,
+        'farm_name': farm.name,
+        'total_houses': houses.count(),
+        'houses': [],
+        'alerts_summary': {
+            'total_active': 0,
+            'critical': 0,
+            'warning': 0,
+            'normal': 0
+        },
+        'connection_summary': {
+            'connected': 0,
+            'disconnected': 0
+        }
+    }
+    
+    for house in houses:
+        snapshot = house.get_latest_snapshot()
+        active_alarms = HouseAlarm.objects.filter(house=house, is_active=True).count()
+        
+        house_data = {
+            'house_id': house.id,
+            'house_number': house.house_number,
+            'current_day': house.current_day,
+            'status': house.status,
+        }
+        
+        if snapshot:
+            serializer = HouseMonitoringSummarySerializer(snapshot)
+            house_data.update(serializer.data)
+            
+            # Update summary counts
+            if snapshot.alarm_status == 'critical':
+                dashboard_data['alerts_summary']['critical'] += 1
+            elif snapshot.alarm_status == 'warning':
+                dashboard_data['alerts_summary']['warning'] += 1
+            else:
+                dashboard_data['alerts_summary']['normal'] += 1
+            
+            if snapshot.is_connected:
+                dashboard_data['connection_summary']['connected'] += 1
+            else:
+                dashboard_data['connection_summary']['disconnected'] += 1
+        else:
+            house_data['status'] = 'no_data'
+        
+        house_data['active_alarms_count'] = active_alarms
+        dashboard_data['alerts_summary']['total_active'] += active_alarms
+        
+        dashboard_data['houses'].append(house_data)
+    
+    return Response(dashboard_data)

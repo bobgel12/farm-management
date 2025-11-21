@@ -24,6 +24,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ProfessionalLayout from './components/layout/ProfessionalLayout';
 import RotemDashboard from './components/rotem/RotemDashboard';
 import FarmDetailPage from './components/rotem/FarmDetailPage';
+import HouseMonitoringDashboard from './components/houses/HouseMonitoringDashboard';
+import FarmHousesMonitoring from './components/houses/FarmHousesMonitoring';
 import theme from './theme';
 
 function App() {
@@ -83,10 +85,24 @@ function App() {
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />
+                <Route path="/houses/:houseId/monitoring" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <HouseMonitoringDashboard />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/farms/:farmId/workers" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
                       <ProfessionalWorkerList />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/farms/:farmId/monitoring" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <FarmHousesMonitoring />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />

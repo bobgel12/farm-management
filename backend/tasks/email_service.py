@@ -16,7 +16,7 @@ class TaskEmailService:
     """Service for sending daily task reminder emails"""
     
     @staticmethod
-    def send_daily_task_reminders():
+    def send_daily_task_reminders(force=False):
         """Send daily task reminders to all active farms with workers"""
         # Check if email is disabled due to Railway restrictions
         if os.getenv('DISABLE_EMAIL', 'False').lower() == 'true':
@@ -28,8 +28,8 @@ class TaskEmailService:
         
         for farm in farms:
             try:
-                # Check if email was already sent today
-                if EmailTask.objects.filter(farm=farm, sent_date=timezone.now().date()).exists():
+                # Check if email was already sent today (unless force is True)
+                if not force and EmailTask.objects.filter(farm=farm, sent_date=timezone.now().date()).exists():
                     logger.info(f"Email already sent today for farm {farm.name}")
                     continue
                 
@@ -66,13 +66,17 @@ class TaskEmailService:
         return sent_count
     
     @staticmethod
-    def send_farm_task_reminders(farm):
-        """Send daily task reminders for a specific farm"""
+    def send_farm_task_reminders(farm, force=False):
+        """Send daily task reminders for a specific farm
+        
+        Returns:
+            tuple: (sent_count, message) where sent_count is 0 or 1, and message explains the result
+        """
         try:
-            # Check if email was already sent today
-            if EmailTask.objects.filter(farm=farm, sent_date=timezone.now().date()).exists():
+            # Check if email was already sent today (unless force is True)
+            if not force and EmailTask.objects.filter(farm=farm, sent_date=timezone.now().date()).exists():
                 logger.info(f"Email already sent today for farm {farm.name}")
-                return 0
+                return 0, f"Email already sent today for {farm.name}. Use force=True to resend."
             
             # Get active workers who want to receive daily tasks
             workers = farm.workers.filter(
@@ -82,28 +86,28 @@ class TaskEmailService:
             
             if not workers.exists():
                 logger.info(f"No active workers found for farm {farm.name}")
-                return 0
+                return 0, f"No active workers with receive_daily_tasks=True found for {farm.name}"
             
             # Get today's and tomorrow's tasks for all active houses
             task_data = TaskEmailService._get_farm_task_data(farm)
             
             if not task_data['houses']:
                 logger.info(f"No active houses with tasks found for farm {farm.name}")
-                return 0
+                return 0, f"No active houses with tasks found for {farm.name}"
             
             # Send email to all workers
             success = TaskEmailService._send_farm_task_email(farm, workers, task_data)
             
             if success:
                 logger.info(f"Successfully sent task email for farm {farm.name}")
-                return 1
+                return 1, f"Successfully sent daily task reminder email for {farm.name}"
             else:
                 logger.error(f"Failed to send task email for farm {farm.name}")
-                return 0
+                return 0, f"Failed to send email for {farm.name}. Check email configuration and logs."
                 
         except Exception as e:
             logger.error(f"Error sending task email for farm {farm.name}: {str(e)}")
-            return 0
+            return 0, f"Error sending email for {farm.name}: {str(e)}"
     
     @staticmethod
     def _get_farm_task_data(farm):
@@ -136,8 +140,32 @@ class TaskEmailService:
                 is_completed=False
             ).order_by('task_name')
             
+            # If no tasks for today/tomorrow, get upcoming tasks (next 7 days)
+            if not today_tasks.exists() and not tomorrow_tasks.exists():
+                upcoming_tasks = Task.objects.filter(
+                    house=house,
+                    day_offset__gte=current_day,
+                    day_offset__lte=current_day + 7,
+                    is_completed=False
+                ).order_by('day_offset', 'task_name')[:10]  # Limit to 10 upcoming tasks
+                
+                if upcoming_tasks.exists():
+                    # Group by day_offset
+                    today_tasks_list = []
+                    tomorrow_tasks_list = []
+                    for task in upcoming_tasks:
+                        if task.day_offset == current_day:
+                            today_tasks_list.append(task)
+                        elif task.day_offset == current_day + 1:
+                            tomorrow_tasks_list.append(task)
+                        elif not today_tasks_list:  # If no today tasks, use first upcoming
+                            today_tasks_list.append(task)
+                    
+                    today_tasks = today_tasks_list
+                    tomorrow_tasks = tomorrow_tasks_list
+            
             # Only include houses that have tasks
-            if today_tasks.exists() or tomorrow_tasks.exists():
+            if today_tasks or tomorrow_tasks:
                 house_data = {
                     'id': house.id,
                     'house_number': house.house_number,
@@ -229,15 +257,17 @@ class TaskEmailService:
                     # Return False to indicate failure
                     return False
             
-            # Record the sent email
-            EmailTask.objects.create(
+            # Record the sent email (update if exists, create if not)
+            EmailTask.objects.update_or_create(
                 farm=farm,
                 sent_date=task_data['date'],
-                sent_time=timezone.now().time(),
-                recipients=recipient_emails,
-                subject=subject,
-                houses_included=[house['id'] for house in task_data['houses']],
-                tasks_count=total_tasks
+                defaults={
+                    'sent_time': timezone.now().time(),
+                    'recipients': recipient_emails,
+                    'subject': subject,
+                    'houses_included': [house['id'] for house in task_data['houses']],
+                    'tasks_count': total_tasks
+                }
             )
             
             return True
@@ -374,9 +404,8 @@ This is a test email to verify email configuration.
                     )
                 except (socket.timeout, smtplib.SMTPException, OSError) as e:
                     logger.error(f"SMTP connection failed: {str(e)}")
-                    # Return a mock success for testing purposes
-                    logger.info("Email sending disabled due to network restrictions")
-                    return True
+                    logger.error("Email sending failed - check SMTP configuration and network connectivity")
+                    return False
             
             logger.info(f"Test email sent successfully to {test_email}")
             return True

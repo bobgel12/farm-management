@@ -30,6 +30,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Send emails to all farms (default behavior)',
         )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Force resend even if email was already sent today',
+        )
 
     def handle(self, *args, **options):
         if options['test']:
@@ -49,19 +54,16 @@ class Command(BaseCommand):
             try:
                 from farms.models import Farm
                 farm = Farm.objects.get(id=farm_id)
-                sent_count = TaskEmailService.send_farm_task_reminders(farm)
+                force = options.get('force', False)
+                sent_count, message = TaskEmailService.send_farm_task_reminders(farm, force=force)
                 
                 if sent_count > 0:
                     self.stdout.write(
-                        self.style.SUCCESS(
-                            f'Successfully sent daily task reminder email for {farm.name}'
-                        )
+                        self.style.SUCCESS(message)
                     )
                 else:
                     self.stdout.write(
-                        self.style.WARNING(
-                            f'No email sent for {farm.name} (already sent today or no workers/tasks)'
-                        )
+                        self.style.WARNING(message)
                     )
                     
             except Farm.DoesNotExist:

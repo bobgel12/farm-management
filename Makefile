@@ -1,7 +1,7 @@
 # Chicken House Management System
 # Makefile for local development and deployment
 
-.PHONY: help install dev build up down restart logs clean test seed email-test deploy-railway
+.PHONY: help install dev build up down restart logs clean test seed email-test deploy-railway railway-env railway-up railway-dev railway-link logs-email
 
 # Default target
 help: ## Show this help message
@@ -23,9 +23,86 @@ dev: ## Start development environment
 	@echo "🔧 Starting development environment..."
 	docker-compose up -d
 	@echo "✅ Development environment started!"
-	@echo "📱 Frontend: http://localhost:3000"
-	@echo "🔧 Backend: http://localhost:8000"
-	@echo "📊 Admin: http://localhost:8000/admin (admin/admin123)"
+	@echo "📱 Frontend: http://localhost:3002"
+	@echo "🔧 Backend: http://localhost:8002"
+	@echo "📊 Admin: http://localhost:8002/admin (admin/admin123)"
+
+# Railway Commands
+railway-link: ## Link project to Railway (if not already linked)
+	@echo "🔗 Linking project to Railway..."
+	@if ! railway status > /dev/null 2>&1; then \
+		echo "⚠️  Project not linked to Railway. Please run 'railway link' manually."; \
+		echo "   Or run 'make railway-env' which will attempt to link automatically."; \
+	else \
+		echo "✅ Project already linked to Railway"; \
+	fi
+
+railway-env: ## Fetch environment variables from Railway and save to .env
+	@echo "📥 Fetching environment variables from Railway..."
+	@if ! command -v railway > /dev/null 2>&1; then \
+		echo "❌ Railway CLI not found. Please install it first:"; \
+		echo "   npm install -g @railway/cli"; \
+		exit 1; \
+	fi
+	@if ! railway status > /dev/null 2>&1; then \
+		echo "⚠️  Project not linked to Railway. Attempting to link..."; \
+		echo "   Please select your Railway project when prompted."; \
+		railway link || (echo "❌ Failed to link project. Please run 'railway link' manually." && exit 1); \
+	fi
+	@echo "📋 Fetching variables from Railway..."
+	@echo "# Environment variables fetched from Railway" > .env.railway
+	@echo "# Generated automatically - do not edit manually" >> .env.railway
+	@echo "# Run 'make railway-env' to update" >> .env.railway
+	@echo "" >> .env.railway
+	@railway variables --kv >> .env.railway 2>/dev/null || \
+		(railway variables --json | python3 -c "import json, sys; \
+			vars = json.load(sys.stdin); \
+			with open('.env.railway', 'a') as f: \
+				[f.write(f'{k}={v}\n') for k, v in vars.items()]" 2>/dev/null) || \
+		(echo "❌ Failed to fetch variables. Make sure you're logged in: railway login" && rm -f .env.railway && exit 1)
+	@if [ -f .env.railway ] && [ -s .env.railway ]; then \
+		if [ -f .env ]; then \
+			echo "📝 Merging with existing .env file..."; \
+			python3 -c " \
+railway_vars = {}; \
+existing_vars = {}; \
+with open('.env.railway', 'r') as f: \
+    for line in f: \
+        line = line.strip(); \
+        if line and not line.startswith('#') and '=' in line: \
+            key, _, value = line.partition('='); \
+            railway_vars[key] = value; \
+with open('.env', 'r') as f: \
+    for line in f: \
+        line = line.strip(); \
+        if line and not line.startswith('#') and '=' in line: \
+            key, _, value = line.partition('='); \
+            if key not in railway_vars: \
+                existing_vars[key] = value; \
+with open('.env.railway', 'w') as f: \
+    f.write('# Environment variables fetched from Railway\n'); \
+    f.write('# Generated automatically - do not edit manually\n'); \
+    f.write('# Run \"make railway-env\" to update\n\n'); \
+    for key, value in sorted({**railway_vars, **existing_vars}.items()): \
+        f.write(f'{key}={value}\n'); \
+" 2>/dev/null || echo "⚠️  Python merge failed, using Railway vars only"; \
+		fi; \
+		mv .env.railway .env || exit 1; \
+		echo "✅ Environment variables saved to .env"; \
+		echo "📋 Variables fetched from Railway:"; \
+		(grep -v '^#' .env 2>/dev/null | grep -v '^$$' | grep '=' | cut -d'=' -f1 | sed 's/^/   - /' | head -20 || echo "   (no variables found)"); \
+		echo ""; \
+	else \
+		echo "❌ Failed to create .env file or no variables found"; \
+		rm -f .env.railway; \
+		exit 1; \
+	fi
+
+railway-up: railway-env up ## Fetch Railway env vars and start all services
+	@echo "✅ Services started with Railway environment variables!"
+
+railway-dev: railway-env dev ## Fetch Railway env vars and start development environment
+	@echo "✅ Development environment started with Railway environment variables!"
 
 # Docker Commands
 build: ## Build Docker images
@@ -34,6 +111,10 @@ build: ## Build Docker images
 
 up: ## Start all services
 	@echo "🚀 Starting all services..."
+	@if [ ! -f .env ]; then \
+		echo "⚠️  .env file not found. Using default environment variables."; \
+		echo "   Run 'make railway-env' to fetch from Railway, or create .env manually."; \
+	fi
 	docker-compose up -d
 
 down: ## Stop all services
@@ -55,6 +136,10 @@ logs-backend: ## Show backend logs only
 logs-frontend: ## Show frontend logs only
 	@echo "📋 Showing frontend logs..."
 	docker-compose logs -f frontend
+
+logs-email: ## Show email-related logs only
+	@echo "📧 Showing email logs..."
+	docker-compose logs -f backend | grep -i -E "(email|smtp|mail|send.*email|test.*email|email.*test|email.*service|email.*error|email.*fail)"
 
 # Database Commands
 migrate: ## Run database migrations
@@ -161,11 +246,16 @@ prod-down: ## Stop production environment
 # Railway Deployment
 deploy-railway: ## Deploy to Railway
 	@echo "🚀 Deploying to Railway..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one first."; \
+	@if ! command -v railway > /dev/null 2>&1; then \
+		echo "❌ Railway CLI not found. Please install it first:"; \
+		echo "   npm install -g @railway/cli"; \
 		exit 1; \
 	fi
-	@echo "📋 Make sure to set these environment variables in Railway:"
+	@if ! railway status > /dev/null 2>&1; then \
+		echo "⚠️  Project not linked to Railway. Linking now..."; \
+		railway link || (echo "❌ Failed to link project." && exit 1); \
+	fi
+	@echo "📋 Make sure these environment variables are set in Railway:"
 	@echo "   - EMAIL_HOST_USER=your-email@gmail.com"
 	@echo "   - EMAIL_HOST_PASSWORD=your-app-password"
 	@echo "   - SECRET_KEY=your-secret-key"
@@ -191,9 +281,9 @@ status: ## Show service status
 # Quick Commands
 quick-start: install up migrate seed ## Quick start: install, start, migrate, and seed
 	@echo "🎉 Quick start complete!"
-	@echo "📱 Frontend: http://localhost:3000"
-	@echo "🔧 Backend: http://localhost:8000"
-	@echo "📊 Admin: http://localhost:8000/admin (admin/admin123)"
+	@echo "📱 Frontend: http://localhost:3002"
+	@echo "🔧 Backend: http://localhost:8002"
+	@echo "📊 Admin: http://localhost:8002/admin (admin/admin123)"
 
 quick-reset: down clean up migrate seed ## Quick reset: clean, restart, and seed
 	@echo "🔄 Quick reset complete!"
@@ -215,6 +305,7 @@ help-email: ## Show email help
 	@echo "  make email-test   - Send test email"
 	@echo "  make email-daily  - Send daily task emails"
 	@echo "  make test-email-config - Test email configuration"
+	@echo "  make logs-email   - Monitor email-related logs"
 
 help-rotem: ## Show Rotem scraper help
 	@echo "Rotem Scraper Commands:"
@@ -222,6 +313,15 @@ help-rotem: ## Show Rotem scraper help
 	@echo "  make rotem-setup  - Setup Rotem credentials"
 	@echo "  make rotem-test   - Test Rotem scraper"
 	@echo "  make rotem-logs   - Show Rotem scraper logs"
+
+help-railway: ## Show Railway help
+	@echo "Railway Commands:"
+	@echo "================"
+	@echo "  make railway-link  - Link project to Railway"
+	@echo "  make railway-env   - Fetch env vars from Railway and save to .env"
+	@echo "  make railway-up    - Fetch Railway env vars and start all services"
+	@echo "  make railway-dev   - Fetch Railway env vars and start dev environment"
+	@echo "  make deploy-railway - Deploy to Railway"
 
 help-deploy: ## Show deployment help
 	@echo "Deployment Commands:"
