@@ -16,6 +16,9 @@ urlpatterns = [
     path('api/', include('health.urls')),
     path('api/', include('integrations.urls')),
     path('api/rotem/', include('rotem_scraper.urls')),
+    path('api/', include('organizations.urls')),
+    path('api/', include('reporting.urls')),
+    path('api/', include('analytics.urls')),
     # API root endpoint
     path('', lambda request: JsonResponse({
         'status': 'ok', 

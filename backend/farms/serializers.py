@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Farm, Worker, Program, ProgramTask
+from .models import Farm, Worker, Program, ProgramTask, Breed, Flock, FlockPerformance, FlockComparison
 
 
 class WorkerSerializer(serializers.ModelSerializer):
@@ -23,7 +23,7 @@ class FarmSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = [
-            'id', 'name', 'location', 'description', 'contact_person',
+            'id', 'organization', 'name', 'location', 'description', 'contact_person',
             'contact_phone', 'contact_email', 'is_active',
             'total_houses', 'active_houses', 'workers', 'houses',
             'has_system_integration', 'integration_type', 'integration_status',
@@ -68,7 +68,7 @@ class FarmListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = [
-            'id', 'name', 'location', 'description', 'is_active',
+            'id', 'organization', 'name', 'location', 'description', 'is_active',
             'total_houses', 'active_houses', 'has_system_integration',
             'integration_type', 'integration_status', 'last_sync',
             'is_integrated', 'integration_display_name'
@@ -149,7 +149,7 @@ class FarmWithProgramSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = [
-            'id', 'name', 'location', 'contact_person',
+            'id', 'organization', 'name', 'location', 'contact_person',
             'contact_phone', 'contact_email', 'program', 'program_id',
             'is_active', 'total_houses', 'active_houses', 'workers',
             'created_at', 'updated_at'
@@ -167,3 +167,172 @@ class FarmWithProgramSerializer(serializers.ModelSerializer):
         if program_id:
             validated_data['program_id'] = program_id
         return super().update(instance, validated_data)
+
+
+class BreedSerializer(serializers.ModelSerializer):
+    """Serializer for Breed model"""
+    class Meta:
+        model = Breed
+        fields = [
+            'id', 'name', 'code', 'description',
+            'average_weight_gain_per_week', 'average_feed_conversion_ratio',
+            'average_mortality_rate', 'typical_harvest_age_days',
+            'typical_harvest_weight_grams', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class BreedListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for breed list"""
+    class Meta:
+        model = Breed
+        fields = ['id', 'name', 'code', 'typical_harvest_age_days', 'is_active']
+
+
+class FlockPerformanceSerializer(serializers.ModelSerializer):
+    """Serializer for FlockPerformance model"""
+    flock_code = serializers.CharField(source='flock.flock_code', read_only=True)
+    batch_number = serializers.CharField(source='flock.batch_number', read_only=True)
+    
+    class Meta:
+        model = FlockPerformance
+        fields = [
+            'id', 'flock', 'flock_code', 'batch_number',
+            'record_date', 'flock_age_days',
+            'average_weight_grams', 'total_weight_kg',
+            'feed_consumed_kg', 'daily_feed_consumption_kg', 'feed_conversion_ratio',
+            'daily_water_consumption_liters',
+            'current_chicken_count', 'mortality_count',
+            'mortality_rate', 'livability',
+            'average_temperature', 'average_humidity',
+            'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FlockSerializer(serializers.ModelSerializer):
+    """Serializer for Flock model"""
+    breed = BreedListSerializer(read_only=True)
+    breed_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    house_name = serializers.CharField(source='house.__str__', read_only=True)
+    farm_name = serializers.CharField(source='house.farm.name', read_only=True)
+    current_age_days = serializers.ReadOnlyField()
+    days_until_harvest = serializers.ReadOnlyField()
+    mortality_count = serializers.ReadOnlyField()
+    mortality_rate = serializers.ReadOnlyField()
+    livability = serializers.ReadOnlyField()
+    performance_records = FlockPerformanceSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Flock
+        fields = [
+            'id', 'house', 'house_name', 'farm_name',
+            'breed', 'breed_id',
+            'batch_number', 'flock_code',
+            'arrival_date', 'expected_harvest_date', 'actual_harvest_date',
+            'start_date', 'end_date',
+            'initial_chicken_count', 'current_chicken_count',
+            'status', 'is_active',
+            'supplier', 'notes',
+            'current_age_days', 'days_until_harvest',
+            'mortality_count', 'mortality_rate', 'livability',
+            'performance_records',
+            'created_at', 'updated_at', 'created_by'
+        ]
+        read_only_fields = ['id', 'flock_code', 'created_at', 'updated_at', 'created_by']
+    
+    def create(self, validated_data):
+        """Create flock and set created_by"""
+        breed_id = validated_data.pop('breed_id', None)
+        if breed_id:
+            validated_data['breed_id'] = breed_id
+        
+        # Auto-generate flock_code if not provided
+        if 'flock_code' not in validated_data or not validated_data.get('flock_code'):
+            house = validated_data.get('house')
+            batch_number = validated_data.get('batch_number', '')
+            arrival_date = validated_data.get('arrival_date')
+            
+            # Generate flock_code: HOUSE-BATCH-YYYYMMDD
+            house_str = str(house.id) if house else 'UNK'
+            date_str = arrival_date.strftime('%Y%m%d') if arrival_date else ''
+            validated_data['flock_code'] = f"{house_str}-{batch_number}-{date_str}"
+        
+        # Set created_by from request user if available
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        
+        return super().create(validated_data)
+
+
+class FlockListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for flock list"""
+    breed_name = serializers.CharField(source='breed.name', read_only=True)
+    house_name = serializers.CharField(source='house.__str__', read_only=True)
+    current_age_days = serializers.ReadOnlyField()
+    days_until_harvest = serializers.ReadOnlyField()
+    mortality_rate = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = Flock
+        fields = [
+            'id', 'house', 'house_name', 'breed_name',
+            'batch_number', 'flock_code',
+            'arrival_date', 'expected_harvest_date', 'actual_harvest_date',
+            'status', 'is_active',
+            'initial_chicken_count', 'current_chicken_count',
+            'current_age_days', 'days_until_harvest', 'mortality_rate'
+        ]
+
+
+class FlockComparisonSerializer(serializers.ModelSerializer):
+    """Serializer for FlockComparison model"""
+    flocks = FlockListSerializer(many=True, read_only=True)
+    flock_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False
+    )
+    creator_name = serializers.CharField(source='created_by.username', read_only=True)
+    
+    class Meta:
+        model = FlockComparison
+        fields = [
+            'id', 'name', 'description',
+            'flocks', 'flock_ids',
+            'comparison_metrics', 'comparison_results',
+            'created_by', 'creator_name',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        """Create comparison and add flocks"""
+        flock_ids = validated_data.pop('flock_ids', [])
+        
+        # Set created_by from request user
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        
+        comparison = super().create(validated_data)
+        
+        # Add flocks
+        if flock_ids:
+            comparison.flocks.set(flock_ids)
+        
+        return comparison
+    
+    def update(self, instance, validated_data):
+        """Update comparison and flocks"""
+        flock_ids = validated_data.pop('flock_ids', None)
+        
+        comparison = super().update(instance, validated_data)
+        
+        # Update flocks if provided
+        if flock_ids is not None:
+            comparison.flocks.set(flock_ids)
+        
+        return comparison

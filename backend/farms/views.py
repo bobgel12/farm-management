@@ -5,11 +5,13 @@ from rest_framework.viewsets import ModelViewSet
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
-from .models import Farm, Worker, Program, ProgramTask, ProgramChangeLog
+from .models import Farm, Worker, Program, ProgramTask, ProgramChangeLog, Breed, Flock, FlockPerformance, FlockComparison
 from .serializers import (
     FarmSerializer, FarmListSerializer, WorkerSerializer,
     ProgramSerializer, ProgramListSerializer, ProgramTaskSerializer,
-    FarmWithProgramSerializer
+    FarmWithProgramSerializer, BreedSerializer, BreedListSerializer,
+    FlockSerializer, FlockListSerializer, FlockPerformanceSerializer,
+    FlockComparisonSerializer
 )
 from .program_change_service import ProgramChangeService
 from integrations.rotem import RotemIntegration
@@ -19,6 +21,26 @@ from integrations.models import IntegrationLog, IntegrationError
 class FarmViewSet(ModelViewSet):
     queryset = Farm.objects.all()
     serializer_class = FarmSerializer
+    
+    def get_queryset(self):
+        """Filter farms based on organization"""
+        queryset = Farm.objects.all()
+        
+        # Filter by organization if specified
+        organization_id = self.request.query_params.get('organization_id')
+        if organization_id:
+            queryset = queryset.filter(organization_id=organization_id)
+        
+        # If user is authenticated and not staff, filter by user's organizations
+        if self.request.user.is_authenticated and not self.request.user.is_staff:
+            from organizations.models import OrganizationUser
+            user_organizations = OrganizationUser.objects.filter(
+                user=self.request.user,
+                is_active=True
+            ).values_list('organization_id', flat=True)
+            queryset = queryset.filter(organization_id__in=user_organizations)
+        
+        return queryset.order_by('name')
     
     @action(detail=True, methods=['post'])
     def configure_integration(self, request, pk=None):
@@ -732,3 +754,254 @@ class FarmWithProgramListCreateView(generics.ListCreateAPIView):
 class FarmWithProgramDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Farm.objects.all()
     serializer_class = FarmWithProgramSerializer
+
+
+# Breed Views
+class BreedViewSet(ModelViewSet):
+    queryset = Breed.objects.all()
+    serializer_class = BreedSerializer
+    permission_classes = []  # Will be handled by authentication middleware
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return BreedListSerializer
+        return BreedSerializer
+    
+    def get_queryset(self):
+        """Filter breeds based on organization if needed"""
+        queryset = Breed.objects.filter(is_active=True)
+        # Add organization filtering if needed in the future
+        return queryset
+
+
+# Flock Views
+class FlockViewSet(ModelViewSet):
+    queryset = Flock.objects.all()
+    serializer_class = FlockSerializer
+    permission_classes = []  # Will be handled by authentication middleware
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return FlockListSerializer
+        return FlockSerializer
+    
+    def get_queryset(self):
+        """Filter flocks based on house, farm, or organization"""
+        queryset = Flock.objects.select_related('house', 'breed', 'house__farm').all()
+        
+        # Filter by house
+        house_id = self.request.query_params.get('house_id')
+        if house_id:
+            queryset = queryset.filter(house_id=house_id)
+        
+        # Filter by farm
+        farm_id = self.request.query_params.get('farm_id')
+        if farm_id:
+            queryset = queryset.filter(house__farm_id=farm_id)
+        
+        # Filter by organization
+        organization_id = self.request.query_params.get('organization_id')
+        if organization_id:
+            queryset = queryset.filter(house__farm__organization_id=organization_id)
+        
+        # Filter by status
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        # Filter active flocks
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # Filter by breed
+        breed_id = self.request.query_params.get('breed_id')
+        if breed_id:
+            queryset = queryset.filter(breed_id=breed_id)
+        
+        return queryset.order_by('-arrival_date', 'batch_number')
+    
+    @action(detail=True, methods=['get'])
+    def performance(self, request, pk=None):
+        """Get performance records for a flock"""
+        flock = self.get_object()
+        performance_records = flock.performance_records.all().order_by('record_date', 'flock_age_days')
+        serializer = FlockPerformanceSerializer(performance_records, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def add_performance_record(self, request, pk=None):
+        """Add a performance record for a flock"""
+        flock = self.get_object()
+        serializer = FlockPerformanceSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            serializer.save(
+                flock=flock,
+                recorded_by=request.user if request.user.is_authenticated else None
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark flock as completed"""
+        flock = self.get_object()
+        
+        from farms.services import FlockManagementService
+        
+        actual_harvest_date = request.data.get('actual_harvest_date')
+        final_count = request.data.get('final_count')
+        
+        updated_flock = FlockManagementService.complete_flock(
+            flock,
+            actual_harvest_date=actual_harvest_date,
+            final_count=final_count
+        )
+        
+        serializer = self.get_serializer(updated_flock)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def summary(self, request, pk=None):
+        """Get comprehensive flock summary"""
+        flock = self.get_object()
+        
+        from farms.services import FlockManagementService
+        summary = FlockManagementService.get_flock_summary(flock)
+        
+        return Response(summary)
+    
+    @action(detail=True, methods=['post'])
+    def calculate_performance(self, request, pk=None):
+        """Calculate and record flock performance"""
+        flock = self.get_object()
+        
+        from farms.services import FlockManagementService
+        
+        record_date = request.data.get('record_date')
+        if record_date:
+            from datetime import datetime
+            record_date = datetime.strptime(record_date, '%Y-%m-%d').date()
+        
+        performance = FlockManagementService.calculate_flock_performance(flock, record_date)
+        
+        serializer = FlockPerformanceSerializer(performance)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class FlockPerformanceViewSet(ModelViewSet):
+    queryset = FlockPerformance.objects.all()
+    serializer_class = FlockPerformanceSerializer
+    permission_classes = []  # Will be handled by authentication middleware
+    
+    def get_queryset(self):
+        """Filter performance records based on flock"""
+        queryset = FlockPerformance.objects.select_related('flock').all()
+        
+        flock_id = self.request.query_params.get('flock_id')
+        if flock_id:
+            queryset = queryset.filter(flock_id=flock_id)
+        
+        return queryset.order_by('-record_date', '-flock_age_days')
+
+
+class FlockComparisonViewSet(ModelViewSet):
+    queryset = FlockComparison.objects.all()
+    serializer_class = FlockComparisonSerializer
+    permission_classes = []  # Will be handled by authentication middleware
+    
+    def get_queryset(self):
+        """Filter comparisons based on user"""
+        queryset = FlockComparison.objects.prefetch_related('flocks').all()
+        
+        # Filter by organization if needed
+        organization_id = self.request.query_params.get('organization_id')
+        if organization_id:
+            queryset = queryset.filter(flocks__house__farm__organization_id=organization_id).distinct()
+        
+        # Filter by creator
+        if self.request.user.is_authenticated and not self.request.user.is_staff:
+            queryset = queryset.filter(created_by=self.request.user)
+        
+        return queryset.order_by('-created_at')
+    
+    @action(detail=True, methods=['post'])
+    def calculate(self, request, pk=None):
+        """Calculate comparison results for a comparison"""
+        comparison = self.get_object()
+        
+        from farms.services import FlockManagementService
+        
+        # Get comparison metrics
+        metrics = request.data.get('metrics', comparison.comparison_metrics or [])
+        
+        # Use service to calculate comparison
+        flocks = comparison.flocks.all()
+        results = FlockManagementService.compare_flocks(flocks, metrics)
+        
+        # Save results
+        comparison.comparison_metrics = metrics
+        comparison.comparison_results = results
+        comparison.save()
+        
+        return Response({
+            'comparison': FlockComparisonSerializer(comparison).data,
+            'results': results
+        })
+    
+    def _calculate_comparison(self, comparison, metrics):
+        """Calculate comparison results between flocks"""
+        flocks = comparison.flocks.all()
+        results = {
+            'flocks': [],
+            'comparisons': {}
+        }
+        
+        for flock in flocks:
+            flock_data = {
+                'id': flock.id,
+                'batch_number': flock.batch_number,
+                'house': str(flock.house),
+                'arrival_date': flock.arrival_date.isoformat(),
+                'breed': flock.breed.name if flock.breed else None,
+            }
+            
+            # Calculate metrics for each flock
+            for metric in metrics:
+                value = self._calculate_metric(flock, metric)
+                flock_data[metric] = value
+            
+            results['flocks'].append(flock_data)
+        
+        # Calculate comparisons
+        if len(flocks) > 1:
+            for metric in metrics:
+                values = [f[metric] for f in results['flocks'] if metric in f and f[metric] is not None]
+                if values:
+                    results['comparisons'][metric] = {
+                        'min': min(values),
+                        'max': max(values),
+                        'average': sum(values) / len(values),
+                        'range': max(values) - min(values)
+                    }
+        
+        return results
+    
+    def _calculate_metric(self, flock, metric):
+        """Calculate a specific metric for a flock"""
+        if metric == 'mortality_rate':
+            return flock.mortality_rate
+        elif metric == 'livability':
+            return flock.livability
+        elif metric == 'current_age_days':
+            return flock.current_age_days
+        elif metric == 'days_until_harvest':
+            return flock.days_until_harvest
+        elif metric == 'current_chicken_count':
+            return flock.current_chicken_count
+        elif metric == 'mortality_count':
+            return flock.mortality_count
+        # Add more metrics as needed
+        return None

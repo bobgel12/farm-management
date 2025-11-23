@@ -219,6 +219,255 @@ class HouseMonitoringSnapshot(models.Model):
         return self.connection_status == 1
 
 
+class Device(models.Model):
+    """Device/equipment in a house (heaters, fans, lights, etc.)"""
+    DEVICE_TYPES = [
+        ('heater', 'Heater'),
+        ('tunnel_fan', 'Tunnel Fan'),
+        ('exhaust_fan', 'Exhaust Fan'),
+        ('stir_fan', 'Stir Fan'),
+        ('cooling_pad', 'Cooling Pad'),
+        ('light', 'Light'),
+        ('feeder', 'Feeder'),
+        ('auger', 'Auger'),
+        ('water_system', 'Water System'),
+        ('ventilation', 'Ventilation'),
+        ('other', 'Other'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('on', 'On'),
+        ('off', 'Off'),
+        ('error', 'Error'),
+        ('maintenance', 'Maintenance'),
+    ]
+    
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='devices')
+    device_type = models.CharField(max_length=50, choices=DEVICE_TYPES)
+    device_number = models.IntegerField(help_text="Device number/identifier within the house")
+    name = models.CharField(max_length=200, blank=True, help_text="Optional device name")
+    
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='off')
+    percentage = models.FloatField(null=True, blank=True, help_text="Percentage/level (0-100) for variable devices")
+    
+    # Metadata
+    last_update = models.DateTimeField(auto_now=True)
+    last_checked = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        unique_together = ['house', 'device_type', 'device_number']
+        ordering = ['house', 'device_type', 'device_number']
+        indexes = [
+            models.Index(fields=['house', 'device_type']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.house} - {self.get_device_type_display()} #{self.device_number}"
+
+
+class ControlSettings(models.Model):
+    """Control settings for a house (temperature curves, ventilation, etc.)"""
+    house = models.OneToOneField(House, on_delete=models.CASCADE, related_name='control_settings')
+    
+    # Temperature settings
+    temperature_curve = models.JSONField(
+        default=dict,
+        help_text="Day-based temperature targets {day: temperature}"
+    )
+    min_temperature = models.FloatField(null=True, blank=True, help_text="Minimum temperature (F)")
+    max_temperature = models.FloatField(null=True, blank=True, help_text="Maximum temperature (F)")
+    target_temperature = models.FloatField(null=True, blank=True, help_text="Current target temperature (F)")
+    temperature_offset = models.FloatField(default=0.0, help_text="Temperature offset adjustment")
+    
+    # Humidity settings
+    humidity_target = models.FloatField(null=True, blank=True, help_text="Target humidity percentage")
+    humidity_treatment_enabled = models.BooleanField(default=False)
+    humidity_min = models.FloatField(null=True, blank=True)
+    humidity_max = models.FloatField(null=True, blank=True)
+    
+    # CO2 settings
+    co2_target = models.FloatField(null=True, blank=True, help_text="Target CO2 level (ppm)")
+    co2_treatment_enabled = models.BooleanField(default=False)
+    co2_max = models.FloatField(null=True, blank=True)
+    
+    # Ventilation settings
+    ventilation_mode = models.CharField(
+        max_length=50,
+        default='minimum',
+        choices=[
+            ('minimum', 'Minimum Ventilation'),
+            ('tunnel', 'Tunnel Ventilation'),
+            ('natural', 'Natural Ventilation'),
+            ('mixed', 'Mixed Mode'),
+        ]
+    )
+    static_pressure_target = models.FloatField(null=True, blank=True, help_text="Target static pressure")
+    static_pressure_min = models.FloatField(null=True, blank=True)
+    static_pressure_max = models.FloatField(null=True, blank=True)
+    
+    # Lighting settings
+    lighting_schedule = models.JSONField(
+        default=dict,
+        help_text="Lighting schedule configuration"
+    )
+    light_dimmer_level = models.FloatField(null=True, blank=True, help_text="Light dimmer percentage (0-100)")
+    
+    # Cooling pad settings
+    cooling_pad_enabled = models.BooleanField(default=False)
+    cooling_pad_threshold = models.FloatField(null=True, blank=True)
+    
+    # Fogger settings
+    fogger_enabled = models.BooleanField(default=False)
+    fogger_threshold = models.FloatField(null=True, blank=True)
+    
+    # Water & Feed settings
+    water_on_demand_enabled = models.BooleanField(default=True)
+    feed_schedule = models.JSONField(default=dict, help_text="Feed schedule configuration")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Control Settings"
+        verbose_name_plural = "Control Settings"
+    
+    def __str__(self):
+        return f"Control Settings - {self.house}"
+
+
+class HouseConfiguration(models.Model):
+    """System configuration for a house"""
+    house = models.OneToOneField(House, on_delete=models.CASCADE, related_name='configuration')
+    
+    # Dimensions
+    length_feet = models.FloatField(null=True, blank=True, help_text="House length in feet")
+    width_feet = models.FloatField(null=True, blank=True, help_text="House width in feet")
+    height_feet = models.FloatField(null=True, blank=True, help_text="House height in feet")
+    total_square_feet = models.FloatField(null=True, blank=True, help_text="Total square footage")
+    
+    # Sensor layout
+    sensor_layout = models.JSONField(default=dict, help_text="Sensor positions and types")
+    
+    # Relay layout
+    relay_layout = models.JSONField(default=dict, help_text="Relay assignments and configurations")
+    
+    # Fan capacity
+    fan_air_capacity_cfm = models.FloatField(null=True, blank=True, help_text="Total fan air capacity in CFM")
+    tunnel_fan_count = models.IntegerField(default=0)
+    exhaust_fan_count = models.IntegerField(default=0)
+    stir_fan_count = models.IntegerField(default=0)
+    
+    # Scale settings
+    scale_settings = models.JSONField(default=dict, help_text="Scale configuration")
+    
+    # Equipment layout
+    silo_count = models.IntegerField(default=0)
+    auger_count = models.IntegerField(default=0)
+    feeder_count = models.IntegerField(default=0)
+    drinker_count = models.IntegerField(default=0)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "House Configuration"
+        verbose_name_plural = "House Configurations"
+    
+    def __str__(self):
+        return f"Configuration - {self.house}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate total square feet
+        if self.length_feet and self.width_feet:
+            self.total_square_feet = self.length_feet * self.width_feet
+        super().save(*args, **kwargs)
+
+
+class Sensor(models.Model):
+    """Sensor information for a house"""
+    SENSOR_TYPES = [
+        ('temperature', 'Temperature'),
+        ('humidity', 'Humidity'),
+        ('pressure', 'Pressure'),
+        ('co2', 'CO2'),
+        ('ammonia', 'Ammonia'),
+        ('wind_speed', 'Wind Speed'),
+        ('wind_direction', 'Wind Direction'),
+        ('water_meter', 'Water Meter'),
+        ('feed_scale', 'Feed Scale'),
+        ('bird_scale', 'Bird Scale'),
+        ('other', 'Other'),
+    ]
+    
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='sensors')
+    sensor_type = models.CharField(max_length=50, choices=SENSOR_TYPES)
+    sensor_number = models.IntegerField(help_text="Sensor number/identifier")
+    location = models.CharField(max_length=200, blank=True, help_text="Sensor location description")
+    
+    # Calibration
+    calibration_data = models.JSONField(default=dict, help_text="Calibration parameters")
+    last_calibration = models.DateTimeField(null=True, blank=True)
+    calibration_due_date = models.DateField(null=True, blank=True)
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['house', 'sensor_type', 'sensor_number']
+        ordering = ['house', 'sensor_type', 'sensor_number']
+    
+    def __str__(self):
+        return f"{self.house} - {self.get_sensor_type_display()} #{self.sensor_number}"
+
+
+class TemperatureCurve(models.Model):
+    """Day-based temperature curve for a house"""
+    control_settings = models.ForeignKey(
+        ControlSettings,
+        on_delete=models.CASCADE,
+        related_name='temperature_curves'
+    )
+    day = models.IntegerField(help_text="Day of flock (0-42)")
+    target_temperature = models.FloatField(help_text="Target temperature in Fahrenheit")
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        unique_together = ['control_settings', 'day']
+        ordering = ['day']
+    
+    def __str__(self):
+        return f"Day {self.day}: {self.target_temperature}°F"
+
+
+class DeviceStatus(models.Model):
+    """Historical device status records"""
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='status_history')
+    status = models.CharField(max_length=20)
+    percentage = models.FloatField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['device', '-timestamp']),
+            models.Index(fields=['timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.device} - {self.status} at {self.timestamp}"
+
+
 class HouseAlarm(models.Model):
     """Alarm information from monitoring snapshots"""
     ALARM_SEVERITY_CHOICES = [

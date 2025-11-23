@@ -36,6 +36,9 @@ INSTALLED_APPS = [
     'health',
     'integrations',  # New integration service
     'rotem_scraper',
+    'organizations',  # Multi-tenancy support
+    'reporting',  # Advanced reporting
+    'analytics',  # Business Intelligence
 ]
 
 MIDDLEWARE = [

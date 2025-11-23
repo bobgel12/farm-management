@@ -36,9 +36,12 @@ import {
   AccountCircle as AccountIcon,
   Security as SecurityIcon,
   Sensors as SensorsIcon,
+  Analytics as AnalyticsIcon,
+  Pets as PoultryIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import EmailStatus from '../EmailStatus';
+import OrganizationSwitcher from '../organizations/OrganizationSwitcher';
 
 interface ProfessionalLayoutProps {
   children: React.ReactNode;
@@ -71,6 +74,18 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
       icon: <FarmIcon />, 
       path: '/farms',
       description: 'Manage farms and houses'
+    },
+    { 
+      text: 'Flocks', 
+      icon: <PoultryIcon />, 
+      path: '/flocks',
+      description: 'Track and manage chicken flocks'
+    },
+    { 
+      text: 'Analytics', 
+      icon: <AnalyticsIcon />, 
+      path: '/analytics',
+      description: 'Business intelligence and KPIs'
     },
     { 
       text: 'Rotem Integration', 
@@ -197,9 +212,13 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
             {drawerOpen ? <CloseIcon /> : <MenuIcon />}
           </IconButton>
           
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
             {menuItems.find(item => isActive(item.path))?.text || 'Dashboard'}
           </Typography>
+
+          <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', px: 2 }}>
+            <OrganizationSwitcher />
+          </Box>
 
           <Box display="flex" alignItems="center" gap={1}>
             <Tooltip title="Notifications">
@@ -278,8 +297,12 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
           anchor="left"
           open={drawerOpen}
           sx={{
-            width: 280,
+            width: drawerOpen ? 280 : 0,
             flexShrink: 0,
+            transition: theme.transitions.create('width', {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.leavingScreen,
+            }),
             '& .MuiDrawer-paper': {
               width: 280,
               boxSizing: 'border-box',
@@ -295,12 +318,18 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
         component="main"
         sx={{
           flexGrow: 1,
-          width: { md: `calc(100% - ${drawerOpen ? 280 : 0}px)` },
+          width: { 
+            xs: '100%',
+            md: drawerOpen ? `calc(100% - 280px)` : '100%'
+          },
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
-          ml: { md: drawerOpen ? 0 : 0 },
+          ml: { 
+            xs: 0,
+            md: 0 
+          },
         }}
       >
         <Toolbar />

@@ -47,7 +47,7 @@ const TaskList: React.FC = () => {
       setHouse(response.data);
     } catch (err) {
       setError('Failed to fetch house details');
-      logger.error('Error fetching house details:', err);
+      console.error('Error fetching house details:', err);
     } finally {
       setLoading(false);
     }

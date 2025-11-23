@@ -32,7 +32,7 @@ import {
   Sync,
   Refresh,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   Warning,
   Home,
   TrendingUp,
@@ -49,6 +49,7 @@ import {
   Schedule as ScheduleIcon,
   Today as TodayIcon,
   TouchApp as ClickIcon,
+  CompareArrows,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -56,7 +57,8 @@ import EmailManager from '../EmailManager';
 import WorkerList from '../WorkerList';
 import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
 import monitoringApi from '../../services/monitoringApi';
-import logger from '../../utils/logger';
+import { MonitoringDashboardData } from '../../types/monitoring';
+// Removed logger import - using console instead
 
 interface Farm {
   id: number;
@@ -145,13 +147,25 @@ interface MLPrediction {
   prediction_type: string;
   value: number;
   confidence: number;
+  confidence_score?: number;
+  prediction_data?: {
+    action?: string;
+    recommendations?: string[];
+    [key: string]: any;
+  };
 }
 
 interface MonitoringHouse {
   id: number;
+  house_id?: number;
   house_number: number;
   status: string;
   alerts_count: number;
+  active_alarms_count?: number;
+  humidity?: number | null;
+  temperature?: number | null;
+  average_temperature?: number | null;
+  alarm_status?: string;
   last_update: string;
 }
 
@@ -161,7 +175,8 @@ interface MonitoringDashboard {
     total_active: number;
     critical: number;
     warning: number;
-    info: number;
+    normal?: number;
+    info?: number;
   };
   connection_summary: {
     connected: number;
@@ -229,9 +244,28 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     setLoadingMonitoring(true);
     try {
       const data = await monitoringApi.getFarmMonitoringDashboard(farm.id);
-      setMonitoringDashboard(data);
+      // Transform MonitoringDashboardData to MonitoringDashboard format
+      const transformedData: MonitoringDashboard = {
+        total_houses: data.total_houses,
+        alerts_summary: data.alerts_summary,
+        connection_summary: data.connection_summary,
+        houses: data.houses.map((house) => ({
+          id: house.house_id,
+          house_id: house.house_id,
+          house_number: house.house_number,
+          status: house.status,
+          alerts_count: house.active_alarms_count,
+          active_alarms_count: house.active_alarms_count,
+          humidity: house.humidity,
+          temperature: house.average_temperature,
+          average_temperature: house.average_temperature,
+          alarm_status: house.alarm_status || 'normal',
+          last_update: house.timestamp || new Date().toISOString(),
+        })),
+      };
+      setMonitoringDashboard(transformedData);
     } catch (error) {
-      logger.error('Error fetching monitoring dashboard:', error);
+      console.error('Error fetching monitoring dashboard:', error);
     } finally {
       setLoadingMonitoring(false);
     }
@@ -243,12 +277,12 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     setLoading(true);
     setError(null);
     try {
-      logger.debug('Fetching farm data for ID:', farmId);
+      console.debug('Fetching farm data for ID:', farmId);
       const response = await api.get(`/farms/${farmId}/`);
-      logger.debug('Farm data received:', response.data);
+      console.debug('Farm data received:', response.data);
       setFarm(response.data);
     } catch (error: unknown) {
-      logger.error('Error fetching farm data:', error);
+      console.error('Error fetching farm data:', error);
       const errorMessage = (error as { response?: { data?: { detail?: string; error?: string } }; message?: string })?.response?.data?.detail || 
                           (error as { response?: { data?: { detail?: string; error?: string } }; message?: string })?.response?.data?.error || 
                           (error as { message?: string })?.message || 
@@ -267,7 +301,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const response = await api.get(`/farms/${farm.id}/integration_status/`);
       setIntegrationHealth(response.data.health_details);
     } catch (error) {
-      logger.error('Failed to fetch integration health:', error);
+      console.error('Failed to fetch integration health:', error);
     } finally {
       setLoadingHealth(false);
     }
@@ -281,7 +315,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const response = await api.get(`/farms/${farm.id}/house-sensor-data/`);
       setHouseSensorData(response.data.houses || {});
     } catch (error) {
-      logger.error('Error fetching house sensor data:', error);
+      console.error('Error fetching house sensor data:', error);
     } finally {
       setLoadingData(false);
     }
@@ -294,7 +328,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       const response = await api.get(`/rotem/predictions/?farm_name=${encodeURIComponent(farm.name)}&limit=10`);
       setMlPredictions(response.data.results || []);
     } catch (error) {
-      logger.error('Error fetching ML predictions:', error);
+      console.error('Error fetching ML predictions:', error);
     }
   };
 
@@ -339,7 +373,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         await fetchMlPredictions();
       }
     } catch (error) {
-      logger.error('Sync failed:', error);
+      console.error('Sync failed:', error);
       const errorMessage = (error as Error)?.message || 'Unknown error';
       setSyncMessage(`Sync failed: ${errorMessage}`);
     } finally {
@@ -366,8 +400,9 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'House generation failed');
+        const errorData: any = await response.json();
+        const errorMessage: string = errorData?.message || 'House generation failed';
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();
@@ -380,7 +415,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       await fetchFarmData();
       
     } catch (error) {
-      logger.error('House generation failed:', error);
+      console.error('House generation failed:', error);
       const errorMessage = (error as Error)?.message || 'Unknown error';
       setGenerateMessage(`House generation failed: ${errorMessage}`);
     } finally {
@@ -400,7 +435,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const getIntegrationStatusIcon = (status: string) => {
     switch (status) {
       case 'active': return <CheckCircle />;
-      case 'error': return <Error />;
+      case 'error': return <ErrorIcon />;
       case 'inactive': return <Warning />;
       default: return <Settings />;
     }
@@ -592,19 +627,31 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
             <Typography variant="h6">
               Houses ({farm.houses?.length || 0})
             </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<Home />}
-              onClick={() => {
-                if (farm.houses && farm.houses.length > 0) {
-                  navigate(`/farms/${farm.id}/houses/${farm.houses[0].id}`);
-                }
-              }}
-              size="small"
-              disabled={!farm.houses || farm.houses.length === 0}
-            >
-              View Houses
-            </Button>
+            <Box display="flex" gap={1}>
+              {farm.houses && farm.houses.length > 1 && (
+                <Button
+                  variant="outlined"
+                  startIcon={<CompareArrows />}
+                  onClick={() => navigate(`/farms/${farm.id}/houses/comparison`)}
+                  size="small"
+                >
+                  Compare Houses
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<Home />}
+                onClick={() => {
+                  if (farm.houses && farm.houses.length > 0) {
+                    navigate(`/farms/${farm.id}/houses/${farm.houses[0].id}`);
+                  }
+                }}
+                size="small"
+                disabled={!farm.houses || farm.houses.length === 0}
+              >
+                View Houses
+              </Button>
+            </Box>
           </Box>
           
           <Grid container spacing={2}>
@@ -639,7 +686,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                     {houseSensorData[house.house_number.toString()]?.sensors ? (
                       <>
                         <Typography color="textSecondary" variant="body2" gutterBottom>
-                          Age: {houseSensorData[house.house_number.toString()].sensors.growth_day?.current || house.current_age_days} days
+                          Age: {house.current_age_days || (houseSensorData[house.house_number.toString()]?.sensors as any)?.growth_day?.current || 'N/A'} days
                         </Typography>
                         <Typography color="textSecondary" variant="body2" gutterBottom>
                           Temperature: {houseSensorData[house.house_number.toString()].sensors.temperature?.current || 'N/A'}°C
@@ -1074,9 +1121,9 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                               <Typography variant="h6">House {house.house_number}</Typography>
                               <Chip
-                                label={house.alarm_status}
+                                label={house.alarm_status || house.status}
                                 size="small"
-                                color={house.alarm_status === 'critical' ? 'error' : house.alarm_status === 'warning' ? 'warning' : 'success'}
+                                color={(house.alarm_status || house.status) === 'critical' ? 'error' : (house.alarm_status || house.status) === 'warning' ? 'warning' : 'success'}
                               />
                             </Box>
                             {house.average_temperature !== null && (
@@ -1089,9 +1136,9 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                                 Humidity: {house.humidity?.toFixed(1)}%
                               </Typography>
                             )}
-                            {house.active_alarms_count > 0 && (
+                            {(house.active_alarms_count ?? house.alerts_count ?? 0) > 0 && (
                               <Chip
-                                label={`${house.active_alarms_count} alarm${house.active_alarms_count > 1 ? 's' : ''}`}
+                                label={`${house.active_alarms_count ?? house.alerts_count ?? 0} alarm${(house.active_alarms_count ?? house.alerts_count ?? 0) > 1 ? 's' : ''}`}
                                 size="small"
                                 color="error"
                                 sx={{ mt: 1 }}
@@ -1146,9 +1193,9 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                             {prediction.prediction_data?.action || prediction.prediction_data?.recommendations?.[0] || 'Analysis available'}
                           </Typography>
                           <Chip
-                            label={`${(prediction.confidence_score * 100).toFixed(0)}% confidence`}
+                            label={`${Math.round((prediction.confidence_score ?? prediction.confidence ?? 0) * 100)}% confidence`}
                             size="small"
-                            color={prediction.confidence_score > 0.8 ? 'success' : prediction.confidence_score > 0.6 ? 'warning' : 'default'}
+                            color={(prediction.confidence_score ?? prediction.confidence ?? 0) > 0.8 ? 'success' : (prediction.confidence_score ?? prediction.confidence ?? 0) > 0.6 ? 'warning' : 'default'}
                           />
                         </CardContent>
                       </Card>

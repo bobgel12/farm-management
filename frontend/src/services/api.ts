@@ -52,9 +52,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear token and redirect to login
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      // Don't redirect if we're already on the login page to avoid infinite loops
+      const isLoginPage = window.location.pathname === '/login' || 
+                         window.location.pathname === '/forgot-password' ||
+                         window.location.pathname === '/reset-password';
+      
+      if (!isLoginPage) {
+        // Clear token and redirect to login
+        localStorage.removeItem('authToken');
+        window.location.href = '/login';
+      }
     } else if (error.code === 'NETWORK_ERROR' || !error.response) {
       // Handle network errors or API unavailable
       // You could show a toast notification here

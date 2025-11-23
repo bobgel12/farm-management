@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
 import api from '../services/api';
 
 interface Farm {
@@ -97,7 +97,7 @@ interface FarmContextType {
   loading: boolean;
   error: string | null;
   fetchFarms: () => Promise<void>;
-  fetchHouses: (_farmId?: number) => Promise<void>;
+  fetchHouses: (_farmId?: number) => Promise<House[]>;
   fetchFarmTaskSummary: (_farmId: number) => Promise<void>;
   completeTask: (_taskId: number, _completedBy?: string, _notes?: string) => Promise<boolean>;
   createFarm: (_farmData: Partial<Farm>) => Promise<Farm | null>;
@@ -129,15 +129,28 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch farms on mount if not already loaded
+  useEffect(() => {
+    if (farms.length === 0) {
+      console.log('FarmProvider: Fetching farms on mount...');
+      fetchFarms();
+    }
+  }, []);
+
   const fetchFarms = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      console.log('FarmContext: Fetching farms from API...');
       const response = await api.get('/farms/');
+      console.log('FarmContext: API response:', response.data);
       // Handle paginated response - farms are in the 'results' property
       const farmsData = response.data.results || response.data;
-      setFarms(Array.isArray(farmsData) ? farmsData : []);
-    } catch (err) {
+      const farmsArray = Array.isArray(farmsData) ? farmsData : [];
+      console.log('FarmContext: Processed farms:', farmsArray.length, farmsArray);
+      setFarms(farmsArray);
+    } catch (err: any) {
+      console.error('FarmContext: Error fetching farms:', err);
       setError('Failed to fetch farms');
       setFarms([]); // Ensure farms is always an array
     } finally {
@@ -150,13 +163,25 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     setError(null);
     try {
       const url = farmId ? `/farms/${farmId}/houses/` : '/houses/';
+      console.log('FarmContext: Fetching houses from:', url);
       const response = await api.get(url);
+      console.log('FarmContext: Houses API response:', response.data);
       // Handle paginated response - houses are in the 'results' property
       const housesData = response.data.results || response.data;
-      setHouses(Array.isArray(housesData) ? housesData : []);
-    } catch (err) {
+      const housesArray = Array.isArray(housesData) ? housesData : [];
+      // Add farm_id to each house if not present (since we fetched for specific farm)
+      const housesWithFarmId = housesArray.map(house => ({
+        ...house,
+        farm_id: house.farm_id || farmId || (house.farm && house.farm.id) || null
+      }));
+      console.log('FarmContext: Processed houses:', housesWithFarmId.length, housesWithFarmId);
+      setHouses(housesWithFarmId);
+      return housesWithFarmId;
+    } catch (err: any) {
+      console.error('FarmContext: Error fetching houses:', err);
       setError('Failed to fetch houses');
       setHouses([]); // Ensure houses is always an array
+      return [];
     } finally {
       setLoading(false);
     }

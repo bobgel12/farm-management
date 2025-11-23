@@ -226,7 +226,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
       await onSyncData(farm.id);
       await fetchIntegrationData(); // Refresh data after sync
     } catch (error) {
-      logger.error('Sync failed:', error);
+      console.error('Sync failed:', error);
     } finally {
       setSyncing(false);
     }

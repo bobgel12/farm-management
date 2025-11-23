@@ -145,6 +145,16 @@ logs-email: ## Show email-related logs only
 migrate: ## Run database migrations
 	@echo "🗄️ Running database migrations..."
 	docker-compose exec backend python manage.py migrate
+	@echo "✅ Migrations applied successfully!"
+
+migrate-all: ## Run migrations for all apps including new features
+	@echo "🗄️ Running all database migrations..."
+	@echo "   - Organizations (multi-tenancy)"
+	@echo "   - Farms (flock management)"
+	@echo "   - Reporting"
+	@echo "   - Analytics"
+	docker-compose exec backend python manage.py migrate organizations farms reporting analytics
+	@echo "✅ All migrations applied successfully!"
 
 migrate-create: ## Create new migration
 	@echo "📝 Creating new migration..."

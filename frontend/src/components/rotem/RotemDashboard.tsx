@@ -67,7 +67,7 @@ const RotemDashboard: React.FC = () => {
       const data = await rotemApi.getRealTimeFarmData(farm.farm_id);
       setRealTimeData(data);
     } catch (error) {
-      logger.error('Error loading real-time data:', error);
+      console.error('Error loading real-time data:', error);
     } finally {
       setIsLoadingRealTime(false);
     }

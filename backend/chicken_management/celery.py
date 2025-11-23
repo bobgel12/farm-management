@@ -24,6 +24,16 @@ app.conf.beat_schedule = {
         'task': 'rotem_scraper.tasks.analyze_data',
         'schedule': 3600.0,  # Every hour (3600 seconds)
     },
+    # Scheduled report execution (check every hour)
+    'execute-due-scheduled-reports': {
+        'task': 'reporting.tasks.execute_due_scheduled_reports',
+        'schedule': 3600.0,  # Every hour (3600 seconds)
+    },
+    # Daily KPI calculations (run at midnight)
+    'calculate-organization-kpis-daily': {
+        'task': 'reporting.tasks.calculate_organization_kpis',
+        'schedule': crontab(hour=0, minute=0),  # Daily at midnight
+    },
 }
 
 @app.task(bind=True)

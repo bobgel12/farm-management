@@ -3,16 +3,21 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider } from './contexts/AuthContext';
+import { OrganizationProvider } from './contexts/OrganizationContext';
 import { FarmProvider } from './contexts/FarmContext';
 import { TaskProvider } from './contexts/TaskContext';
 import { WorkerProvider } from './contexts/WorkerContext';
 import { ProgramProvider } from './contexts/ProgramContext';
 import { RotemProvider } from './contexts/RotemContext';
+import { FlockProvider } from './contexts/FlockContext';
+import { AnalyticsProvider } from './contexts/AnalyticsContext';
+import { ReportingProvider } from './contexts/ReportingContext';
 import Login from './components/Login';
 import ProfessionalDashboard from './components/dashboard/ProfessionalDashboard';
 import ProfessionalFarmList from './components/farms/ProfessionalFarmList';
 import UnifiedFarmDashboard from './components/farms/UnifiedFarmDashboard';
 import HouseDetail from './components/HouseDetail';
+import HouseDetailPage from './components/houses/HouseDetailPage';
 import ProfessionalTaskList from './components/tasks/ProfessionalTaskList';
 import ProfessionalProgramManager from './components/programs/ProfessionalProgramManager';
 import ProfessionalWorkerList from './components/workers/ProfessionalWorkerList';
@@ -26,6 +31,14 @@ import RotemDashboard from './components/rotem/RotemDashboard';
 import FarmDetailPage from './components/rotem/FarmDetailPage';
 import HouseMonitoringDashboard from './components/houses/HouseMonitoringDashboard';
 import FarmHousesMonitoring from './components/houses/FarmHousesMonitoring';
+import ComparisonDashboard from './components/houses/ComparisonDashboard';
+import ProfessionalFlockList from './components/flocks/ProfessionalFlockList';
+import FlockForm from './components/flocks/FlockForm';
+import FlockDetail from './components/flocks/FlockDetail';
+import BIDashboard from './components/analytics/BIDashboard';
+import OrganizationSettings from './components/organizations/OrganizationSettings';
+import ReportList from './components/reporting/ReportList';
+import PerformanceRecordForm from './components/flocks/PerformanceRecordForm';
 import theme from './theme';
 
 function App() {
@@ -33,11 +46,15 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <FarmProvider>
-          <TaskProvider>
-            <WorkerProvider>
-              <ProgramProvider>
-                <RotemProvider>
+        <OrganizationProvider>
+          <FarmProvider>
+            <TaskProvider>
+              <WorkerProvider>
+                <ProgramProvider>
+                  <RotemProvider>
+                    <FlockProvider>
+                      <AnalyticsProvider>
+                        <ReportingProvider>
                   <Router
                     future={{
                       v7_startTransition: true,
@@ -72,14 +89,14 @@ function App() {
                 <Route path="/farms/:farmId/houses/:houseId" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
-                      <HouseDetail />
+                      <HouseDetailPage />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/houses/:houseId" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
-                      <HouseDetail />
+                      <HouseDetailPage />
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />
@@ -111,6 +128,20 @@ function App() {
                     </ProfessionalLayout>
                   </ProtectedRoute>
                 } />
+                <Route path="/houses/comparison" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <ComparisonDashboard />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/farms/:farmId/houses/comparison" element={
+                  <ProtectedRoute>
+                    <ProfessionalLayout>
+                      <ComparisonDashboard />
+                    </ProfessionalLayout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/programs" element={
                   <ProtectedRoute>
                     <ProfessionalLayout>
@@ -139,6 +170,62 @@ function App() {
                             </ProfessionalLayout>
                           </ProtectedRoute>
                         } />
+                        <Route path="/flocks" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <ProfessionalFlockList />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/flocks/new" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <FlockForm />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/flocks/:id" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <FlockDetail />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/flocks/:id/edit" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <FlockForm />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/flocks/:flockId/performance/new" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <PerformanceRecordForm />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/organization/settings" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <OrganizationSettings />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/analytics" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <BIDashboard />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/reports" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <ReportList />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
                         <Route path="/rotem" element={
                           <ProtectedRoute>
                             <ProfessionalLayout>
@@ -156,11 +243,15 @@ function App() {
                         <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
                   </Router>
-                </RotemProvider>
-              </ProgramProvider>
-            </WorkerProvider>
-          </TaskProvider>
-        </FarmProvider>
+                        </ReportingProvider>
+                      </AnalyticsProvider>
+                    </FlockProvider>
+                  </RotemProvider>
+                </ProgramProvider>
+              </WorkerProvider>
+            </TaskProvider>
+          </FarmProvider>
+        </OrganizationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

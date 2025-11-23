@@ -6,11 +6,14 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Max, Min
 from django.utils import timezone
 from datetime import timedelta, datetime
-from .models import House, HouseMonitoringSnapshot, HouseAlarm
+from .models import House, HouseMonitoringSnapshot, HouseAlarm, Device, DeviceStatus, ControlSettings, TemperatureCurve, HouseConfiguration, Sensor
 from .serializers import (
     HouseSerializer, HouseListSerializer,
     HouseMonitoringSnapshotSerializer, HouseMonitoringSummarySerializer,
-    HouseMonitoringStatsSerializer, HouseAlarmSerializer
+    HouseMonitoringStatsSerializer, HouseAlarmSerializer,
+    HouseComparisonSerializer, DeviceSerializer, DeviceStatusSerializer,
+    ControlSettingsSerializer, TemperatureCurveSerializer,
+    HouseConfigurationSerializer, SensorSerializer
 )
 from farms.models import Farm
 from tasks.task_scheduler import TaskScheduler
@@ -357,3 +360,344 @@ def farm_houses_monitoring_dashboard(request, farm_id):
         dashboard_data['houses'].append(house_data)
     
     return Response(dashboard_data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_details(request, house_id):
+    """Get comprehensive house details including monitoring, devices, flock, and feed"""
+    house = get_object_or_404(House, id=house_id)
+    
+    # Get latest snapshot
+    snapshot = house.get_latest_snapshot()
+    
+    # Get active alarms
+    active_alarms = HouseAlarm.objects.filter(house=house, is_active=True)
+    
+    # Build comprehensive response
+    details = {
+        'house': HouseSerializer(house).data,
+        'monitoring': HouseMonitoringSnapshotSerializer(snapshot).data if snapshot else None,
+        'alarms': HouseAlarmSerializer(active_alarms, many=True).data,
+        'stats': house.get_stats(days=7) if snapshot else None,
+    }
+    
+    return Response(details)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def houses_comparison(request):
+    """Get comparison data for multiple houses across farms"""
+    # Get query parameters
+    farm_id = request.query_params.get('farm_id')
+    house_ids = request.query_params.getlist('house_ids')
+    favorites_only = request.query_params.get('favorites', 'false').lower() == 'true'
+    
+    # Build queryset
+    houses = House.objects.filter(is_active=True)
+    
+    if farm_id:
+        houses = houses.filter(farm_id=farm_id)
+    
+    if house_ids:
+        houses = houses.filter(id__in=house_ids)
+    
+    # TODO: Implement favorites when user preferences are added
+    # if favorites_only:
+    #     houses = houses.filter(id__in=user_favorite_house_ids)
+    
+    # Get comparison data for each house
+    comparison_data = []
+    
+    for house in houses:
+        snapshot = house.get_latest_snapshot()
+        current_day = house.current_day
+        
+        # Determine if house is full (has chickens)
+        is_full_house = current_day is not None and current_day >= 0
+        
+        # Get ventilation mode from snapshot or default
+        ventilation_mode = None
+        if snapshot:
+            # Try to extract ventilation mode from raw_data or sensor_data
+            raw_data = snapshot.raw_data or {}
+            sensor_data = snapshot.sensor_data or {}
+            
+            # Check common ventilation mode fields
+            ventilation_mode = (
+                raw_data.get('ventilation_mode') or
+                raw_data.get('ventMode') or
+                sensor_data.get('ventilation_mode') or
+                'Minimum Vent.'  # Default
+            )
+        
+        house_comparison = {
+            'house_id': house.id,
+            'house_number': house.house_number,
+            'farm_id': house.farm.id,
+            'farm_name': house.farm.name,
+            
+            # House Status
+            'current_day': current_day,
+            'status': house.status,
+            'is_full_house': is_full_house,
+            
+            # Time
+            'last_update_time': snapshot.timestamp if snapshot else None,
+            
+            # Metrics
+            'average_temperature': snapshot.average_temperature if snapshot else None,
+            'static_pressure': snapshot.static_pressure if snapshot else None,
+            'inside_humidity': snapshot.humidity if snapshot else None,
+            'tunnel_temperature': None,  # Will be extracted from sensor_data if available
+            'outside_temperature': snapshot.outside_temperature if snapshot else None,
+            'ventilation_mode': ventilation_mode,
+            
+            # Additional status
+            'is_connected': snapshot.is_connected if snapshot else False,
+            'has_alarms': snapshot.has_alarms if snapshot else False,
+            'alarm_status': snapshot.alarm_status if snapshot else 'normal',
+        }
+        
+        # Extract tunnel temperature from sensor data if available
+        if snapshot and snapshot.sensor_data:
+            sensor_data = snapshot.sensor_data
+            # Try common field names for tunnel temperature
+            house_comparison['tunnel_temperature'] = (
+                sensor_data.get('tunnel_temperature') or
+                sensor_data.get('tunnelTemp') or
+                sensor_data.get('tunnel_temp') or
+                None
+            )
+        
+        comparison_data.append(house_comparison)
+    
+    # Sort by farm name, then house number
+    comparison_data.sort(key=lambda x: (x['farm_name'], x['house_number']))
+    
+    serializer = HouseComparisonSerializer(comparison_data, many=True)
+    return Response({
+        'count': len(serializer.data),
+        'houses': serializer.data
+    })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def house_devices(request, house_id):
+    """Get all devices for a house or create a new device"""
+    house = get_object_or_404(House, id=house_id)
+    
+    if request.method == 'GET':
+        devices = Device.objects.filter(house=house)
+        serializer = DeviceSerializer(devices, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        serializer = DeviceSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(house=house)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def device_detail(request, device_id):
+    """Get, update, or delete a specific device"""
+    device = get_object_or_404(Device, id=device_id)
+    
+    if request.method == 'GET':
+        serializer = DeviceSerializer(device)
+        return Response(serializer.data)
+    
+    elif request.method in ['PUT', 'PATCH']:
+        serializer = DeviceSerializer(device, data=request.data, partial=request.method == 'PATCH')
+        if serializer.is_valid():
+            serializer.save()
+            # Create status history record
+            DeviceStatus.objects.create(
+                device=device,
+                status=device.status,
+                percentage=device.percentage,
+                notes=f"Updated via API"
+            )
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        device.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def device_control(request, device_id):
+    """Control a device (turn on/off, set percentage, etc.)"""
+    device = get_object_or_404(Device, id=device_id)
+    
+    action = request.data.get('action')  # 'on', 'off', 'set_percentage'
+    percentage = request.data.get('percentage')
+    
+    if action == 'on':
+        device.status = 'on'
+    elif action == 'off':
+        device.status = 'off'
+    elif action == 'set_percentage' and percentage is not None:
+        device.status = 'on'
+        device.percentage = max(0, min(100, float(percentage)))
+    else:
+        return Response(
+            {'error': 'Invalid action or missing parameters'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    device.save()
+    
+    # Create status history record
+    DeviceStatus.objects.create(
+        device=device,
+        status=device.status,
+        percentage=device.percentage,
+        notes=f"Controlled via API: {action}"
+    )
+    
+    serializer = DeviceSerializer(device)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def device_status_history(request, device_id):
+    """Get status history for a device"""
+    device = get_object_or_404(Device, id=device_id)
+    
+    limit = int(request.query_params.get('limit', 100))
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+    
+    history = DeviceStatus.objects.filter(device=device)
+    
+    if start_date:
+        try:
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            history = history.filter(timestamp__gte=start_date)
+        except (ValueError, AttributeError):
+            pass
+    
+    if end_date:
+        try:
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            history = history.filter(timestamp__lte=end_date)
+        except (ValueError, AttributeError):
+            pass
+    
+    history = history[:limit]
+    serializer = DeviceStatusSerializer(history, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def house_control_settings(request, house_id):
+    """Get or update control settings for a house"""
+    house = get_object_or_404(House, id=house_id)
+    
+    # Get or create control settings
+    control_settings, created = ControlSettings.objects.get_or_create(house=house)
+    
+    if request.method == 'GET':
+        serializer = ControlSettingsSerializer(control_settings)
+        return Response(serializer.data)
+    
+    elif request.method in ['PUT', 'PATCH']:
+        serializer = ControlSettingsSerializer(
+            control_settings,
+            data=request.data,
+            partial=request.method == 'PATCH'
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def temperature_curve(request, house_id):
+    """Get or update temperature curve for a house"""
+    house = get_object_or_404(House, id=house_id)
+    control_settings, _ = ControlSettings.objects.get_or_create(house=house)
+    
+    if request.method == 'GET':
+        curves = TemperatureCurve.objects.filter(control_settings=control_settings)
+        serializer = TemperatureCurveSerializer(curves, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        # Update or create temperature curve points
+        curve_data = request.data
+        if isinstance(curve_data, list):
+            # Bulk update
+            TemperatureCurve.objects.filter(control_settings=control_settings).delete()
+            curves = []
+            for item in curve_data:
+                curve = TemperatureCurve.objects.create(
+                    control_settings=control_settings,
+                    day=item['day'],
+                    target_temperature=item['target_temperature'],
+                    notes=item.get('notes', '')
+                )
+                curves.append(curve)
+            serializer = TemperatureCurveSerializer(curves, many=True)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            # Single curve point
+            serializer = TemperatureCurveSerializer(data=curve_data)
+            if serializer.is_valid():
+                serializer.save(control_settings=control_settings)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def house_configuration(request, house_id):
+    """Get or update house configuration"""
+    house = get_object_or_404(House, id=house_id)
+    config, created = HouseConfiguration.objects.get_or_create(house=house)
+    
+    if request.method == 'GET':
+        serializer = HouseConfigurationSerializer(config)
+        return Response(serializer.data)
+    
+    elif request.method in ['PUT', 'PATCH']:
+        serializer = HouseConfigurationSerializer(
+            config,
+            data=request.data,
+            partial=request.method == 'PATCH'
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def house_sensors(request, house_id):
+    """Get or create sensors for a house"""
+    house = get_object_or_404(House, id=house_id)
+    
+    if request.method == 'GET':
+        sensors = Sensor.objects.filter(house=house)
+        serializer = SensorSerializer(sensors, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        serializer = SensorSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(house=house)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

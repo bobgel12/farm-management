@@ -85,7 +85,7 @@ const PasswordChange: React.FC<PasswordChangeProps> = ({ onSuccess, onCancel }) 
         }, 2000);
       }
     } catch (err: any) {
-      logger.error('Password change error:', err);
+      console.error('Password change error:', err);
       
       if (err.response?.status === 400) {
         setError(err.response?.data?.error || 'Invalid password or validation failed');

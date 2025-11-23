@@ -81,7 +81,7 @@ const FarmDetailPage: React.FC = () => {
       // Load real-time data
       await loadRealTimeData();
     } catch (err) {
-      logger.error('FarmDetailPage error:', err);
+      console.error('FarmDetailPage error:', err);
       setError('Failed to load farm data');
     } finally {
       setLoading(false);
@@ -96,7 +96,7 @@ const FarmDetailPage: React.FC = () => {
       const data = await rotemApi.getRealTimeFarmData(farmId);
       setRealTimeData(data);
     } catch (error) {
-      logger.error('Error loading real-time data:', error);
+      console.error('Error loading real-time data:', error);
     } finally {
       setIsLoadingRealTime(false);
     }

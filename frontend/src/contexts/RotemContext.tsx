@@ -288,7 +288,7 @@ export const RotemProvider: React.FC<RotemProviderProps> = ({ children }) => {
       const result = await rotemApi.getFarmDashboard(farmId);
       return result;
     } catch (error) {
-      logger.error('getFarmDashboard error:', error);
+      console.error('getFarmDashboard error:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load farm dashboard' });
       throw error;
     }

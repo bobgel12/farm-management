@@ -4,6 +4,16 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Farm(models.Model):
+    # Multi-tenancy
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='farms',
+        null=True,
+        blank=True,
+        help_text="Organization this farm belongs to"
+    )
+    
     # Basic farm information
     name = models.CharField(max_length=200)
     location = models.CharField(max_length=300)
@@ -217,3 +227,347 @@ class ProgramChangeLog(models.Model):
     @property
     def is_processed(self):
         return self.processed_at is not None
+
+
+class Breed(models.Model):
+    """Chicken breed information"""
+    name = models.CharField(max_length=100, unique=True, help_text="Breed name (e.g., Cobb 500, Ross 308)")
+    code = models.CharField(max_length=50, unique=True, help_text="Breed code/identifier")
+    description = models.TextField(blank=True, help_text="Breed description and characteristics")
+    
+    # Breed characteristics
+    average_weight_gain_per_week = models.FloatField(
+        null=True, blank=True,
+        help_text="Average weight gain per week in grams"
+    )
+    average_feed_conversion_ratio = models.FloatField(
+        null=True, blank=True,
+        help_text="Average FCR (Feed Conversion Ratio)"
+    )
+    average_mortality_rate = models.FloatField(
+        null=True, blank=True,
+        help_text="Average mortality rate as percentage (0-100)"
+    )
+    typical_harvest_age_days = models.IntegerField(
+        null=True, blank=True,
+        help_text="Typical harvest age in days"
+    )
+    typical_harvest_weight_grams = models.FloatField(
+        null=True, blank=True,
+        help_text="Typical harvest weight in grams"
+    )
+    
+    # Metadata
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Breed'
+        verbose_name_plural = 'Breeds'
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return self.name
+
+
+class Flock(models.Model):
+    """Flock/Batch tracking for houses"""
+    FLOCK_STATUS_CHOICES = [
+        ('setup', 'Setup'),
+        ('arrival', 'Arrival'),
+        ('growing', 'Growing'),
+        ('production', 'Production'),
+        ('harvesting', 'Harvesting'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    # Relationships
+    house = models.ForeignKey(
+        'houses.House',
+        on_delete=models.CASCADE,
+        related_name='flocks',
+        help_text="House where this flock is located"
+    )
+    breed = models.ForeignKey(
+        Breed,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flocks',
+        help_text="Breed of chickens in this flock"
+    )
+    
+    # Flock identification
+    batch_number = models.CharField(max_length=100, help_text="Batch/flock number")
+    flock_code = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Unique flock identifier code"
+    )
+    
+    # Dates
+    arrival_date = models.DateField(help_text="Date chickens arrived at the house")
+    expected_harvest_date = models.DateField(null=True, blank=True, help_text="Expected harvest date")
+    actual_harvest_date = models.DateField(null=True, blank=True, help_text="Actual harvest date")
+    start_date = models.DateField(null=True, blank=True, help_text="Flock start date")
+    end_date = models.DateField(null=True, blank=True, help_text="Flock end date")
+    
+    # Initial counts
+    initial_chicken_count = models.IntegerField(
+        help_text="Initial number of chickens placed"
+    )
+    current_chicken_count = models.IntegerField(
+        null=True, blank=True,
+        help_text="Current number of chickens (updated over time)"
+    )
+    
+    # Flock status
+    status = models.CharField(
+        max_length=20,
+        choices=FLOCK_STATUS_CHOICES,
+        default='setup',
+        help_text="Current flock status"
+    )
+    is_active = models.BooleanField(default=True, help_text="Whether this flock is currently active")
+    
+    # Additional metadata
+    supplier = models.CharField(max_length=200, blank=True, help_text="Chicken supplier name")
+    notes = models.TextField(blank=True, help_text="Additional notes about this flock")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_flocks'
+    )
+    
+    class Meta:
+        ordering = ['-arrival_date', 'batch_number']
+        verbose_name = 'Flock'
+        verbose_name_plural = 'Flocks'
+        unique_together = ['house', 'batch_number']
+        indexes = [
+            models.Index(fields=['flock_code']),
+            models.Index(fields=['house', '-arrival_date']),
+            models.Index(fields=['status', 'is_active']),
+            models.Index(fields=['breed', '-arrival_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.house} - {self.batch_number} ({self.arrival_date})"
+    
+    @property
+    def current_age_days(self):
+        """Calculate current flock age in days"""
+        from django.utils import timezone
+        if not self.arrival_date:
+            return None
+        
+        today = timezone.now().date()
+        if self.end_date and today > self.end_date:
+            return None  # Flock is completed
+        
+        return (today - self.arrival_date).days
+    
+    @property
+    def days_until_harvest(self):
+        """Calculate days until expected harvest"""
+        if not self.expected_harvest_date:
+            return None
+        
+        from django.utils import timezone
+        today = timezone.now().date()
+        if today > self.expected_harvest_date:
+            return 0
+        
+        return (self.expected_harvest_date - today).days
+    
+    @property
+    def mortality_count(self):
+        """Calculate total mortality"""
+        if not self.current_chicken_count:
+            return None
+        return self.initial_chicken_count - self.current_chicken_count
+    
+    @property
+    def mortality_rate(self):
+        """Calculate mortality rate as percentage"""
+        mortality = self.mortality_count
+        if mortality is None or self.initial_chicken_count == 0:
+            return None
+        return (mortality / self.initial_chicken_count) * 100
+    
+    @property
+    def livability(self):
+        """Calculate livability percentage"""
+        mortality_rate = self.mortality_rate
+        if mortality_rate is None:
+            return None
+        return 100 - mortality_rate
+
+
+class FlockPerformance(models.Model):
+    """Performance metrics for a flock at a specific point in time"""
+    flock = models.ForeignKey(
+        Flock,
+        on_delete=models.CASCADE,
+        related_name='performance_records',
+        help_text="Flock this performance record belongs to"
+    )
+    
+    # Date and age
+    record_date = models.DateField(help_text="Date of this performance record")
+    flock_age_days = models.IntegerField(help_text="Flock age in days at record date")
+    
+    # Weight metrics
+    average_weight_grams = models.FloatField(
+        null=True, blank=True,
+        help_text="Average weight per chicken in grams"
+    )
+    total_weight_kg = models.FloatField(
+        null=True, blank=True,
+        help_text="Total flock weight in kg"
+    )
+    
+    # Feed metrics
+    feed_consumed_kg = models.FloatField(
+        null=True, blank=True,
+        help_text="Total feed consumed in kg (cumulative or for period)"
+    )
+    daily_feed_consumption_kg = models.FloatField(
+        null=True, blank=True,
+        help_text="Daily feed consumption in kg"
+    )
+    feed_conversion_ratio = models.FloatField(
+        null=True, blank=True,
+        help_text="Feed Conversion Ratio (FCR)"
+    )
+    
+    # Water metrics
+    daily_water_consumption_liters = models.FloatField(
+        null=True, blank=True,
+        help_text="Daily water consumption in liters"
+    )
+    
+    # Counts
+    current_chicken_count = models.IntegerField(
+        help_text="Current number of chickens"
+    )
+    mortality_count = models.IntegerField(
+        default=0,
+        help_text="Number of deaths (cumulative or for period)"
+    )
+    
+    # Health metrics
+    mortality_rate = models.FloatField(
+        null=True, blank=True,
+        help_text="Mortality rate as percentage"
+    )
+    livability = models.FloatField(
+        null=True, blank=True,
+        help_text="Livability percentage"
+    )
+    
+    # Environmental metrics (if available)
+    average_temperature = models.FloatField(null=True, blank=True)
+    average_humidity = models.FloatField(null=True, blank=True)
+    
+    # Additional notes
+    notes = models.TextField(blank=True, help_text="Additional notes for this record")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    recorded_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recorded_flock_performance'
+    )
+    
+    class Meta:
+        ordering = ['flock', 'record_date', 'flock_age_days']
+        verbose_name = 'Flock Performance'
+        verbose_name_plural = 'Flock Performance Records'
+        unique_together = ['flock', 'record_date', 'flock_age_days']
+        indexes = [
+            models.Index(fields=['flock', '-record_date']),
+            models.Index(fields=['flock', 'flock_age_days']),
+            models.Index(fields=['record_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.flock} - Day {self.flock_age_days} ({self.record_date})"
+    
+    def calculate_fcr(self):
+        """Calculate FCR if data is available"""
+        if self.feed_consumed_kg and self.total_weight_kg and self.total_weight_kg > 0:
+            # FCR = Feed consumed / Weight gain
+            # Weight gain = Total weight - initial weight
+            # For simplicity, we'll calculate based on total weight
+            # More accurate would be to track weight gain
+            pass  # FCR calculation can be complex, handle in service layer
+    
+    def save(self, *args, **kwargs):
+        """Calculate derived metrics before saving"""
+        # Calculate mortality rate if possible
+        if self.flock and self.current_chicken_count:
+            initial_count = self.flock.initial_chicken_count
+            if initial_count > 0:
+                self.mortality_rate = ((initial_count - self.current_chicken_count) / initial_count) * 100
+                self.livability = 100 - self.mortality_rate
+        
+        super().save(*args, **kwargs)
+
+
+class FlockComparison(models.Model):
+    """Saved comparison between multiple flocks"""
+    name = models.CharField(max_length=200, help_text="Comparison name")
+    description = models.TextField(blank=True)
+    
+    # Flocks being compared
+    flocks = models.ManyToManyField(
+        Flock,
+        related_name='comparisons',
+        help_text="Flocks included in this comparison"
+    )
+    
+    # Comparison criteria
+    comparison_metrics = models.JSONField(
+        default=list,
+        help_text="List of metrics to compare (e.g., ['fcr', 'mortality_rate', 'weight_gain'])"
+    )
+    
+    # Results (cached)
+    comparison_results = models.JSONField(
+        null=True, blank=True,
+        help_text="Cached comparison results"
+    )
+    
+    # Metadata
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='flock_comparisons'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Flock Comparison'
+        verbose_name_plural = 'Flock Comparisons'
+    
+    def __str__(self):
+        return f"{self.name} ({self.flocks.count()} flocks)"

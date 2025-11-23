@@ -153,14 +153,6 @@ const FarmHousesSection: React.FC<FarmHousesSectionProps> = ({
                     </Typography>
                   )}
                   
-                  {!house.is_active && (
-                    <Chip
-                      label="Inactive"
-                      color="default"
-                      size="small"
-                      sx={{ mt: 1 }}
-                    />
-                  )}
                 </CardContent>
               </Card>
             </Grid>
