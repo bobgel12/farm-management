@@ -97,3 +97,5 @@ settings.local.py
 # Cache
 .cache/
 *.cache
+backend/chicken_management/settings_prod.py
+backend/chicken_management/settings_prod.py

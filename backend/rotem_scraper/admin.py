@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import RotemFarm, RotemUser, RotemController, RotemDataPoint, RotemScrapeLog, MLPrediction, MLModel
+from .models import RotemFarm, RotemUser, RotemController, RotemDataPoint, RotemScrapeLog, MLPrediction, MLModel, RotemDailySummary
 
 
 @admin.register(RotemFarm)
@@ -52,3 +52,12 @@ class MLModelAdmin(admin.ModelAdmin):
     list_display = ['name', 'version', 'model_type', 'is_active', 'accuracy_score', 'last_trained']
     list_filter = ['is_active', 'model_type', 'created_at']
     search_fields = ['name', 'version']
+
+
+@admin.register(RotemDailySummary)
+class RotemDailySummaryAdmin(admin.ModelAdmin):
+    list_display = ['controller', 'date', 'total_data_points', 'temperature_avg', 'humidity_avg', 'anomalies_count', 'created_at']
+    list_filter = ['date', 'created_at']
+    search_fields = ['controller__controller_name']
+    date_hierarchy = 'date'
+    readonly_fields = ['created_at', 'updated_at']

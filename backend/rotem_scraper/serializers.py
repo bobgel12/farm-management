@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog
+from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog, RotemDailySummary
 
 
 class RotemDataPointSerializer(serializers.ModelSerializer):
@@ -59,3 +59,22 @@ class MLModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = MLModel
         fields = ['id', 'name', 'version', 'model_type', 'is_active', 'accuracy_score', 'training_data_size', 'last_trained', 'created_at']
+
+
+class RotemDailySummarySerializer(serializers.ModelSerializer):
+    controller_name = serializers.CharField(source='controller.controller_name', read_only=True)
+    farm_name = serializers.CharField(source='controller.farm.farm_name', read_only=True)
+    
+    class Meta:
+        model = RotemDailySummary
+        fields = [
+            'id', 'controller', 'controller_name', 'farm_name', 'date',
+            'temperature_avg', 'temperature_min', 'temperature_max', 'temperature_data_points',
+            'humidity_avg', 'humidity_min', 'humidity_max', 'humidity_data_points',
+            'static_pressure_avg', 'static_pressure_min', 'static_pressure_max', 'static_pressure_data_points',
+            'wind_speed_avg', 'wind_speed_min', 'wind_speed_max', 'wind_speed_data_points',
+            'water_consumption_avg', 'water_consumption_min', 'water_consumption_max', 'water_consumption_data_points',
+            'feed_consumption_avg', 'feed_consumption_min', 'feed_consumption_max', 'feed_consumption_data_points',
+            'anomalies_count', 'warnings_count', 'errors_count', 'total_data_points',
+            'created_at', 'updated_at'
+        ]

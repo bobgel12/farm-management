@@ -156,3 +156,72 @@ class MLModel(models.Model):
     class Meta:
         verbose_name = "ML Model"
         verbose_name_plural = "ML Models"
+
+
+class RotemDailySummary(models.Model):
+    """
+    Daily aggregated metrics per controller for efficient analytics and ML training.
+    This model stores daily summaries to reduce storage requirements and improve query performance.
+    """
+    controller = models.ForeignKey(RotemController, on_delete=models.CASCADE, related_name='daily_summaries')
+    date = models.DateField()
+    
+    # Temperature metrics (Celsius)
+    temperature_avg = models.FloatField(null=True, blank=True)
+    temperature_min = models.FloatField(null=True, blank=True)
+    temperature_max = models.FloatField(null=True, blank=True)
+    temperature_data_points = models.IntegerField(default=0)
+    
+    # Humidity metrics (%)
+    humidity_avg = models.FloatField(null=True, blank=True)
+    humidity_min = models.FloatField(null=True, blank=True)
+    humidity_max = models.FloatField(null=True, blank=True)
+    humidity_data_points = models.IntegerField(default=0)
+    
+    # Static pressure metrics (Pa)
+    static_pressure_avg = models.FloatField(null=True, blank=True)
+    static_pressure_min = models.FloatField(null=True, blank=True)
+    static_pressure_max = models.FloatField(null=True, blank=True)
+    static_pressure_data_points = models.IntegerField(default=0)
+    
+    # Wind speed metrics (m/s)
+    wind_speed_avg = models.FloatField(null=True, blank=True)
+    wind_speed_min = models.FloatField(null=True, blank=True)
+    wind_speed_max = models.FloatField(null=True, blank=True)
+    wind_speed_data_points = models.IntegerField(default=0)
+    
+    # Water consumption metrics (L/h)
+    water_consumption_avg = models.FloatField(null=True, blank=True)
+    water_consumption_min = models.FloatField(null=True, blank=True)
+    water_consumption_max = models.FloatField(null=True, blank=True)
+    water_consumption_data_points = models.IntegerField(default=0)
+    
+    # Feed consumption metrics (kg/h)
+    feed_consumption_avg = models.FloatField(null=True, blank=True)
+    feed_consumption_min = models.FloatField(null=True, blank=True)
+    feed_consumption_max = models.FloatField(null=True, blank=True)
+    feed_consumption_data_points = models.IntegerField(default=0)
+    
+    # Quality metrics
+    anomalies_count = models.IntegerField(default=0)  # Number of data points with quality='error' or 'warning'
+    warnings_count = models.IntegerField(default=0)  # Number of data points with quality='warning'
+    errors_count = models.IntegerField(default=0)  # Number of data points with quality='error'
+    total_data_points = models.IntegerField(default=0)  # Total data points aggregated
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['controller', 'date']
+        indexes = [
+            models.Index(fields=['controller', 'date']),
+            models.Index(fields=['date']),
+            models.Index(fields=['controller', '-date']),
+        ]
+        verbose_name = "Rotem Daily Summary"
+        verbose_name_plural = "Rotem Daily Summaries"
+        ordering = ['-date', 'controller']
+    
+    def __str__(self):
+        return f"{self.controller.controller_name} - {self.date} (Data Points: {self.total_data_points})"

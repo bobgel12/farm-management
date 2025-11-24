@@ -14,5 +14,6 @@ urlpatterns = [
     path('recurring-tasks/<int:pk>/', views.RecurringTaskDetailView.as_view(), name='recurring-task-detail'),
     path('tasks/send-test-email/', views.send_test_email, name='send-test-email'),
     path('tasks/send-daily-tasks/', views.send_daily_tasks, name='send-daily-tasks'),
+    path('tasks/trigger-daily-emails/', views.trigger_daily_emails, name='trigger-daily-emails'),
     path('tasks/email-history/', views.email_history, name='email-history'),
 ]

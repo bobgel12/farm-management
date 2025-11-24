@@ -369,7 +369,7 @@ class FarmViewSet(ModelViewSet):
                     program = Program.objects.get(is_default=True, is_active=True)
                 except Program.DoesNotExist:
                     IntegrationError.objects.create(
-                        farm=farm,
+                    farm=farm,
                         integration_type='rotem',
                         error_type='task_generation',
                         error_message=f'Cannot generate tasks for house {house.house_number}: farm has no program assigned and no default program exists',

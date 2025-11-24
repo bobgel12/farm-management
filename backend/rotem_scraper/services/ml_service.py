@@ -11,7 +11,7 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
 import logging
-from ..models import RotemDataPoint, MLPrediction, MLModel, RotemController
+from ..models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemDailySummary
 import json
 
 logger = logging.getLogger(__name__)
@@ -467,16 +467,77 @@ class MLAnalysisService:
     def train_models(self):
         """Train and save ML models for future use"""
         try:
-            # Get historical data for training
-            training_data = RotemDataPoint.objects.filter(
-                timestamp__gte=timezone.now() - timedelta(days=30)
-            ).values('data_type', 'value', 'quality', 'timestamp')
+            # Try to use aggregated data first (more efficient)
+            use_aggregated = True
+            training_data = None
+            
+            # Check if we have aggregated summaries for the last 30 days
+            cutoff_date = timezone.now().date() - timedelta(days=30)
+            summary_count = RotemDailySummary.objects.filter(date__gte=cutoff_date).count()
+            
+            if summary_count >= 30:  # At least 30 days of aggregated data
+                logger.info("Using aggregated daily summaries for model training")
+                summaries = RotemDailySummary.objects.filter(
+                    date__gte=cutoff_date
+                ).select_related('controller')
+                
+                # Convert summaries to training format
+                training_records = []
+                for summary in summaries:
+                    # Use average values as representative data points
+                    if summary.temperature_avg is not None:
+                        training_records.append({
+                            'data_type': 'temperature',
+                            'value': summary.temperature_avg,
+                            'quality': 'good' if summary.anomalies_count == 0 else 'warning',
+                            'timestamp': timezone.make_aware(
+                                timezone.datetime.combine(summary.date, timezone.datetime.min.time())
+                            ),
+                            'controller_id': summary.controller.id,
+                        })
+                    if summary.humidity_avg is not None:
+                        training_records.append({
+                            'data_type': 'humidity',
+                            'value': summary.humidity_avg,
+                            'quality': 'good' if summary.anomalies_count == 0 else 'warning',
+                            'timestamp': timezone.make_aware(
+                                timezone.datetime.combine(summary.date, timezone.datetime.min.time())
+                            ),
+                            'controller_id': summary.controller.id,
+                        })
+                    if summary.static_pressure_avg is not None:
+                        training_records.append({
+                            'data_type': 'static_pressure',
+                            'value': summary.static_pressure_avg,
+                            'quality': 'good' if summary.anomalies_count == 0 else 'warning',
+                            'timestamp': timezone.make_aware(
+                                timezone.datetime.combine(summary.date, timezone.datetime.min.time())
+                            ),
+                            'controller_id': summary.controller.id,
+                        })
+                
+                training_data = training_records
+                logger.info(f"Using {len(training_records)} aggregated data points for training")
+            else:
+                use_aggregated = False
+                logger.info("Insufficient aggregated data, falling back to raw data points")
+            
+            # Fallback to raw data points if aggregated data is insufficient
+            if not use_aggregated or len(training_data) < 1000:
+                logger.info("Fetching raw data points for training")
+                training_data = RotemDataPoint.objects.filter(
+                    timestamp__gte=timezone.now() - timedelta(days=30)
+                ).values('data_type', 'value', 'quality', 'timestamp', 'controller_id')
             
             if len(training_data) < 1000:
                 logger.warning("Insufficient data for model training")
                 return False
             
-            df = pd.DataFrame(list(training_data))
+            # Convert to DataFrame
+            if isinstance(training_data, list):
+                df = pd.DataFrame(training_data)
+            else:
+                df = pd.DataFrame(list(training_data))
             
             # Train anomaly detection model
             self._train_anomaly_model(df)

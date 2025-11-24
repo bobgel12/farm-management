@@ -62,6 +62,44 @@ export interface RotemScrapeLog {
   created_at: string;
 }
 
+export interface RotemDailySummary {
+  id: number;
+  controller: number;
+  controller_name: string;
+  farm_name: string;
+  date: string;
+  temperature_avg: number | null;
+  temperature_min: number | null;
+  temperature_max: number | null;
+  temperature_data_points: number;
+  humidity_avg: number | null;
+  humidity_min: number | null;
+  humidity_max: number | null;
+  humidity_data_points: number;
+  static_pressure_avg: number | null;
+  static_pressure_min: number | null;
+  static_pressure_max: number | null;
+  static_pressure_data_points: number;
+  wind_speed_avg: number | null;
+  wind_speed_min: number | null;
+  wind_speed_max: number | null;
+  wind_speed_data_points: number;
+  water_consumption_avg: number | null;
+  water_consumption_min: number | null;
+  water_consumption_max: number | null;
+  water_consumption_data_points: number;
+  feed_consumption_avg: number | null;
+  feed_consumption_min: number | null;
+  feed_consumption_max: number | null;
+  feed_consumption_data_points: number;
+  anomalies_count: number;
+  warnings_count: number;
+  errors_count: number;
+  total_data_points: number;
+  created_at: string;
+  updated_at: string;
+}
+
 
 export interface MLModel {
   id: number;

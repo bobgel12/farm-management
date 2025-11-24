@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     RotemDataViewSet, MLPredictionViewSet, MLModelViewSet, RotemControllerViewSet,
-    RotemFarmViewSet, RotemUserViewSet, RotemScrapeLogViewSet, RotemScraperViewSet
+    RotemFarmViewSet, RotemUserViewSet, RotemScrapeLogViewSet, RotemScraperViewSet,
+    RotemDailySummaryViewSet, trigger_daily_scrape
 )
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
@@ -19,6 +20,7 @@ router.register(r'farms', RotemFarmViewSet, basename='rotem-farm')
 router.register(r'users', RotemUserViewSet)
 router.register(r'logs', RotemScrapeLogViewSet)
 router.register(r'scraper', RotemScraperViewSet, basename='scraper')
+router.register(r'daily-summaries', RotemDailySummaryViewSet, basename='daily-summaries')
 
 @api_view(['GET'])
 def farm_detail(request, farm_id):
@@ -33,5 +35,7 @@ def farm_detail(request, farm_id):
 urlpatterns = [
     # Simple test endpoint - put this BEFORE router to take precedence
     path('farms/<str:farm_id>/', farm_detail, name='farm-detail-test'),
+    # Daily data collection trigger endpoint
+    path('trigger-daily-scrape/', trigger_daily_scrape, name='trigger-daily-scrape'),
     path('', include(router.urls)),
 ]

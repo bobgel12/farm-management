@@ -13,7 +13,11 @@
   "cron": {
     "daily-tasks": {
       "schedule": "0 21 * * *",
-      "command": "python manage.py send_daily_tasks"
+      "command": "cd /app && python manage.py send_daily_tasks"
+    },
+    "daily-rotem-scrape": {
+      "schedule": "0 2 * * *",
+      "command": "cd /app && python manage.py collect_rotem_data_daily"
     }
   },
   "services": {

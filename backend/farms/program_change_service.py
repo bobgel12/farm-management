@@ -250,7 +250,7 @@ class ProgramChangeService:
             user_choice__isnull=True,
             processed_at__isnull=True
         ).order_by('-created_at')
-    
+
     @staticmethod
     def regenerate_tasks_for_farm(farm: Farm, force_regenerate: bool = True) -> bool:
         """Regenerate tasks for all active houses in a farm when program changes"""

@@ -1,12 +1,13 @@
 from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog
+from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog, RotemDailySummary
 from .serializers import (
     RotemDataPointSerializer, MLPredictionSerializer, MLModelSerializer, RotemControllerSerializer,
-    RotemFarmSerializer, RotemUserSerializer, RotemScrapeLogSerializer
+    RotemFarmSerializer, RotemUserSerializer, RotemScrapeLogSerializer, RotemDailySummarySerializer
 )
 from .services.scraper_service import DjangoRotemScraperService
 from .services.ml_service import MLAnalysisService
@@ -391,3 +392,161 @@ class MLModelViewSet(viewsets.ReadOnlyModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, 
                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])  # Allow external cron services to trigger
+def trigger_daily_scrape(request):
+    """
+    API endpoint to trigger daily Rotem data collection.
+    Can be called by external cron services (cron-job.org, EasyCron, etc.)
+    
+    Optional query parameters:
+    - farm_id: Collect data for specific farm only (optional)
+    
+    Optional header for security:
+    - X-Cron-Secret: Secret token to authenticate cron requests (if CRON_SECRET is set in settings)
+    """
+    from django.conf import settings
+    
+    # Optional secret token authentication for cron services
+    cron_secret = request.headers.get('X-Cron-Secret')
+    expected_secret = getattr(settings, 'CRON_SECRET', None)
+    
+    if expected_secret and cron_secret != expected_secret:
+        return Response(
+            {'error': 'Invalid or missing cron secret token'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    farm_id = request.data.get('farm_id') or request.query_params.get('farm_id')
+    
+    try:
+        service = DjangoRotemScraperService(farm_id=farm_id if farm_id else None)
+        
+        if farm_id:
+            # Scrape specific farm
+            scrape_log = service.scrape_and_save_data()
+            
+            return Response({
+                'status': 'success',
+                'message': f'Data collection completed for farm {farm_id}',
+                'scrape_status': scrape_log.status,
+                'data_points_collected': scrape_log.data_points_collected,
+                'completed_at': scrape_log.completed_at.isoformat() if scrape_log.completed_at else None,
+                'error_message': scrape_log.error_message if scrape_log.status != 'success' else None
+            })
+        else:
+            # Scrape all farms
+            results = service.scrape_all_farms()
+            successful_farms = [r for r in results if r.get('status') == 'success']
+            total_data_points = sum(r.get('data_points_collected', 0) for r in results)
+            
+            return Response({
+                'status': 'success',
+                'message': f'Data collection completed for {len(successful_farms)} farms',
+                'total_farms': len(results),
+                'successful_farms': len(successful_farms),
+                'total_data_points_collected': total_data_points,
+                'results': results
+            })
+    except Exception as e:
+        return Response(
+            {'status': 'error', 'error': f'Failed to collect Rotem data: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for daily aggregated Rotem data summaries"""
+    queryset = RotemDailySummary.objects.all()
+    serializer_class = RotemDailySummarySerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['controller', 'date']
+    search_fields = ['controller__controller_name', 'controller__farm__farm_name']
+    ordering_fields = ['date', 'total_data_points']
+    ordering = ['-date']
+    
+    def get_queryset(self):
+        """Filter queryset based on query parameters"""
+        queryset = super().get_queryset()
+        
+        # Filter by farm_id if provided
+        farm_id = self.request.query_params.get('farm_id')
+        if farm_id:
+            try:
+                farm = RotemFarm.objects.get(farm_id=farm_id)
+                controllers = farm.controllers.all()
+                queryset = queryset.filter(controller__in=controllers)
+            except RotemFarm.DoesNotExist:
+                queryset = queryset.none()
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        
+        # Filter by controller_id if provided
+        controller_id = self.request.query_params.get('controller_id')
+        if controller_id:
+            queryset = queryset.filter(controller_id=controller_id)
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def by_farm(self, request):
+        """Get daily summaries for a specific farm"""
+        farm_id = request.query_params.get('farm_id')
+        if not farm_id:
+            return Response(
+                {'error': 'farm_id parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            farm = RotemFarm.objects.get(farm_id=farm_id)
+            controllers = farm.controllers.all()
+            summaries = RotemDailySummary.objects.filter(
+                controller__in=controllers
+            ).order_by('-date')
+            
+            serializer = self.get_serializer(summaries, many=True)
+            return Response(serializer.data)
+        except RotemFarm.DoesNotExist:
+            return Response(
+                {'error': 'Farm not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=False, methods=['get'])
+    def by_controller(self, request):
+        """Get daily summaries for a specific controller"""
+        controller_id = request.query_params.get('controller_id')
+        if not controller_id:
+            return Response(
+                {'error': 'controller_id parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        summaries = RotemDailySummary.objects.filter(
+            controller_id=controller_id
+        ).order_by('-date')
+        
+        serializer = self.get_serializer(summaries, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        """Get recent daily summaries (last 30 days)"""
+        days = int(request.query_params.get('days', 30))
+        cutoff_date = timezone.now().date() - timedelta(days=days)
+        
+        summaries = RotemDailySummary.objects.filter(
+            date__gte=cutoff_date
+        ).order_by('-date')
+        
+        serializer = self.get_serializer(summaries, many=True)
+        return Response(serializer.data)

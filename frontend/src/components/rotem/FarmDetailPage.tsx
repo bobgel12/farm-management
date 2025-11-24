@@ -32,6 +32,7 @@ import FarmInfoCard from './FarmInfoCard';
 import ControllerStatusCard from './ControllerStatusCard';
 import RealTimeSensorCard from './RealTimeSensorCard';
 import TemperatureSensorsCard from './TemperatureSensorsCard';
+import HistoricalDataView from './HistoricalDataView';
 import { rotemApi } from '../../services/rotemApi';
 import logger from '../../utils/logger';
 
@@ -224,6 +225,7 @@ const FarmDetailPage: React.FC = () => {
           <Tab label="Overview" />
           <Tab label="Real-Time Data" />
           <Tab label="Sensor Data" />
+          <Tab label="Historical Data" />
           <Tab label="Controllers" />
           <Tab label="Settings" />
         </Tabs>
@@ -307,6 +309,10 @@ const FarmDetailPage: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={tabValue} index={3}>
+        <HistoricalDataView />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={4}>
         <Grid container spacing={2}>
           {controllers.map((controller) => (
             <Grid item xs={12} sm={6} md={4} key={controller.id}>
@@ -340,7 +346,7 @@ const FarmDetailPage: React.FC = () => {
         </Grid>
       </TabPanel>
 
-      <TabPanel value={tabValue} index={4}>
+      <TabPanel value={tabValue} index={5}>
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>

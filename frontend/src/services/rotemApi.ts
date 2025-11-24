@@ -5,6 +5,7 @@ import {
   RotemController,
   RotemDataPoint,
   RotemScrapeLog,
+  RotemDailySummary,
   MLPrediction,
   MLModel,
   MLSummary,
@@ -461,6 +462,51 @@ class RotemApiService {
 
   async runMLAnalysis(): Promise<{ message: string; task_id: string }> {
     const response = await axios.post(`${this.baseURL}/rotem/ml-models/run_analysis/`, {}, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  // Daily Summaries (Historical Data)
+  async getDailySummaries(params?: {
+    farm_id?: string;
+    controller_id?: number;
+    start_date?: string;
+    end_date?: string;
+    days?: number;
+  }): Promise<RotemDailySummary[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.farm_id) queryParams.append('farm_id', params.farm_id);
+    if (params?.controller_id) queryParams.append('controller_id', params.controller_id.toString());
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const url = params?.days 
+      ? `${this.baseURL}/rotem/daily-summaries/recent/?days=${params.days}`
+      : `${this.baseURL}/rotem/daily-summaries/?${queryParams.toString()}`;
+    
+    const response = await axios.get(url, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data.results || response.data;
+  }
+
+  async getDailySummariesByFarm(farmId: string): Promise<RotemDailySummary[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/daily-summaries/by_farm/?farm_id=${farmId}`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getDailySummariesByController(controllerId: number): Promise<RotemDailySummary[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/daily-summaries/by_controller/?controller_id=${controllerId}`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getRecentDailySummaries(days: number = 30): Promise<RotemDailySummary[]> {
+    const response = await axios.get(`${this.baseURL}/rotem/daily-summaries/recent/?days=${days}`, {
       headers: this.getAuthHeaders()
     });
     return response.data;

@@ -1,5 +1,6 @@
 from rest_framework import generics, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
@@ -261,3 +262,59 @@ def email_history(request):
         })
     
     return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])  # Allow external cron services to trigger
+def trigger_daily_emails(request):
+    """
+    API endpoint to trigger daily task email sending.
+    Can be called by external cron services (cron-job.org, EasyCron, etc.)
+    
+    Optional query parameters:
+    - force: Force resend even if already sent today (default: False)
+    - farm_id: Send for specific farm only (optional)
+    
+    Optional header for security:
+    - X-Cron-Secret: Secret token to authenticate cron requests (if CRON_SECRET is set in settings)
+    """
+    import os
+    from django.conf import settings
+    
+    # Optional secret token authentication for cron services
+    cron_secret = request.headers.get('X-Cron-Secret')
+    expected_secret = getattr(settings, 'CRON_SECRET', None)
+    
+    if expected_secret and cron_secret != expected_secret:
+        return Response(
+            {'error': 'Invalid or missing cron secret token'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    force = request.data.get('force', False) or request.query_params.get('force', 'false').lower() == 'true'
+    farm_id = request.data.get('farm_id') or request.query_params.get('farm_id')
+    
+    try:
+        if farm_id:
+            from farms.models import Farm
+            farm = Farm.objects.get(id=farm_id)
+            sent_count, message = TaskEmailService.send_farm_task_reminders(farm, force=force)
+            
+            return Response({
+                'status': 'success',
+                'message': message,
+                'sent_count': sent_count,
+                'farm_id': farm_id
+            })
+        else:
+            sent_count = TaskEmailService.send_daily_task_reminders(force=force)
+            return Response({
+                'status': 'success',
+                'message': f'Successfully sent {sent_count} daily task reminder emails',
+                'sent_count': sent_count
+            })
+    except Exception as e:
+        return Response(
+            {'status': 'error', 'error': f'Failed to send daily task emails: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
