@@ -25,6 +25,10 @@ import {
   ListItemText,
   ListItemIcon,
   Divider,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   Settings,
@@ -201,6 +205,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
 }) => {
   const { farmId } = useParams<{ farmId: string }>();
   const navigate = useNavigate();
+  const { programs, fetchPrograms } = useProgram();
   const [farm, setFarm] = useState<Farm | null>(propFarm || null);
   const [loading, setLoading] = useState(!propFarm);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +217,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generateMessage, setGenerateMessage] = useState<string | null>(null);
+  const [selectedProgramId, setSelectedProgramId] = useState<number | null>(null);
   const [houseSensorData, setHouseSensorData] = useState<{[key: string]: HouseSensorData}>({});
   const [mlPredictions, setMlPredictions] = useState<MLPrediction[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -225,6 +231,18 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farmId, propFarm]);
+
+  useEffect(() => {
+    // Fetch programs when dialog opens
+    if (generateDialogOpen && programs.length === 0) {
+      fetchPrograms();
+    }
+    // Set initial program selection from farm
+    if (generateDialogOpen && farm) {
+      const currentProgramId = (farm as any).program_id || (farm as any).program?.id || null;
+      setSelectedProgramId(currentProgramId);
+    }
+  }, [generateDialogOpen, farm, programs.length, fetchPrograms]);
 
   useEffect(() => {
     if (farm?.has_system_integration) {
@@ -386,22 +404,31 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const handleGenerateHousesAndTasks = async () => {
     if (!farm) return;
     
-    // Check if farm has a program assigned
-    const farmProgramId = (farm as any).program_id || (farm as any).program?.id;
-    if (!farmProgramId) {
-      setGenerateMessage('Please select a program in the Configuration dialog before generating tasks.');
-      setGenerateDialogOpen(false);
-      setIntegrationDialogOpen(true); // Open integration dialog to select program
+    // Check if a program is selected
+    if (!selectedProgramId) {
+      setGenerateMessage('Please select a program before generating tasks.');
       return;
     }
     
     setGenerating(true);
     try {
+      // First, save the program to the farm
+      try {
+        await api.patch(`/farms/${farm.id}/`, {
+          program: selectedProgramId
+        });
+        console.log('Program saved to farm');
+      } catch (error) {
+        console.error('Failed to save program to farm:', error);
+        // Continue anyway - the sync_data endpoint can also accept program_id
+      }
+      
       const token = localStorage.getItem('authToken');
       if (!token) {
         throw new Error('No authentication token found');
       }
       
+      // Generate houses and tasks with the selected program
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8002/api'}/farms/${farm.id}/sync_data/`, {
         method: 'POST',
         headers: {
@@ -409,7 +436,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          force_regenerate: false, // Set to true if you want to regenerate existing tasks
+          force_regenerate: false,
+          program_id: selectedProgramId, // Pass program_id in the request
         }),
       });
       
@@ -419,9 +447,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         
         // Check if error is about missing program
         if (errorData?.requires_program_selection) {
-          setGenerateMessage('A program must be selected before generating tasks. Please configure the farm first.');
-          setGenerateDialogOpen(false);
-          setIntegrationDialogOpen(true);
+          setGenerateMessage('A program must be selected before generating tasks.');
           return;
         }
         
@@ -429,13 +455,14 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       }
       
       const result = await response.json();
-      const programName = result.program_used || (farm as any).program?.name || 'selected program';
+      const selectedProgram = programs.find(p => p.id === selectedProgramId);
+      const programName = selectedProgram?.name || result.program_used || 'selected program';
       setGenerateMessage(result.message || `Houses and tasks generated successfully using ${programName}.`);
       
       setGenerateDialogOpen(false);
       if (onRefresh) onRefresh();
       
-      // Refresh farm data to show the new houses
+      // Refresh farm data to show the new houses and updated program
       await fetchFarmData();
       
     } catch (error) {
@@ -1286,7 +1313,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       </Dialog>
 
       {/* Generate Houses & Tasks Dialog */}
-      <Dialog open={generateDialogOpen} onClose={() => setGenerateDialogOpen(false)}>
+      <Dialog open={generateDialogOpen} onClose={() => setGenerateDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Generate Houses & Tasks</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
@@ -1303,23 +1330,53 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
               • Create/update House objects with correct data
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              • Generate tasks based on house age and assigned program
+              • Generate tasks based on house age and selected program
             </Typography>
           </Box>
-          {farm && !((farm as any).program_id || (farm as any).program?.id) && (
-            <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
-              <Typography variant="body2">
-                <strong>No program selected.</strong> Please configure a program in the Configuration dialog before generating tasks.
-              </Typography>
-            </Alert>
-          )}
-          {farm && ((farm as any).program_id || (farm as any).program?.id) && (
-            <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Program:</strong> {(farm as any).program?.name || 'Selected program'} will be used for task generation.
-              </Typography>
-            </Alert>
-          )}
+
+          {/* Program Selection */}
+          <Box sx={{ mt: 3, mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel id="program-select-label">Select Program *</InputLabel>
+              <Select
+                labelId="program-select-label"
+                id="program-select"
+                value={selectedProgramId || ''}
+                label="Select Program *"
+                onChange={(e) => setSelectedProgramId(e.target.value as number | null)}
+                disabled={generating}
+              >
+                <MenuItem value="">
+                  <em>No Program Selected</em>
+                </MenuItem>
+                {programs
+                  .filter(p => p.is_active)
+                  .map((program) => (
+                    <MenuItem key={program.id} value={program.id}>
+                      {program.name}
+                      {program.is_default && (
+                        <Chip label="Default" size="small" sx={{ ml: 1 }} />
+                      )}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+            {!selectedProgramId && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  A program must be selected before generating tasks. The selected program will be saved to this farm.
+                </Typography>
+              </Alert>
+            )}
+            {selectedProgramId && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Selected Program:</strong> {programs.find(p => p.id === selectedProgramId)?.name || 'Unknown'} will be used for task generation and saved to this farm.
+                </Typography>
+              </Alert>
+            )}
+          </Box>
+
           {generating && (
             <Box sx={{ mt: 2 }}>
               <LinearProgress />
@@ -1336,7 +1393,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           <Button 
             onClick={handleGenerateHousesAndTasks} 
             variant="contained" 
-            disabled={generating || !((farm as any).program_id || (farm as any).program?.id)}
+            disabled={generating || !selectedProgramId}
           >
             {generating ? 'Generating...' : 'Generate Now'}
           </Button>

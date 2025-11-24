@@ -199,6 +199,19 @@ class FarmViewSet(ModelViewSet):
         """Sync data from integrated system and generate houses/tasks"""
         farm = self.get_object()
         
+        # Check if program_id is provided in request
+        program_id = request.data.get('program_id')
+        if program_id:
+            try:
+                program = Program.objects.get(id=program_id, is_active=True)
+                farm.program = program
+                farm.save()
+            except Program.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': f'Program with id {program_id} not found',
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if farm has a program before generating tasks
         force_regenerate = request.data.get('force_regenerate', False)
         if not farm.program:
@@ -210,7 +223,7 @@ class FarmViewSet(ModelViewSet):
             except Program.DoesNotExist:
                 return Response({
                     'status': 'error',
-                    'message': 'Farm has no program assigned. Please select a program in the Configuration dialog before generating tasks.',
+                    'message': 'Farm has no program assigned. Please select a program before generating tasks.',
                     'requires_program_selection': True
                 }, status=status.HTTP_400_BAD_REQUEST)
         

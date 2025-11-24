@@ -46,8 +46,6 @@ import {
   History,
   HealthAndSafety,
 } from '@mui/icons-material';
-import { useProgram } from '../../contexts/ProgramContext';
-import { Select, MenuItem, InputLabel } from '@mui/material';
 
 interface IntegrationManagementProps {
   open: boolean;
@@ -96,10 +94,8 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   onTestConnection,
   onSyncData,
 }) => {
-  const { programs, fetchPrograms, loading: programsLoading } = useProgram();
   const [activeTab, setActiveTab] = useState(0);
   const [integrationType, setIntegrationType] = useState(farm.integration_type);
-  const [selectedProgramId, setSelectedProgramId] = useState<number | null>(farm.program_id || farm.program?.id || null);
   const [rotemCredentials, setRotemCredentials] = useState({
     username: farm.rotem_username || '',
     password: farm.rotem_password || '',
@@ -118,7 +114,6 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   useEffect(() => {
     if (open) {
       setIntegrationType(farm.integration_type);
-      setSelectedProgramId(farm.program_id || farm.program?.id || null);
       setRotemCredentials({
         username: farm.rotem_username || '',
         password: farm.rotem_password || '',
@@ -126,16 +121,11 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
       setConnectionStatus('idle');
       setConnectionError('');
       
-      // Fetch programs if not already loaded
-      if (programs.length === 0) {
-        fetchPrograms();
-      }
-      
       if (farm.has_system_integration) {
         fetchIntegrationData();
       }
     }
-  }, [open, farm, programs.length, fetchPrograms]);
+  }, [open, farm]);
 
   const fetchIntegrationData = async () => {
     setLoadingHealth(true);
@@ -217,9 +207,6 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
         ...(integrationType === 'rotem' && {
           username: rotemCredentials.username,
           password: rotemCredentials.password,
-        }),
-        ...(selectedProgramId && {
-          program_id: selectedProgramId,
         }),
       };
       
@@ -382,46 +369,6 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
                 />
               </RadioGroup>
             </FormControl>
-
-            {/* Program Selection */}
-            <Card sx={{ p: 2, mb: 3, border: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="h6" gutterBottom>
-                Task Program
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Select a program to use for generating tasks when houses are created or synced.
-              </Typography>
-              <FormControl fullWidth>
-                <InputLabel id="program-select-label">Select Program</InputLabel>
-                <Select
-                  labelId="program-select-label"
-                  id="program-select"
-                  value={selectedProgramId || ''}
-                  label="Select Program"
-                  onChange={(e) => setSelectedProgramId(e.target.value as number | null)}
-                  disabled={programsLoading}
-                >
-                  <MenuItem value="">
-                    <em>No Program Selected</em>
-                  </MenuItem>
-                  {programs
-                    .filter(p => p.is_active)
-                    .map((program) => (
-                      <MenuItem key={program.id} value={program.id}>
-                        {program.name}
-                        {program.is_default && (
-                          <Chip label="Default" size="small" sx={{ ml: 1 }} />
-                        )}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-              {!selectedProgramId && (
-                <Alert severity="warning" sx={{ mt: 2 }}>
-                  A program must be selected before generating tasks. Tasks will not be generated until a program is assigned.
-                </Alert>
-              )}
-            </Card>
 
             {integrationType === 'rotem' && (
               <Card sx={{ p: 2, border: '1px solid', borderColor: 'primary.main' }}>

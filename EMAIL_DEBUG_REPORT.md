@@ -288,3 +288,4 @@ The email functionality is **not currently working** because email credentials a
 4. Test sending an email via API or management command
 
 
+
