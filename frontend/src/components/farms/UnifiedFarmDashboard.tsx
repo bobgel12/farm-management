@@ -63,6 +63,7 @@ import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
 import monitoringApi from '../../services/monitoringApi';
 import { MonitoringDashboardData } from '../../types/monitoring';
 import IntegrationManagement from './IntegrationManagement';
+import { useProgram } from '../../contexts/ProgramContext';
 // Removed logger import - using console instead
 
 interface Farm {
