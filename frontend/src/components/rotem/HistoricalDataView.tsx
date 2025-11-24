@@ -281,7 +281,7 @@ const HistoricalDataView: React.FC = () => {
 
         {summaries.length === 0 && !loading && (
           <Alert severity="info" sx={{ mb: 3 }}>
-            No data available. Select filters and click "Load Data" to view historical data.
+            No data available. Select filters and click &quot;Load Data&quot; to view historical data.
           </Alert>
         )}
 
