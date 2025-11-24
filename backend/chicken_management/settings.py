@@ -191,30 +191,105 @@ else:
     logger.info(f"Email Password: {'*' * len(EMAIL_HOST_PASSWORD) if EMAIL_HOST_PASSWORD else 'Not set'}")
 
 # Logging configuration
+import os
+from pathlib import Path
+
+# Ensure logs directory exists
+LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR.mkdir(exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'detailed': {
+            'format': '{levelname} {asctime} {name} {module} {funcName} {lineno} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
     'handlers': {
         'file': {
             'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': 'logs/django.log',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'django.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'django_errors.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,
+            'formatter': 'detailed',
         },
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'debug_console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
         },
     },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
     'loggers': {
-        'tasks.email_service': {
-            'handlers': ['file', 'console'],
+        'django': {
+            'handlers': ['console', 'file', 'error_file'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['error_file', 'file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'tasks.email_service': {
+            'handlers': ['file', 'console', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
         },
         'rotem_scraper': {
+            'handlers': ['file', 'console', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'integrations': {
+            'handlers': ['file', 'console', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'farms': {
             'handlers': ['file', 'console'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
+        },
+        'houses': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }

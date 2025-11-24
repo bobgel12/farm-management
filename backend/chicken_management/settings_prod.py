@@ -13,14 +13,14 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     try:
-        import dj_database_url
-        DATABASES = {
+    import dj_database_url
+    DATABASES = {
             'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
-        }
-        # Add connection settings for Railway PostgreSQL
-        DATABASES['default']['CONN_MAX_AGE'] = 60
-        DATABASES['default']['CONN_HEALTH_CHECKS'] = True
-        DATABASES['default']['OPTIONS'] = {
+    }
+    # Add connection settings for Railway PostgreSQL
+    DATABASES['default']['CONN_MAX_AGE'] = 60
+    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+    DATABASES['default']['OPTIONS'] = {
             'connect_timeout': 60,  # Increased timeout for Railway
             'options': '-c statement_timeout=30000'  # 30 second statement timeout
         }
@@ -128,6 +128,13 @@ ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@example.com')
 
 # Logging
+import os
+from pathlib import Path
+
+# Ensure logs directory exists
+LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR.mkdir(exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -135,35 +142,83 @@ LOGGING = {
         'verbose': {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
         },
         'simple': {
-            'format': '{levelname} {message}',
+            'format': '{levelname} {asctime} {message}',
             'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'detailed': {
+            'format': '{levelname} {asctime} {name} {module} {funcName} {lineno} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+            'level': 'INFO',
         },
         'file': {
             'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': 'logs/django.log',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'django.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,
             'formatter': 'verbose',
+        },
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'django_errors.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,
+            'formatter': 'detailed',
         },
     },
     'root': {
-        'handlers': ['console'],
+        'handlers': ['console', 'file'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
+            'handlers': ['console', 'file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['error_file', 'file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.server': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },
         'tasks.email_service': {
+            'handlers': ['console', 'file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'rotem_scraper': {
+            'handlers': ['console', 'file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'integrations': {
+            'handlers': ['console', 'file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'farms': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'houses': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
