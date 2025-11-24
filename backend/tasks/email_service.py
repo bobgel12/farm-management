@@ -263,9 +263,19 @@ class TaskEmailService:
             )
             email.attach_alternative(html_content, "text/html")
             
-            # Use SendGrid API instead of SMTP for Railway
-            if os.getenv('EMAIL_HOST', '').endswith('sendgrid.net'):
+            # Use API-based email services for Railway (no SMTP needed)
+            email_host = os.getenv('EMAIL_HOST', '')
+            email_provider = os.getenv('EMAIL_PROVIDER', '').lower()
+            
+            # Check for Resend (best for low volume - 3,000 emails/month free)
+            if email_provider == 'resend' or 'resend.com' in email_host.lower():
+                return TaskEmailService._send_via_resend(recipient_emails, subject, text_content, html_content)
+            # Check for SendGrid API
+            elif email_host.endswith('sendgrid.net'):
                 return TaskEmailService._send_via_sendgrid_api(recipient_emails, subject, text_content, html_content)
+            # Check for Mailgun API
+            elif 'mailgun.org' in email_host:
+                return TaskEmailService._send_via_mailgun_api(recipient_emails, subject, text_content, html_content)
             else:
                 # Send email with timeout for other providers
                 import socket
@@ -306,15 +316,24 @@ class TaskEmailService:
         try:
             from sendgrid import SendGridAPIClient
             from sendgrid.helpers.mail import Mail
+            from sendgrid.exceptions import SendGridException
             
             api_key = os.getenv('EMAIL_HOST_PASSWORD')  # SendGrid API key
             from_email = settings.DEFAULT_FROM_EMAIL
             
-            # Validate API key
-            if not api_key or not api_key.startswith('SG.'):
-                logger.error("Invalid SendGrid API key format")
+            # Validate API key exists
+            if not api_key:
+                logger.error("SendGrid API key (EMAIL_HOST_PASSWORD) is not set in environment variables")
                 return False
             
+            # Validate API key format
+            if not api_key.startswith('SG.'):
+                logger.error(f"Invalid SendGrid API key format. Expected format: SG.xxxxx (got: {api_key[:5]}...)")
+                logger.error("Please ensure your SendGrid API key starts with 'SG.'")
+                return False
+            
+            # Log API key status (without exposing the key)
+            logger.info(f"SendGrid API key found: {api_key[:5]}...{api_key[-4:]} (length: {len(api_key)})")
             logger.info(f"Sending SendGrid email to {len(recipients)} recipients")
             logger.info(f"From: {from_email}, Subject: {subject}")
             
@@ -345,8 +364,160 @@ class TaskEmailService:
                 logger.error(f"SendGrid response body: {response.body}")
                 return False
             
+        except SendGridException as e:
+            # Handle SendGrid-specific exceptions
+            error_msg = str(e)
+            logger.error(f"SendGrid API exception: {error_msg}")
+            
+            # Check for 401 Unauthorized specifically
+            if '401' in error_msg or 'Unauthorized' in error_msg:
+                logger.error("=" * 60)
+                logger.error("SendGrid Authentication Failed (401 Unauthorized)")
+                logger.error("Possible causes:")
+                logger.error("1. API key is incorrect or has been revoked")
+                logger.error("2. API key doesn't have 'Mail Send' permission enabled")
+                logger.error("3. API key format is invalid")
+                logger.error("=" * 60)
+                logger.error("To fix:")
+                logger.error("1. Go to SendGrid Dashboard → Settings → API Keys")
+                logger.error("2. Create a new API key with 'Mail Send' permission")
+                logger.error("3. Update EMAIL_HOST_PASSWORD environment variable")
+                logger.error("4. Ensure the key starts with 'SG.'")
+                logger.error("=" * 60)
+            
+            # Try to extract response body if available
+            if hasattr(e, 'body') and e.body:
+                logger.error(f"SendGrid error details: {e.body}")
+            if hasattr(e, 'status_code'):
+                logger.error(f"SendGrid status code: {e.status_code}")
+            
+            return False
+            
         except Exception as e:
-            logger.error(f"SendGrid email failed: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"SendGrid email failed: {error_msg}")
+            
+            # Check if it's an HTTP 401 error
+            if '401' in error_msg or 'Unauthorized' in error_msg:
+                logger.error("SendGrid authentication failed. Please check:")
+                logger.error("- EMAIL_HOST_PASSWORD environment variable is set correctly")
+                logger.error("- API key has 'Mail Send' permission in SendGrid dashboard")
+                logger.error("- API key is not expired or revoked")
+            
+            return False
+    
+    @staticmethod
+    def _send_via_resend(recipients, subject, text_content, html_content):
+        """Send email via Resend API (Best for low volume - 3,000 emails/month free)"""
+        try:
+            import resend
+            
+            api_key = os.getenv('RESEND_API_KEY') or os.getenv('EMAIL_HOST_PASSWORD')
+            from_email = settings.DEFAULT_FROM_EMAIL
+            
+            # Validate API key
+            if not api_key:
+                logger.error("Resend API key (RESEND_API_KEY or EMAIL_HOST_PASSWORD) is not set")
+                return False
+            
+            # Set API key
+            resend.api_key = api_key
+            
+            logger.info(f"Sending Resend email to {len(recipients)} recipients")
+            logger.info(f"From: {from_email}, Subject: {subject}")
+            
+            # Resend supports multiple recipients
+            for recipient in recipients:
+                params = {
+                    "from": from_email,
+                    "to": recipient,
+                    "subject": subject,
+                    "text": text_content,
+                }
+                
+                if html_content:
+                    params["html"] = html_content
+                
+                email = resend.Emails.send(params)
+                
+                if email and 'id' in email:
+                    logger.info(f"Resend email sent successfully to {recipient} (ID: {email['id']})")
+                else:
+                    logger.warning(f"Resend email sent but no ID returned for {recipient}")
+            
+            logger.info(f"Resend emails sent successfully to {recipients}")
+            return True
+            
+        except ImportError:
+            logger.error("Resend package not installed. Install with: pip install resend")
+            return False
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Resend email failed: {error_msg}")
+            
+            # Provide helpful error messages
+            if '401' in error_msg or 'Unauthorized' in error_msg:
+                logger.error("Resend authentication failed. Please check:")
+                logger.error("- RESEND_API_KEY environment variable is set correctly")
+                logger.error("- API key is valid and active in Resend dashboard")
+            elif '422' in error_msg or 'validation' in error_msg.lower():
+                logger.error("Resend validation error. Please check:")
+                logger.error("- From email address is verified in Resend dashboard")
+                logger.error("- Email addresses are in correct format")
+            
+            return False
+    
+    @staticmethod
+    def _send_via_mailgun_api(recipients, subject, text_content, html_content):
+        """Send email via Mailgun API"""
+        try:
+            import requests
+            
+            api_key = os.getenv('EMAIL_HOST_PASSWORD')  # Mailgun API key
+            domain = os.getenv('MAILGUN_DOMAIN', '')
+            from_email = settings.DEFAULT_FROM_EMAIL
+            
+            # Validate API key
+            if not api_key:
+                logger.error("Mailgun API key (EMAIL_HOST_PASSWORD) is not set")
+                return False
+            
+            if not domain:
+                logger.error("MAILGUN_DOMAIN environment variable is not set")
+                return False
+            
+            url = f"https://api.mailgun.net/v3/{domain}/messages"
+            auth = ("api", api_key)
+            
+            data = {
+                "from": from_email,
+                "to": recipients,
+                "subject": subject,
+                "text": text_content
+            }
+            
+            if html_content:
+                data["html"] = html_content
+            
+            response = requests.post(url, auth=auth, data=data)
+            
+            if response.status_code == 401:
+                logger.error("Mailgun authentication failed (401). Check API key and domain.")
+                return False
+            
+            response.raise_for_status()
+            
+            logger.info(f"Mailgun email sent successfully to {recipients}")
+            return True
+            
+        except requests.exceptions.HTTPError as e:
+            if e.response and e.response.status_code == 401:
+                logger.error("Mailgun authentication failed (401). Check API key and domain.")
+            else:
+                logger.error(f"Mailgun HTTP error: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Mailgun email failed: {str(e)}")
             return False
     
     @staticmethod
@@ -407,9 +578,16 @@ This is a test email to verify email configuration.
             logger.info(f"Email configuration - From: {settings.DEFAULT_FROM_EMAIL}")
             logger.info(f"Email configuration - Backend: {settings.EMAIL_BACKEND}")
             
-            # Use SendGrid API for test emails on Railway
-            if os.getenv('EMAIL_HOST', '').endswith('sendgrid.net'):
+            # Use API-based email services for test emails on Railway
+            email_host = os.getenv('EMAIL_HOST', '')
+            email_provider = os.getenv('EMAIL_PROVIDER', '').lower()
+            
+            if email_provider == 'resend' or 'resend.com' in email_host.lower():
+                return TaskEmailService._send_via_resend([test_email], subject, text_content, None)
+            elif email_host.endswith('sendgrid.net'):
                 return TaskEmailService._send_via_sendgrid_api([test_email], subject, text_content, None)
+            elif 'mailgun.org' in email_host:
+                return TaskEmailService._send_via_mailgun_api([test_email], subject, text_content, None)
             else:
                 # Send simple email with timeout for other providers
                 import socket

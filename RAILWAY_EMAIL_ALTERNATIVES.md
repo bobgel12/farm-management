@@ -43,25 +43,26 @@ EMAIL_HOST_PASSWORD=your_ses_secret_key
 DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 ```
 
-## 🔧 **Option 3: Webhook-based Email Service**
+## 🔧 **Option 3: Resend (BEST for Low Volume - 3,000 emails/month FREE)**
 
-### **Resend (Free Tier)**
-```python
-# Add to requirements.txt
-resend
+**Perfect for <50 emails/month!** Already implemented in the codebase.
 
-# Use in email_service.py
-import resend
-
-def send_email_via_resend(recipients, subject, content):
-    resend.api_key = os.getenv('RESEND_API_KEY')
-    resend.Emails.send({
-        "from": "noreply@yourdomain.com",
-        "to": recipients,
-        "subject": subject,
-        "html": content
-    })
+```bash
+# Set these environment variables in Railway
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_your_api_key_here
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 ```
+
+**Setup**:
+1. Sign up at https://resend.com (free, no credit card)
+2. Get API key from dashboard
+3. Set environment variables above
+4. Redeploy
+
+**That's it!** No code changes needed - the code automatically uses Resend when `EMAIL_PROVIDER=resend` is set.
+
+See `LOW_VOLUME_EMAIL_ALTERNATIVES.md` for complete guide.
 
 ### **EmailJS (Client-side)**
 - Send emails directly from frontend
@@ -70,6 +71,7 @@ def send_email_via_resend(recipients, subject, content):
 
 ## 🎯 **Recommended Solution**
 
+**For low volume (<50 emails/month)**: Use **Resend** (3,000 emails/month free) ⭐ **BEST FOR LOW VOLUME**
 **For immediate fix**: Upgrade to Railway Pro ($5/month)
 **For free solution**: Use SendGrid free tier (100 emails/day)
 
