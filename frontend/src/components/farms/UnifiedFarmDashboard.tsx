@@ -386,6 +386,15 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const handleGenerateHousesAndTasks = async () => {
     if (!farm) return;
     
+    // Check if farm has a program assigned
+    const farmProgramId = (farm as any).program_id || (farm as any).program?.id;
+    if (!farmProgramId) {
+      setGenerateMessage('Please select a program in the Configuration dialog before generating tasks.');
+      setGenerateDialogOpen(false);
+      setIntegrationDialogOpen(true); // Open integration dialog to select program
+      return;
+    }
+    
     setGenerating(true);
     try {
       const token = localStorage.getItem('authToken');
@@ -399,16 +408,29 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           'Authorization': `Token ${token}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          force_regenerate: false, // Set to true if you want to regenerate existing tasks
+        }),
       });
       
       if (!response.ok) {
         const errorData: any = await response.json();
         const errorMessage: string = errorData?.message || 'House generation failed';
+        
+        // Check if error is about missing program
+        if (errorData?.requires_program_selection) {
+          setGenerateMessage('A program must be selected before generating tasks. Please configure the farm first.');
+          setGenerateDialogOpen(false);
+          setIntegrationDialogOpen(true);
+          return;
+        }
+        
         throw new Error(errorMessage);
       }
       
       const result = await response.json();
-      setGenerateMessage(result.message || 'Houses and tasks generated successfully');
+      const programName = result.program_used || (farm as any).program?.name || 'selected program';
+      setGenerateMessage(result.message || `Houses and tasks generated successfully using ${programName}.`);
       
       setGenerateDialogOpen(false);
       if (onRefresh) onRefresh();
@@ -1281,9 +1303,23 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
               • Create/update House objects with correct data
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              • Generate tasks based on house age and assigned programs
+              • Generate tasks based on house age and assigned program
             </Typography>
           </Box>
+          {farm && !((farm as any).program_id || (farm as any).program?.id) && (
+            <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+              <Typography variant="body2">
+                <strong>No program selected.</strong> Please configure a program in the Configuration dialog before generating tasks.
+              </Typography>
+            </Alert>
+          )}
+          {farm && ((farm as any).program_id || (farm as any).program?.id) && (
+            <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+              <Typography variant="body2">
+                <strong>Program:</strong> {(farm as any).program?.name || 'Selected program'} will be used for task generation.
+              </Typography>
+            </Alert>
+          )}
           {generating && (
             <Box sx={{ mt: 2 }}>
               <LinearProgress />
@@ -1297,7 +1333,11 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           <Button onClick={() => setGenerateDialogOpen(false)} disabled={generating}>
             Cancel
           </Button>
-          <Button onClick={handleGenerateHousesAndTasks} variant="contained" disabled={generating}>
+          <Button 
+            onClick={handleGenerateHousesAndTasks} 
+            variant="contained" 
+            disabled={generating || !((farm as any).program_id || (farm as any).program?.id)}
+          >
             {generating ? 'Generating...' : 'Generate Now'}
           </Button>
         </DialogActions>
@@ -1326,6 +1366,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
             last_sync: farm.last_sync,
             rotem_username: (farm as any).rotem_username,
             rotem_password: (farm as any).rotem_password,
+            program: (farm as any).program || null,
+            program_id: (farm as any).program_id || (farm as any).program?.id || null,
           }}
           open={integrationDialogOpen}
           onClose={() => {

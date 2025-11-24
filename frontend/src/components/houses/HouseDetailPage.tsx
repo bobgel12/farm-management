@@ -26,6 +26,7 @@ import {
   Settings as SettingsIcon,
   Home,
   CompareArrows,
+  Assignment as TasksIcon,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { useFarm } from '../../contexts/FarmContext';
@@ -34,12 +35,23 @@ import HouseDevicesTab from './HouseDevicesTab';
 import HouseFlockTab from './HouseFlockTab';
 import HouseMessagesTab from './HouseMessagesTab';
 import HouseMenuTab from './HouseMenuTab';
+import HouseTasksTab from './HouseTasksTab';
 
 interface HouseDetails {
   house: any;
   monitoring: any;
   alarms: any[];
   stats: any;
+  tasks?: {
+    all: any[];
+    today: any[];
+    upcoming: any[];
+    past: any[];
+    completed: any[];
+    total: number;
+    completed_count: number;
+    pending_count: number;
+  };
 }
 
 interface TabPanelProps {
@@ -239,18 +251,25 @@ const HouseDetailPage: React.FC = () => {
             aria-controls="house-tabpanel-2"
           />
           <Tab
+            icon={<TasksIcon />}
+            iconPosition="start"
+            label="Tasks"
+            id="house-tab-3"
+            aria-controls="house-tabpanel-3"
+          />
+          <Tab
             icon={<MessageIcon />}
             iconPosition="start"
             label="Messages"
-            id="house-tab-3"
-            aria-controls="house-tabpanel-3"
+            id="house-tab-4"
+            aria-controls="house-tabpanel-4"
           />
           <Tab
             icon={<SettingsIcon />}
             iconPosition="start"
             label="House Menu"
-            id="house-tab-4"
-            aria-controls="house-tabpanel-4"
+            id="house-tab-5"
+            aria-controls="house-tabpanel-5"
           />
         </Tabs>
       </Box>
@@ -272,9 +291,22 @@ const HouseDetailPage: React.FC = () => {
         <HouseFlockTab houseId={houseId!} house={house} />
       </TabPanel>
       <TabPanel value={activeTab} index={3}>
-        <HouseMessagesTab houseId={houseId!} house={house} />
+        {houseDetails.tasks ? (
+          <HouseTasksTab
+            tasks={houseDetails.tasks}
+            currentDay={house.current_day}
+            loading={loading}
+          />
+        ) : (
+          <Alert severity="info">
+            Tasks are not available. They will be generated when a program is assigned to the farm and houses are synced.
+          </Alert>
+        )}
       </TabPanel>
       <TabPanel value={activeTab} index={4}>
+        <HouseMessagesTab houseId={houseId!} house={house} />
+      </TabPanel>
+      <TabPanel value={activeTab} index={5}>
         <HouseMenuTab houseId={houseId!} house={house} />
       </TabPanel>
     </Box>

@@ -42,11 +42,59 @@ class FarmViewSet(ModelViewSet):
         
         return queryset.order_by('name')
     
+    def update(self, request, *args, **kwargs):
+        """Override update to detect program changes and regenerate tasks"""
+        instance = self.get_object()
+        old_program_id = instance.program_id if instance.program else None
+        
+        # Perform the update
+        response = super().update(request, *args, **kwargs)
+        
+        if response.status_code == 200:
+            # Refresh instance to get updated program
+            instance.refresh_from_db()
+            new_program_id = instance.program_id if instance.program else None
+            
+            # Check if program changed
+            if old_program_id != new_program_id and new_program_id is not None:
+                # Program changed, regenerate tasks for all active houses
+                try:
+                    from .program_change_service import ProgramChangeService
+                    success = ProgramChangeService.regenerate_tasks_for_farm(instance, force_regenerate=True)
+                    if success:
+                        response.data['program_changed'] = True
+                        response.data['tasks_regenerated'] = True
+                        response.data['message'] = f'Tasks regenerated for all active houses using program "{instance.program.name}"'
+                except Exception as e:
+                    response.data['program_changed'] = True
+                    response.data['tasks_regenerated'] = False
+                    response.data['error'] = f'Failed to regenerate tasks: {str(e)}'
+        
+        return response
+    
     @action(detail=True, methods=['post'])
     def configure_integration(self, request, pk=None):
         """Configure system integration for a farm"""
         farm = self.get_object()
         integration_type = request.data.get('integration_type')
+        program_id = request.data.get('program_id')
+        
+        # Update program if provided
+        if program_id:
+            try:
+                program = Program.objects.get(id=program_id, is_active=True)
+                old_program_id = farm.program_id if farm.program else None
+                farm.program = program
+                farm.save()
+                
+                # If program changed, regenerate tasks
+                if old_program_id != program_id:
+                    from .program_change_service import ProgramChangeService
+                    ProgramChangeService.regenerate_tasks_for_farm(farm, force_regenerate=True)
+            except Program.DoesNotExist:
+                return Response({
+                    'error': f'Program with id {program_id} not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         if integration_type == 'rotem':
             # Validate Rotem credentials
@@ -151,6 +199,21 @@ class FarmViewSet(ModelViewSet):
         """Sync data from integrated system and generate houses/tasks"""
         farm = self.get_object()
         
+        # Check if farm has a program before generating tasks
+        force_regenerate = request.data.get('force_regenerate', False)
+        if not farm.program:
+            # Try to get default program
+            try:
+                default_program = Program.objects.get(is_default=True, is_active=True)
+                farm.program = default_program
+                farm.save()
+            except Program.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'Farm has no program assigned. Please select a program in the Configuration dialog before generating tasks.',
+                    'requires_program_selection': True
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         if farm.integration_type == 'rotem':
             try:
                 integration = RotemIntegration(farm)
@@ -159,7 +222,7 @@ class FarmViewSet(ModelViewSet):
                 data = integration.sync_house_data(farm.id)
                 
                 # Generate/update houses and tasks
-                self._sync_rotem_houses(farm)
+                self._sync_rotem_houses(farm, force_regenerate=force_regenerate)
                 
                 # Update last sync time
                 farm.last_sync = timezone.now()
@@ -168,7 +231,8 @@ class FarmViewSet(ModelViewSet):
                 return Response({
                     'status': 'success',
                     'message': 'Data synced successfully and houses/tasks generated',
-                    'data_points': len(data.get('houses', []))
+                    'data_points': len(data.get('houses', [])),
+                    'program_used': farm.program.name if farm.program else None
                 })
                 
             except Exception as e:
@@ -214,7 +278,7 @@ class FarmViewSet(ModelViewSet):
         
         return Response(status_data)
     
-    def _sync_rotem_houses(self, farm):
+    def _sync_rotem_houses(self, farm, force_regenerate=False):
         """Sync houses from Rotem system and generate tasks"""
         try:
             integration = RotemIntegration(farm)
@@ -245,18 +309,19 @@ class FarmViewSet(ModelViewSet):
                     house.batch_start_date = timezone.now().date() - timezone.timedelta(days=age)
                     house.chicken_in_date = house.batch_start_date  # Set chicken_in_date to the calculated batch start date
                     house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=49)  # Typical 7-week cycle
+                    house.current_day = age
                 else:
                     # If age is 0, set default dates for new batch
                     house.batch_start_date = timezone.now().date()
                     house.chicken_in_date = house.batch_start_date
                     house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=49)
+                    house.current_day = 0
                 
                 house.save()
                 
                 # Generate tasks for this house based on its age and assigned program
-                # Only generate tasks if age > 0 (house has birds)
-                if age > 0:
-                    self._generate_house_tasks(house, farm)
+                # Generate tasks if age >= 0 (house exists, even if empty)
+                self._generate_house_tasks(house, farm, force_regenerate=force_regenerate)
                 
                 # Log successful house sync
                 IntegrationLog.objects.create(
@@ -277,11 +342,40 @@ class FarmViewSet(ModelViewSet):
                 error_code='HOUSE_SYNC_FAILED'
             )
     
-    def _generate_house_tasks(self, house, farm):
+    def _generate_house_tasks(self, house, farm, force_regenerate=False):
         """Generate tasks for a house based on its age and assigned program"""
         try:
             from tasks.models import Task
             from tasks.task_scheduler import TaskScheduler
+            
+            # Check if farm has a program assigned
+            program = farm.program
+            if not program:
+                # Try to get default program
+                try:
+                    program = Program.objects.get(is_default=True, is_active=True)
+                except Program.DoesNotExist:
+                    IntegrationError.objects.create(
+                        farm=farm,
+                        integration_type='rotem',
+                        error_type='task_generation',
+                        error_message=f'Cannot generate tasks for house {house.house_number}: farm has no program assigned and no default program exists',
+                        error_code='NO_PROGRAM_ASSIGNED'
+                    )
+                    return []
+            
+            # Check if tasks already exist
+            existing_tasks_count = Task.objects.filter(house=house).count()
+            if existing_tasks_count > 0 and not force_regenerate:
+                # Tasks already exist, return existing tasks
+                IntegrationLog.objects.create(
+                    farm=farm,
+                    integration_type='rotem',
+                    action='generate_tasks',
+                    status='skipped',
+                    message=f'Tasks already exist for house {house.house_number} ({existing_tasks_count} tasks). Use force_regenerate=True to regenerate.'
+                )
+                return list(Task.objects.filter(house=house))
             
             # Get the house's current day (day_offset)
             current_day = house.current_day
@@ -291,6 +385,8 @@ class FarmViewSet(ModelViewSet):
                     from django.utils import timezone
                     days_since_in = (timezone.now().date() - house.chicken_in_date).days
                     current_day = days_since_in
+                    house.current_day = current_day
+                    house.save()
                 else:
                     # Can't generate tasks without a day reference
                     IntegrationError.objects.create(
@@ -300,46 +396,14 @@ class FarmViewSet(ModelViewSet):
                         error_message=f'Cannot generate tasks for house {house.house_number}: no current_day or chicken_in_date',
                         error_code='TASK_GENERATION_FAILED'
                     )
-                    return
+                    return []
             
-            # Use TaskScheduler to generate all tasks for the house
-            # This creates Task objects with day_offset, which the email service needs
-            tasks = TaskScheduler.generate_tasks_for_house(house)
-            
-            # Also create ProgramTask instances if program exists (for program management)
-            program = farm.programs.first()
-            if program:
-                current_age = house.current_age_days or current_day
-                relevant_tasks = program.tasks.filter(
-                    start_day__lte=current_age,
-                    end_day__gte=current_age,
-                    is_active=True
-                )
-                
-                # Create ProgramTask instances for this house
-                for task_template in relevant_tasks:
-                    # Check if task already exists for this house
-                    existing_task = ProgramTask.objects.filter(
-                        program=program,
-                        house=house,
-                        task_name=task_template.task_name,
-                        scheduled_date__date=timezone.now().date()
-                    ).first()
-                    
-                    if not existing_task:
-                        ProgramTask.objects.create(
-                            program=program,
-                            house=house,
-                            task_name=task_template.task_name,
-                            description=task_template.description,
-                            task_type=task_template.task_type,
-                            priority=task_template.priority,
-                            estimated_duration=task_template.estimated_duration,
-                            scheduled_date=timezone.now(),
-                            status='pending',
-                            assigned_to=None,  # Will be assigned later
-                            notes=f"Auto-generated for house {house.house_number} (age {current_age} days)"
-                        )
+            # Generate tasks from program
+            try:
+                tasks = TaskScheduler.generate_tasks_from_program(house, program, force_regenerate=force_regenerate)
+            except ValueError as e:
+                # If program has no tasks, fall back to default templates
+                tasks = TaskScheduler.generate_tasks_for_house(house)
             
             # Log task generation
             IntegrationLog.objects.create(
@@ -347,8 +411,10 @@ class FarmViewSet(ModelViewSet):
                 integration_type='rotem',
                 action='generate_tasks',
                 status='success',
-                message=f'Generated {len(tasks)} Task objects for house {house.house_number} (Day {current_day})'
+                message=f'Generated {len(tasks)} Task objects for house {house.house_number} from program "{program.name}" (Day {current_day})'
             )
+            
+            return tasks
             
         except Exception as e:
             IntegrationError.objects.create(
@@ -358,6 +424,7 @@ class FarmViewSet(ModelViewSet):
                 error_message=f'Failed to generate tasks for house {house.house_number}: {str(e)}',
                 error_code='TASK_GENERATION_FAILED'
             )
+            return []
     
     def _create_default_program_tasks(self, program):
         """Create default broiler program tasks"""

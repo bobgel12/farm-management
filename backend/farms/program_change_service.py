@@ -250,3 +250,38 @@ class ProgramChangeService:
             user_choice__isnull=True,
             processed_at__isnull=True
         ).order_by('-created_at')
+    
+    @staticmethod
+    def regenerate_tasks_for_farm(farm: Farm, force_regenerate: bool = True) -> bool:
+        """Regenerate tasks for all active houses in a farm when program changes"""
+        try:
+            from tasks.task_scheduler import TaskScheduler
+            from houses.models import House
+            
+            if not farm.program:
+                logger.warning(f"Cannot regenerate tasks for farm {farm.name}: no program assigned")
+                return False
+            
+            houses = farm.houses.filter(is_active=True)
+            total_tasks_regenerated = 0
+            
+            for house in houses:
+                try:
+                    # Regenerate tasks for this house
+                    tasks = TaskScheduler.generate_tasks_from_program(
+                        house, 
+                        farm.program, 
+                        force_regenerate=force_regenerate
+                    )
+                    total_tasks_regenerated += len(tasks)
+                    logger.info(f"Regenerated {len(tasks)} tasks for house {house.house_number} in farm {farm.name}")
+                except Exception as e:
+                    logger.error(f"Error regenerating tasks for house {house.house_number}: {str(e)}")
+                    continue
+            
+            logger.info(f"Successfully regenerated tasks for {houses.count()} houses in farm {farm.name} (total: {total_tasks_regenerated} tasks)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error regenerating tasks for farm {farm.name}: {str(e)}")
+            return False

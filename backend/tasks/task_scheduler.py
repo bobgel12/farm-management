@@ -2,6 +2,7 @@
 Task scheduling logic for chicken house management
 """
 from datetime import datetime, timedelta
+from django.utils import timezone
 from .models import Task, RecurringTask
 
 
@@ -400,3 +401,61 @@ class TaskScheduler:
             house=house,
             day_offset__range=[current_day, end_day]
         ).order_by('day_offset', 'task_name')
+    
+    @classmethod
+    def generate_tasks_from_program(cls, house, program, force_regenerate=False):
+        """Generate tasks for a house from a Program's ProgramTask templates"""
+        from farms.models import ProgramTask, Program
+        
+        if not program:
+            raise ValueError("Program is required to generate tasks")
+        
+        # Check if tasks already exist
+        existing_tasks_count = Task.objects.filter(house=house).count()
+        if existing_tasks_count > 0 and not force_regenerate:
+            # Tasks already exist, return existing tasks
+            return list(Task.objects.filter(house=house))
+        
+        # If force_regenerate, delete existing tasks first
+        if force_regenerate and existing_tasks_count > 0:
+            Task.objects.filter(house=house).delete()
+        
+        tasks = []
+        
+        # Get all ProgramTask objects for this program
+        program_tasks = ProgramTask.objects.filter(
+            program=program,
+            is_required=True  # Only generate required tasks by default
+        ).order_by('day', 'priority', 'title')
+        
+        if not program_tasks.exists():
+            # If no program tasks, fall back to default templates
+            return cls.generate_tasks_for_house(house)
+        
+        # Calculate chicken_in_date if not set
+        chicken_in_date = house.chicken_in_date
+        if not chicken_in_date:
+            # Use current date as default
+            chicken_in_date = timezone.now().date()
+            house.chicken_in_date = chicken_in_date
+            house.save()
+        
+        # Generate Task objects from ProgramTask templates
+        for program_task in program_tasks:
+            # Calculate day_offset based on ProgramTask.day
+            day_offset = program_task.day
+            
+            # Create Task object
+            task, created = Task.objects.get_or_create(
+                house=house,
+                day_offset=day_offset,
+                task_name=program_task.title,
+                defaults={
+                    'description': program_task.description or program_task.title,
+                    'task_type': program_task.task_type or 'daily',
+                    'notes': f"From program: {program.name}"
+                }
+            )
+            tasks.append(task)
+        
+        return tasks

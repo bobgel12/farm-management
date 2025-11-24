@@ -17,6 +17,7 @@ from .serializers import (
 )
 from farms.models import Farm
 from tasks.task_scheduler import TaskScheduler
+from tasks.serializers import TaskSerializer
 
 
 class HouseListCreateView(generics.ListCreateAPIView):
@@ -365,7 +366,7 @@ def farm_houses_monitoring_dashboard(request, farm_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_details(request, house_id):
-    """Get comprehensive house details including monitoring, devices, flock, and feed"""
+    """Get comprehensive house details including monitoring, devices, flock, tasks, and feed"""
     house = get_object_or_404(House, id=house_id)
     
     # Get latest snapshot
@@ -374,12 +375,47 @@ def house_details(request, house_id):
     # Get active alarms
     active_alarms = HouseAlarm.objects.filter(house=house, is_active=True)
     
+    # Get tasks for this house
+    from tasks.models import Task
+    from tasks.serializers import TaskSerializer
+    tasks = Task.objects.filter(house=house).order_by('day_offset', 'task_name')
+    
+    # Group tasks by status
+    current_day = house.current_day
+    upcoming_tasks = []
+    past_tasks = []
+    today_tasks = []
+    completed_tasks = []
+    
+    for task in tasks:
+        if task.is_completed:
+            completed_tasks.append(task)
+        elif current_day is not None:
+            if task.day_offset < current_day:
+                past_tasks.append(task)
+            elif task.day_offset == current_day:
+                today_tasks.append(task)
+            else:
+                upcoming_tasks.append(task)
+        else:
+            upcoming_tasks.append(task)
+    
     # Build comprehensive response
     details = {
         'house': HouseSerializer(house).data,
         'monitoring': HouseMonitoringSnapshotSerializer(snapshot).data if snapshot else None,
         'alarms': HouseAlarmSerializer(active_alarms, many=True).data,
         'stats': house.get_stats(days=7) if snapshot else None,
+        'tasks': {
+            'all': TaskSerializer(tasks, many=True).data,
+            'today': TaskSerializer(today_tasks, many=True).data,
+            'upcoming': TaskSerializer(upcoming_tasks, many=True).data,
+            'past': TaskSerializer(past_tasks, many=True).data,
+            'completed': TaskSerializer(completed_tasks, many=True).data,
+            'total': tasks.count(),
+            'completed_count': len(completed_tasks),
+            'pending_count': tasks.count() - len(completed_tasks),
+        },
     }
     
     return Response(details)
