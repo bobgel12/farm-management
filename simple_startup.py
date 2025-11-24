@@ -46,7 +46,7 @@ def main():
     # Run migrations
     print("🔄 Running migrations...")
     try:
-    execute_from_command_line(['manage.py', 'migrate'])
+        execute_from_command_line(['manage.py', 'migrate'])
         print("✅ Migrations completed successfully")
     except Exception as e:
         print(f"❌ Migrations failed: {str(e)}")
