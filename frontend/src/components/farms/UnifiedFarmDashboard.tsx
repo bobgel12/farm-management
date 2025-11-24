@@ -58,6 +58,7 @@ import WorkerList from '../WorkerList';
 import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
 import monitoringApi from '../../services/monitoringApi';
 import { MonitoringDashboardData } from '../../types/monitoring';
+import IntegrationManagement from './IntegrationManagement';
 // Removed logger import - using console instead
 
 interface Farm {
@@ -216,6 +217,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [loadingData, setLoadingData] = useState(false);
   const [monitoringDashboard, setMonitoringDashboard] = useState<MonitoringDashboard | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+  const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
 
   useEffect(() => {
     if (farmId && !propFarm) {
@@ -551,7 +553,13 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
               <Button
                 variant="outlined"
                 startIcon={<Settings />}
-                onClick={() => onConfigureIntegration?.(farm.id)}
+                onClick={() => {
+                  if (onConfigureIntegration) {
+                    onConfigureIntegration(farm.id);
+                  } else {
+                    setIntegrationDialogOpen(true);
+                  }
+                }}
                 size="small"
               >
                 Configure
@@ -638,19 +646,19 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                   Compare Houses
                 </Button>
               )}
-              <Button
-                variant="outlined"
-                startIcon={<Home />}
-                onClick={() => {
-                  if (farm.houses && farm.houses.length > 0) {
-                    navigate(`/farms/${farm.id}/houses/${farm.houses[0].id}`);
-                  }
-                }}
-                size="small"
-                disabled={!farm.houses || farm.houses.length === 0}
-              >
-                View Houses
-              </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Home />}
+              onClick={() => {
+                if (farm.houses && farm.houses.length > 0) {
+                  navigate(`/farms/${farm.id}/houses/${farm.houses[0].id}`);
+                }
+              }}
+              size="small"
+              disabled={!farm.houses || farm.houses.length === 0}
+            >
+              View Houses
+            </Button>
             </Box>
           </Box>
           
@@ -1304,6 +1312,55 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         >
           {generateMessage}
         </Alert>
+      )}
+
+      {/* Integration Management Dialog */}
+      {farm && (
+        <IntegrationManagement
+          farm={{
+            id: farm.id,
+            name: farm.name,
+            integration_type: farm.integration_type || 'none',
+            integration_status: farm.integration_status || 'not_configured',
+            has_system_integration: farm.has_system_integration || false,
+            last_sync: farm.last_sync,
+            rotem_username: (farm as any).rotem_username,
+            rotem_password: (farm as any).rotem_password,
+          }}
+          open={integrationDialogOpen}
+          onClose={() => {
+            setIntegrationDialogOpen(false);
+            fetchFarmData(); // Refresh farm data after closing
+          }}
+          onUpdateIntegration={async (farmId, integrationData) => {
+            try {
+              await api.post(`/farms/${farmId}/configure_integration/`, integrationData);
+              await fetchFarmData();
+              setIntegrationDialogOpen(false);
+            } catch (error) {
+              console.error('Failed to update integration:', error);
+              throw error;
+            }
+          }}
+          onTestConnection={async (farmId) => {
+            try {
+              await api.post(`/farms/${farmId}/test_connection/`);
+              return true;
+            } catch (error) {
+              console.error('Connection test failed:', error);
+              return false;
+            }
+          }}
+          onSyncData={async (farmId) => {
+            try {
+              await api.post(`/farms/${farmId}/sync_data/`);
+              await fetchFarmData();
+            } catch (error) {
+              console.error('Sync failed:', error);
+              throw error;
+            }
+          }}
+        />
       )}
     </Box>
   );
