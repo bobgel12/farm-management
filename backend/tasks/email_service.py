@@ -2,6 +2,7 @@ from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
+from django.db import models
 from .models import EmailTask, Task
 from farms.models import Farm, Worker
 from houses.models import House
@@ -123,8 +124,25 @@ class TaskEmailService:
         
         for house in houses:
             current_day = house.current_day
-            if current_day is None:
+            
+            # First, check if house has ANY pending tasks (regardless of day)
+            all_pending_tasks = Task.objects.filter(
+                house=house,
+                is_completed=False
+            )
+            
+            # If no tasks at all, skip this house
+            if not all_pending_tasks.exists():
                 continue
+            
+            # If current_day is None, calculate it from tasks or use 0
+            if current_day is None:
+                # Try to get the minimum day_offset from pending tasks
+                min_day = all_pending_tasks.aggregate(
+                    min_day=models.Min('day_offset')
+                )['min_day']
+                current_day = min_day if min_day is not None else 0
+                logger.debug(f"House {house.id} has no current_day, using {current_day} from tasks")
                 
             # Get today's tasks
             today_tasks = Task.objects.filter(
@@ -163,8 +181,14 @@ class TaskEmailService:
                     
                     today_tasks = today_tasks_list
                     tomorrow_tasks = tomorrow_tasks_list
+                else:
+                    # If no upcoming tasks match current_day, get the earliest pending tasks
+                    earliest_tasks = all_pending_tasks.order_by('day_offset')[:5]
+                    if earliest_tasks.exists():
+                        today_tasks = list(earliest_tasks)
+                        tomorrow_tasks = []
             
-            # Only include houses that have tasks
+            # Include houses that have any tasks (today, tomorrow, or upcoming)
             if today_tasks or tomorrow_tasks:
                 house_data = {
                     'id': house.id,
