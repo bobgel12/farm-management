@@ -13,16 +13,45 @@ def main():
     print("🐔 Starting Chicken House Management System...")
     
     # Set up Django
-    # Use production settings for Railway deployment
-    if os.getenv('RAILWAY_ENVIRONMENT'):
+    # Use production settings if DATABASE_URL is present (Railway always provides this)
+    # or if RAILWAY_ENVIRONMENT is set
+    if os.getenv('DATABASE_URL') or os.getenv('RAILWAY_ENVIRONMENT'):
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings_prod')
+        print("📋 Using production settings")
     else:
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings')
+        print("📋 Using development settings")
+    
     django.setup()
     
+    # Test database connection before running migrations
+    print("🔍 Testing database connection...")
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            result = cursor.fetchone()
+            if result:
+                print("✅ Database connection successful")
+            else:
+                print("⚠️  Database connection test returned no result")
+    except Exception as e:
+        print(f"❌ Database connection failed: {str(e)}")
+        print("💥 Database test failed, but continuing with startup...")
+        print("   Please check:")
+        print("   1. PostgreSQL service is linked in Railway")
+        print("   2. DATABASE_URL environment variable is set")
+        print("   3. Database service is running")
+    
     # Run migrations
-    print("Running database migrations...")
-    execute_from_command_line(['manage.py', 'migrate'])
+    print("🔄 Running migrations...")
+    try:
+        execute_from_command_line(['manage.py', 'migrate'])
+        print("✅ Migrations completed successfully")
+    except Exception as e:
+        print(f"❌ Migrations failed: {str(e)}")
+        print("   This may be due to database connection issues.")
+        print("   The application will continue, but database operations may fail.")
     
     # Create admin user if it doesn't exist
     try:

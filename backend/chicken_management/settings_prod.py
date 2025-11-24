@@ -12,17 +12,31 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED
 # Database - Railway PostgreSQL Service
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL)
-    }
-    # Add connection settings for Railway PostgreSQL
-    DATABASES['default']['CONN_MAX_AGE'] = 60
-    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
-    DATABASES['default']['OPTIONS'] = {
-        'connect_timeout': 30
-    }
-    print(f"✅ Using Railway PostgreSQL database: {DATABASE_URL[:20]}...")
+    try:
+        import dj_database_url
+        DATABASES = {
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
+        }
+        # Add connection settings for Railway PostgreSQL
+        DATABASES['default']['CONN_MAX_AGE'] = 60
+        DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+        DATABASES['default']['OPTIONS'] = {
+            'connect_timeout': 60,  # Increased timeout for Railway
+            'options': '-c statement_timeout=30000'  # 30 second statement timeout
+        }
+        # Extract database info for logging (without password)
+        db_info = DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else 'unknown'
+        print(f"✅ Using Railway PostgreSQL database: {db_info}")
+    except Exception as e:
+        print(f"❌ Error parsing DATABASE_URL: {str(e)}")
+        # Fallback to SQLite
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+        print("⚠️  Falling back to SQLite")
 else:
     # For Railway, we should always have DATABASE_URL
     # If not, use SQLite as fallback for development
