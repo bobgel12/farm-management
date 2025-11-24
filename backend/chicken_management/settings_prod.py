@@ -13,14 +13,14 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     try:
-    import dj_database_url
-    DATABASES = {
+        import dj_database_url
+        DATABASES = {
             'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
-    }
-    # Add connection settings for Railway PostgreSQL
-    DATABASES['default']['CONN_MAX_AGE'] = 60
-    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
-    DATABASES['default']['OPTIONS'] = {
+        }
+        # Add connection settings for Railway PostgreSQL
+        DATABASES['default']['CONN_MAX_AGE'] = 60
+        DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+        DATABASES['default']['OPTIONS'] = {
             'connect_timeout': 60,  # Increased timeout for Railway
             'options': '-c statement_timeout=30000'  # 30 second statement timeout
         }
