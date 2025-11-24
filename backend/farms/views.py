@@ -280,54 +280,66 @@ class FarmViewSet(ModelViewSet):
     def _generate_house_tasks(self, house, farm):
         """Generate tasks for a house based on its age and assigned program"""
         try:
-            # Get the farm's assigned program
-            program = farm.programs.first()  # Assuming farm has programs relationship
-            if not program:
-                # If no program assigned, create a default broiler program
-                program = Program.objects.create(
-                    farm=farm,
-                    name=f"Default Broiler Program - {farm.name}",
-                    description="Default broiler management program",
-                    program_type='broiler',
-                    duration_days=49,
+            from tasks.models import Task
+            from tasks.task_scheduler import TaskScheduler
+            
+            # Get the house's current day (day_offset)
+            current_day = house.current_day
+            if current_day is None:
+                # If no current_day, calculate from chicken_in_date
+                if house.chicken_in_date:
+                    from django.utils import timezone
+                    days_since_in = (timezone.now().date() - house.chicken_in_date).days
+                    current_day = days_since_in
+                else:
+                    # Can't generate tasks without a day reference
+                    IntegrationError.objects.create(
+                        farm=farm,
+                        integration_type='rotem',
+                        error_type='task_generation',
+                        error_message=f'Cannot generate tasks for house {house.house_number}: no current_day or chicken_in_date',
+                        error_code='TASK_GENERATION_FAILED'
+                    )
+                    return
+            
+            # Use TaskScheduler to generate all tasks for the house
+            # This creates Task objects with day_offset, which the email service needs
+            tasks = TaskScheduler.generate_tasks_for_house(house)
+            
+            # Also create ProgramTask instances if program exists (for program management)
+            program = farm.programs.first()
+            if program:
+                current_age = house.current_age_days or current_day
+                relevant_tasks = program.tasks.filter(
+                    start_day__lte=current_age,
+                    end_day__gte=current_age,
                     is_active=True
                 )
                 
-                # Create default program tasks
-                self._create_default_program_tasks(program)
-            
-            # Get tasks for the house's current age
-            current_age = house.current_age_days
-            relevant_tasks = program.tasks.filter(
-                start_day__lte=current_age,
-                end_day__gte=current_age,
-                is_active=True
-            )
-            
-            # Create ProgramTask instances for this house
-            for task_template in relevant_tasks:
-                # Check if task already exists for this house
-                existing_task = ProgramTask.objects.filter(
-                    program=program,
-                    house=house,
-                    task_name=task_template.task_name,
-                    scheduled_date__date=timezone.now().date()
-                ).first()
-                
-                if not existing_task:
-                    ProgramTask.objects.create(
+                # Create ProgramTask instances for this house
+                for task_template in relevant_tasks:
+                    # Check if task already exists for this house
+                    existing_task = ProgramTask.objects.filter(
                         program=program,
                         house=house,
                         task_name=task_template.task_name,
-                        description=task_template.description,
-                        task_type=task_template.task_type,
-                        priority=task_template.priority,
-                        estimated_duration=task_template.estimated_duration,
-                        scheduled_date=timezone.now(),
-                        status='pending',
-                        assigned_to=None,  # Will be assigned later
-                        notes=f"Auto-generated for house {house.house_number} (age {current_age} days)"
-                    )
+                        scheduled_date__date=timezone.now().date()
+                    ).first()
+                    
+                    if not existing_task:
+                        ProgramTask.objects.create(
+                            program=program,
+                            house=house,
+                            task_name=task_template.task_name,
+                            description=task_template.description,
+                            task_type=task_template.task_type,
+                            priority=task_template.priority,
+                            estimated_duration=task_template.estimated_duration,
+                            scheduled_date=timezone.now(),
+                            status='pending',
+                            assigned_to=None,  # Will be assigned later
+                            notes=f"Auto-generated for house {house.house_number} (age {current_age} days)"
+                        )
             
             # Log task generation
             IntegrationLog.objects.create(
@@ -335,7 +347,7 @@ class FarmViewSet(ModelViewSet):
                 integration_type='rotem',
                 action='generate_tasks',
                 status='success',
-                message=f'Generated {relevant_tasks.count()} tasks for house {house.house_number}'
+                message=f'Generated {len(tasks)} Task objects for house {house.house_number} (Day {current_day})'
             )
             
         except Exception as e:
