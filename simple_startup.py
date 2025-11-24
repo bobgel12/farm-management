@@ -120,8 +120,11 @@ def main():
             print("   This is informational only. Email will work if credentials are correct.")
     
     # Start the server
-    print("🚀 Starting Django development server...")
-    execute_from_command_line(['manage.py', 'runserver', '0.0.0.0:8000'])
+    # Railway sets PORT environment variable, default to 8000 if not set
+    port = os.getenv('PORT', '8000')
+    print(f"🚀 Starting Django development server on port {port}...")
+    print(f"🔗 Health check: http://0.0.0.0:{port}/api/health/")
+    execute_from_command_line(['manage.py', 'runserver', f'0.0.0.0:{port}'])
 
 if __name__ == '__main__':
     main()
