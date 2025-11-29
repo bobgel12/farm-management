@@ -129,8 +129,8 @@ const ComparisonDashboard: React.FC = () => {
       }
 
       data.sort((a, b) => {
-        let aVal: any = a[sortField];
-        let bVal: any = b[sortField];
+        const aVal: any = a[sortField];
+        const bVal: any = b[sortField];
 
         if (aVal === null || aVal === undefined) return 1;
         if (bVal === null || bVal === undefined) return -1;

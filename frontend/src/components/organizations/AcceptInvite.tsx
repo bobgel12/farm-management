@@ -237,7 +237,7 @@ const AcceptInvite: React.FC = () => {
               <Box sx={{ textAlign: 'center', mb: 3 }}>
                 <BusinessIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
                 <Typography variant="h5" gutterBottom>
-                  You're Invited!
+                  You&apos;re Invited!
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
                   {inviteInfo.invited_by} has invited you to join
@@ -395,7 +395,7 @@ const AcceptInvite: React.FC = () => {
 
                   {!user && !inviteInfo.has_existing_user && !showRegistration && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
-                      You'll be asked to create an account
+                      You&apos;ll be asked to create an account
                     </Typography>
                   )}
                 </>
