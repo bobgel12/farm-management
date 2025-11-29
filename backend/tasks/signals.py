@@ -13,27 +13,26 @@ from farms.models import Farm
 def auto_complete_past_tasks_for_house(sender, instance, created, **kwargs):
     """
     Automatically mark past tasks as completed when a new house is created
-    or when a house's chicken_in_date is updated
+    or when a house's chicken_in_date or current_age_days is updated
     """
-    # Check if chicken_in_date exists and current_day > 0
-    if instance.chicken_in_date:
-        current_day = instance.current_day
-        if current_day is not None and current_day > 0:
-            # Mark past tasks as completed
-            past_tasks = Task.objects.filter(
-                house=instance,
-                day_offset__lt=current_day,
-                is_completed=False
+    # Use age_days which prefers current_age_days (from Rotem) over calculated current_day
+    age_days = instance.age_days
+    if age_days is not None and age_days > 0:
+        # Mark past tasks as completed
+        past_tasks = Task.objects.filter(
+            house=instance,
+            day_offset__lt=age_days,
+            is_completed=False
+        )
+        
+        if past_tasks.exists():
+            action = 'creation' if created else 'update'
+            past_tasks.update(
+                is_completed=True,
+                completed_at=timezone.now(),
+                completed_by='system_auto_complete',
+                notes=f'Automatically marked as completed - past task after house {action}'
             )
-            
-            if past_tasks.exists():
-                action = 'creation' if created else 'update'
-                past_tasks.update(
-                    is_completed=True,
-                    completed_at=timezone.now(),
-                    completed_by='system_auto_complete',
-                    notes=f'Automatically marked as completed - past task after house {action}'
-                )
 
 
 @receiver(post_save, sender=Farm)
@@ -50,12 +49,13 @@ def auto_complete_past_tasks_for_farm(sender, instance, created, **kwargs):
     houses = instance.houses.filter(is_active=True)
     
     for house in houses:
-        current_day = house.current_day
-        if current_day is not None and current_day > 0:
+        # Use age_days which prefers current_age_days (from Rotem) over calculated current_day
+        age_days = house.age_days
+        if age_days is not None and age_days > 0:
             # Mark past tasks as completed
             past_tasks = Task.objects.filter(
                 house=house,
-                day_offset__lt=current_day,
+                day_offset__lt=age_days,
                 is_completed=False
             )
             

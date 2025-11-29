@@ -158,9 +158,9 @@ const TaskList: React.FC = () => {
             color={getStatusColor(house.status) as any}
             sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
           />
-          {house.current_day !== null && (
+          {(house.age_days ?? house.current_day) !== null && (
             <Chip
-              label={`Day ${house.current_day}`}
+              label={`Day ${house.age_days ?? house.current_day}`}
               variant="outlined"
               sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
             />
@@ -188,7 +188,7 @@ const TaskList: React.FC = () => {
               >
                 Day {day}
               </Typography>
-              {day === house.current_day && (
+              {day === (house.age_days ?? house.current_day) && (
                 <Chip 
                   label="Today" 
                   color="primary" 

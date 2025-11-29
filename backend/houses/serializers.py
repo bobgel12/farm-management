@@ -7,6 +7,8 @@ class HouseSerializer(serializers.ModelSerializer):
     farm = FarmListSerializer(read_only=True)
     farm_id = serializers.IntegerField(write_only=True)
     current_day = serializers.ReadOnlyField()
+    current_age_days = serializers.ReadOnlyField()
+    age_days = serializers.ReadOnlyField()  # Unified age (prefers current_age_days, fallback to current_day)
     days_remaining = serializers.ReadOnlyField()
     status = serializers.ReadOnlyField()
 
@@ -15,7 +17,8 @@ class HouseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'farm', 'farm_id', 'house_number', 'chicken_in_date',
             'chicken_out_date', 'chicken_out_day', 'is_active',
-            'current_day', 'days_remaining', 'status',
+            'current_day', 'current_age_days', 'age_days', 'days_remaining', 'status',
+            'is_integrated', 'batch_start_date', 'expected_harvest_date',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -37,6 +40,8 @@ class HouseSerializer(serializers.ModelSerializer):
 class HouseListSerializer(serializers.ModelSerializer):
     farm_name = serializers.CharField(source='farm.name', read_only=True)
     current_day = serializers.ReadOnlyField()
+    current_age_days = serializers.ReadOnlyField()
+    age_days = serializers.ReadOnlyField()  # Unified age (prefers current_age_days, fallback to current_day)
     days_remaining = serializers.ReadOnlyField()
     status = serializers.ReadOnlyField()
 
@@ -44,8 +49,9 @@ class HouseListSerializer(serializers.ModelSerializer):
         model = House
         fields = [
             'id', 'farm_name', 'house_number', 'chicken_in_date',
-            'chicken_out_date', 'current_day', 'days_remaining',
-            'status', 'is_active'
+            'chicken_out_date', 'current_day', 'current_age_days', 'age_days',
+            'days_remaining', 'status', 'is_active', 'is_integrated',
+            'batch_start_date', 'expected_harvest_date'
         ]
 
 
@@ -201,19 +207,36 @@ class HouseComparisonSerializer(serializers.Serializer):
     
     # House Status
     current_day = serializers.IntegerField(allow_null=True)
+    age_days = serializers.IntegerField(allow_null=True)
+    current_age_days = serializers.IntegerField(allow_null=True)
+    is_integrated = serializers.BooleanField(default=False)
     status = serializers.CharField()
     is_full_house = serializers.BooleanField()
     
     # Time
     last_update_time = serializers.DateTimeField(allow_null=True)
     
-    # Metrics
+    # Metrics - Temperature
     average_temperature = serializers.FloatField(allow_null=True)
+    outside_temperature = serializers.FloatField(allow_null=True)
+    tunnel_temperature = serializers.FloatField(allow_null=True)
+    target_temperature = serializers.FloatField(allow_null=True)
+    
+    # Metrics - Environment
     static_pressure = serializers.FloatField(allow_null=True)
     inside_humidity = serializers.FloatField(allow_null=True)
-    tunnel_temperature = serializers.FloatField(allow_null=True)
-    outside_temperature = serializers.FloatField(allow_null=True)
     ventilation_mode = serializers.CharField(allow_null=True)
+    ventilation_level = serializers.FloatField(allow_null=True)
+    airflow_cfm = serializers.FloatField(allow_null=True)
+    
+    # Metrics - Consumption (Daily)
+    water_consumption = serializers.FloatField(allow_null=True)
+    feed_consumption = serializers.FloatField(allow_null=True)
+    
+    # Metrics - Bird Status
+    bird_count = serializers.IntegerField(allow_null=True)
+    livability = serializers.FloatField(allow_null=True)
+    growth_day = serializers.IntegerField(allow_null=True)
     
     # Additional status
     is_connected = serializers.BooleanField()

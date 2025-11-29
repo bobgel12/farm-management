@@ -227,9 +227,9 @@ const FarmDetail: React.FC = () => {
                     </Typography>
                     
                     <Box display="flex" gap={1} alignItems="center">
-                      {house.current_day !== null ? (
+                      {(house.age_days ?? house.current_day) !== null ? (
                         <Chip 
-                          label={`Day ${house.current_day}`} 
+                          label={`Day ${house.age_days ?? house.current_day}`} 
                           size="small" 
                           color="secondary" 
                           variant="filled"
@@ -314,11 +314,12 @@ const FarmDetail: React.FC = () => {
                         {/* Today's and Tomorrow's Tasks */}
                         {(() => {
                           const todayTasks = house.pending_tasks.filter(task => task.is_today);
+                          const houseAge = house.age_days ?? house.current_day ?? 0;
                           const tomorrowTasks = house.pending_tasks.filter(task => 
-                            task.day_offset === (house.current_day || 0) + 1
+                            task.day_offset === houseAge + 1
                           );
                           const otherTasks = house.pending_tasks.filter(task => 
-                            !task.is_today && task.day_offset !== (house.current_day || 0) + 1
+                            !task.is_today && task.day_offset !== houseAge + 1
                           );
                           
                           return (
@@ -598,9 +599,9 @@ const FarmDetail: React.FC = () => {
                     color={getStatusColor(house.status) as any}
                     size="small"
                   />
-                  {house.current_day !== null && (
+                  {(house.age_days ?? house.current_day) !== null && (
                     <Chip
-                      label={`Day ${house.current_day}`}
+                      label={`Day ${house.age_days ?? house.current_day}`}
                       variant="outlined"
                       size="small"
                     />

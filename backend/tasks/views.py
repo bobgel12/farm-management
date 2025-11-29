@@ -99,13 +99,14 @@ def task_dashboard(request):
     incomplete_tasks = Task.objects.filter(is_completed=False)
     
     # Get today's tasks across all houses
+    # Use age_days which prefers current_age_days (from Rotem) over calculated current_day
     today_tasks = []
     for house in House.objects.filter(is_active=True):
-        current_day = house.current_day
-        if current_day is not None:
+        age_days = house.age_days  # Unified age - prefers current_age_days, fallback to current_day
+        if age_days is not None:
             house_tasks = Task.objects.filter(
                 house=house,
-                day_offset=current_day,
+                day_offset=age_days,
                 is_completed=False
             )
             for task in house_tasks:
@@ -121,11 +122,11 @@ def task_dashboard(request):
     # Get overdue tasks (tasks from previous days that are incomplete)
     overdue_tasks = []
     for house in House.objects.filter(is_active=True):
-        current_day = house.current_day
-        if current_day is not None and current_day > 0:
+        age_days = house.age_days  # Unified age - prefers current_age_days, fallback to current_day
+        if age_days is not None and age_days > 0:
             overdue = Task.objects.filter(
                 house=house,
-                day_offset__lt=current_day,
+                day_offset__lt=age_days,
                 is_completed=False
             )
             for task in overdue:
@@ -136,7 +137,7 @@ def task_dashboard(request):
                     'task_name': task.task_name,
                     'description': task.description,
                     'day_offset': task.day_offset,
-                    'days_overdue': current_day - task.day_offset
+                    'days_overdue': age_days - task.day_offset
                 })
     
     data = {

@@ -383,23 +383,23 @@ class TaskScheduler:
 
     @classmethod
     def get_today_tasks(cls, house):
-        """Get tasks for today based on house's current day"""
-        current_day = house.current_day
-        if current_day is None:
+        """Get tasks for today based on house's age_days (prefers Rotem age, fallback to calculated)"""
+        age_days = house.age_days
+        if age_days is None:
             return Task.objects.none()
-        return cls.get_tasks_for_day(house, current_day)
+        return cls.get_tasks_for_day(house, age_days)
 
     @classmethod
     def get_upcoming_tasks(cls, house, days_ahead=7):
         """Get upcoming tasks for the next N days"""
-        current_day = house.current_day
-        if current_day is None:
+        age_days = house.age_days
+        if age_days is None:
             return Task.objects.none()
         
-        end_day = min(current_day + days_ahead, 41)
+        end_day = min(age_days + days_ahead, 41)
         return Task.objects.filter(
             house=house,
-            day_offset__range=[current_day, end_day]
+            day_offset__range=[age_days, end_day]
         ).order_by('day_offset', 'task_name')
     
     @classmethod

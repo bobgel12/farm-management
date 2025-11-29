@@ -265,10 +265,24 @@ class MonitoringService:
                 sensor_data=parsed_data.get('sensor_data', {})
             )
             
-            # Update house with latest sync time
+            # Update house with latest sync time and Rotem age data
             house.last_system_sync = timezone.now()
             if general.get('growth_day'):
-                house.current_age_days = int(general.get('growth_day', 0))
+                growth_day = int(general.get('growth_day', 0))
+                house.current_age_days = growth_day
+                
+                # If house is integrated, update chicken_in_date to match Rotem's growth_day
+                # This ensures current_day calculation stays in sync with Rotem data
+                if house.is_integrated and growth_day > 0:
+                    from datetime import timedelta
+                    calculated_chicken_in_date = timezone.now().date() - timedelta(days=growth_day)
+                    house.chicken_in_date = calculated_chicken_in_date
+                    house.batch_start_date = calculated_chicken_in_date
+                    
+                    # Update expected harvest date (typically 42-49 days)
+                    if not house.expected_harvest_date or house.expected_harvest_date < timezone.now().date():
+                        house.expected_harvest_date = calculated_chicken_in_date + timedelta(days=house.chicken_out_day or 42)
+            
             house.save()
             
             # Create alarm records

@@ -62,6 +62,18 @@ export interface House {
   current_population: number;
   created_at: string;
   updated_at: string;
+  // Age tracking fields
+  current_day?: number | null;  // Calculated from chicken_in_date
+  current_age_days?: number;    // Stored value (from Rotem integration)
+  age_days?: number;            // Unified age (prefers current_age_days, fallback to current_day)
+  days_remaining?: number | null;
+  status?: string;
+  // Integration fields
+  is_integrated?: boolean;
+  batch_start_date?: string | null;
+  expected_harvest_date?: string | null;
+  chicken_in_date?: string;
+  chicken_out_date?: string | null;
 }
 
 export interface Task {
@@ -245,6 +257,40 @@ export interface OrganizationMembership {
   joined_at: string;
   is_owner?: boolean;
   is_admin?: boolean;
+}
+
+export interface OrganizationInvite {
+  id: string; // UUID
+  organization: string; // UUID
+  organization_name?: string;
+  email: string;
+  token: string;
+  role: 'owner' | 'admin' | 'manager' | 'worker' | 'viewer';
+  can_manage_farms: boolean;
+  can_manage_users: boolean;
+  can_view_reports: boolean;
+  can_export_data: boolean;
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  expires_at: string;
+  invited_by?: number;
+  invited_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  accepted_at?: string;
+  accepted_by?: number;
+  is_expired?: boolean;
+  is_valid?: boolean;
+}
+
+export interface InviteInfo {
+  organization_name: string;
+  email: string;
+  role: string;
+  is_valid: boolean;
+  is_expired: boolean;
+  status: string;
+  has_existing_user: boolean;
+  invited_by?: string;
 }
 
 // ==================== Flock Management Types ====================

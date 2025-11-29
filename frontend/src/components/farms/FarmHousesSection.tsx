@@ -43,6 +43,7 @@ interface HouseSensorData {
 interface ExtendedHouse extends House {
   house_number?: number;
   current_age_days?: number;
+  age_days?: number;  // Unified age (prefers current_age_days, fallback to current_day)
   is_integrated?: boolean;
   last_system_sync?: string;
 }
@@ -118,7 +119,7 @@ const FarmHousesSection: React.FC<FarmHousesSectionProps> = ({
                   {house.house_number && houseSensorData[house.house_number.toString()]?.sensors ? (
                     <>
                       <Typography color="textSecondary" variant="body2" gutterBottom>
-                        Age: {houseSensorData[house.house_number.toString()].sensors.growth_day?.current || house.current_age_days || 'N/A'} days
+                        Age: {houseSensorData[house.house_number.toString()].sensors.growth_day?.current || (house as any).age_days || house.current_age_days || 'N/A'} days
                       </Typography>
                       <Typography color="textSecondary" variant="body2" gutterBottom>
                         Temperature: {houseSensorData[house.house_number.toString()].sensors.temperature?.current || 'N/A'}°C
@@ -133,7 +134,7 @@ const FarmHousesSection: React.FC<FarmHousesSectionProps> = ({
                   ) : (
                     <>
                       <Typography color="textSecondary" variant="body2" gutterBottom>
-                        Age: {house.current_age_days || 'N/A'} days
+                        Age: {(house as any).age_days || house.current_age_days || 'N/A'} days
                       </Typography>
                       <Typography color="textSecondary" variant="body2" gutterBottom>
                         Temperature: Loading...

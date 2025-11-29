@@ -123,7 +123,8 @@ class TaskEmailService:
         }
         
         for house in houses:
-            current_day = house.current_day
+            # Use age_days which prefers current_age_days (from Rotem) over calculated current_day
+            current_day = house.age_days
             
             # First, check if house has ANY pending tasks (regardless of day)
             all_pending_tasks = Task.objects.filter(
@@ -135,14 +136,14 @@ class TaskEmailService:
             if not all_pending_tasks.exists():
                 continue
             
-            # If current_day is None, calculate it from tasks or use 0
-            if current_day is None:
+            # If age_days is None or 0, calculate it from tasks or use 0
+            if current_day is None or current_day == 0:
                 # Try to get the minimum day_offset from pending tasks
                 min_day = all_pending_tasks.aggregate(
                     min_day=models.Min('day_offset')
                 )['min_day']
                 current_day = min_day if min_day is not None else 0
-                logger.debug(f"House {house.id} has no current_day, using {current_day} from tasks")
+                logger.debug(f"House {house.id} has no age_days, using {current_day} from tasks")
                 
             # Get today's tasks
             today_tasks = Task.objects.filter(

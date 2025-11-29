@@ -191,9 +191,9 @@ const HouseDetailPage: React.FC = () => {
                 {house.farm_name || house.farm?.name || (currentFarm || houseFarm)?.name}
               </Typography>
             </Box>
-            {house.current_day !== null && (
+            {(house.age_days ?? house.current_day) !== null && (
               <Chip
-                label={`Day ${house.current_day}`}
+                label={`Day ${house.age_days ?? house.current_day}`}
                 color="primary"
                 variant="outlined"
               />

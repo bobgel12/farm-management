@@ -448,10 +448,11 @@ def houses_comparison(request):
     
     for house in houses:
         snapshot = house.get_latest_snapshot()
-        current_day = house.current_day
+        # Use age_days which prefers Rotem's current_age_days over calculated current_day
+        age_days = house.age_days
         
         # Determine if house is full (has chickens)
-        is_full_house = current_day is not None and current_day >= 0
+        is_full_house = age_days is not None and age_days >= 0
         
         # Get ventilation mode from snapshot or default
         ventilation_mode = None
@@ -474,21 +475,38 @@ def houses_comparison(request):
             'farm_id': house.farm.id,
             'farm_name': house.farm.name,
             
-            # House Status
-            'current_day': current_day,
+            # House Status - use age_days for consistency (prefers Rotem age over calculated)
+            'current_day': age_days,
+            'age_days': age_days,
+            'current_age_days': house.current_age_days,
+            'is_integrated': house.is_integrated,
             'status': house.status,
             'is_full_house': is_full_house,
             
             # Time
             'last_update_time': snapshot.timestamp if snapshot else None,
             
-            # Metrics
+            # Metrics - Temperature
             'average_temperature': snapshot.average_temperature if snapshot else None,
+            'outside_temperature': snapshot.outside_temperature if snapshot else None,
+            'tunnel_temperature': None,  # Will be extracted from sensor_data if available
+            'target_temperature': snapshot.target_temperature if snapshot else None,
+            
+            # Metrics - Environment
             'static_pressure': snapshot.static_pressure if snapshot else None,
             'inside_humidity': snapshot.humidity if snapshot else None,
-            'tunnel_temperature': None,  # Will be extracted from sensor_data if available
-            'outside_temperature': snapshot.outside_temperature if snapshot else None,
             'ventilation_mode': ventilation_mode,
+            'ventilation_level': snapshot.ventilation_level if snapshot else None,
+            'airflow_cfm': snapshot.airflow_cfm if snapshot else None,
+            
+            # Metrics - Consumption (Daily)
+            'water_consumption': snapshot.water_consumption if snapshot else None,
+            'feed_consumption': snapshot.feed_consumption if snapshot else None,
+            
+            # Metrics - Bird Status
+            'bird_count': snapshot.bird_count if snapshot else None,
+            'livability': snapshot.livability if snapshot else None,
+            'growth_day': snapshot.growth_day if snapshot else None,
             
             # Additional status
             'is_connected': snapshot.is_connected if snapshot else False,

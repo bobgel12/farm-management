@@ -173,7 +173,7 @@ const HouseDetail: React.FC = () => {
                   variant="h6"
                   sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 600 }}
                 >
-                  {house.current_day !== null ? `Day ${house.current_day}` : 'N/A'}
+                  {(house.age_days ?? house.current_day) !== null ? `Day ${house.age_days ?? house.current_day}` : 'N/A'}
                 </Typography>
               </CardContent>
             </Card>

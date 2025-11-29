@@ -315,20 +315,20 @@ class FarmViewSet(ModelViewSet):
                 # Get age from Rotem system (returns 0 if not available)
                 age = integration.get_house_age(farm.id, i)
                 house.current_age_days = age
+                house.is_integrated = True  # Mark as integrated
                 
                 # Calculate batch start date based on age
                 if age > 0:
                     # Calculate the actual chicken in date based on current age
+                    # This ensures current_day (calculated property) matches current_age_days
                     house.batch_start_date = timezone.now().date() - timezone.timedelta(days=age)
-                    house.chicken_in_date = house.batch_start_date  # Set chicken_in_date to the calculated batch start date
-                    house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=49)  # Typical 7-week cycle
-                    house.current_day = age
+                    house.chicken_in_date = house.batch_start_date
+                    house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=house.chicken_out_day or 42)
                 else:
                     # If age is 0, set default dates for new batch
                     house.batch_start_date = timezone.now().date()
                     house.chicken_in_date = house.batch_start_date
-                    house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=49)
-                    house.current_day = 0
+                    house.expected_harvest_date = house.batch_start_date + timezone.timedelta(days=house.chicken_out_day or 42)
                 
                 house.save()
                 
