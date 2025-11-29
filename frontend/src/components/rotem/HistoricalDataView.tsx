@@ -36,7 +36,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import { useParams } from 'react-router-dom';
 import { rotemApi } from '../../services/rotemApi';
-import { RotemDailySummary, RotemFarm, RotemController } from '../../types/rotem';
+import { RotemDailySummary, IntegratedFarm, RotemController } from '../../types/rotem';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -61,7 +61,7 @@ function TabPanel(props: TabPanelProps) {
 
 const HistoricalDataView: React.FC = () => {
   const { farmId } = useParams<{ farmId?: string }>();
-  const [farms, setFarms] = useState<RotemFarm[]>([]);
+  const [farms, setFarms] = useState<IntegratedFarm[]>([]);
   const [controllers, setControllers] = useState<RotemController[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<string>(farmId || '');
   const [selectedControllerId, setSelectedControllerId] = useState<number | ''>('');

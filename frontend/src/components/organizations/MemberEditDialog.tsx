@@ -101,7 +101,7 @@ const MemberEditDialog: React.FC<MemberEditDialogProps> = ({
 
             {isOwner ? (
               <Alert severity="info" sx={{ mb: 2 }}>
-                Owner role cannot be changed. Transfer ownership to change this member's role.
+                Owner role cannot be changed. Transfer ownership to change this member&apos;s role.
               </Alert>
             ) : (
               <>

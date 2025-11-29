@@ -52,9 +52,14 @@ interface House {
   chicken_in_date: string;
   chicken_out_date: string | null;
   current_day: number | null;
+  age_days?: number | null;  // Unified age (prefers current_age_days from Rotem, fallback to current_day)
+  current_age_days?: number;
   days_remaining: number | null;
   status: string;
   is_active: boolean;
+  is_integrated?: boolean;
+  batch_start_date?: string | null;
+  expected_harvest_date?: string | null;
 }
 
 interface TaskSummary {
@@ -78,6 +83,8 @@ interface HouseTaskSummary {
   id: number;
   house_number: number;
   current_day: number | null;
+  age_days?: number | null;  // Unified age (prefers current_age_days from Rotem, fallback to current_day)
+  current_age_days?: number;
   status: string;
   chicken_in_date: string;
   chicken_out_date: string | null;
