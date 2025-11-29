@@ -1,17 +1,22 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db import transaction
-from .models import Organization, OrganizationUser
+from .models import Organization, OrganizationUser, OrganizationInvite
 from .serializers import (
     OrganizationSerializer,
     OrganizationListSerializer,
     OrganizationUserSerializer,
-    OrganizationMembershipSerializer
+    OrganizationMembershipSerializer,
+    OrganizationInviteSerializer,
+    CreateInviteSerializer,
+    AcceptInviteSerializer
 )
+from .invite_service import OrganizationInviteService
 
 
 class OrganizationViewSet(viewsets.ModelViewSet):
@@ -195,6 +200,151 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         
         serializer = OrganizationMembershipSerializer(memberships, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def invite(self, request, pk=None):
+        """Send an invite to join the organization"""
+        organization = self.get_object()
+        
+        # Check permission
+        membership = OrganizationUser.objects.filter(
+            organization=organization,
+            user=request.user,
+            is_active=True
+        ).first()
+        
+        if not membership or not membership.can_manage_users:
+            return Response(
+                {'error': 'You do not have permission to invite members'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = CreateInviteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = OrganizationInviteService.create_invite(
+            organization=organization,
+            email=serializer.validated_data['email'],
+            invited_by=request.user,
+            role=serializer.validated_data.get('role', 'worker'),
+            can_manage_farms=serializer.validated_data.get('can_manage_farms', False),
+            can_manage_users=serializer.validated_data.get('can_manage_users', False),
+            can_view_reports=serializer.validated_data.get('can_view_reports', True),
+            can_export_data=serializer.validated_data.get('can_export_data', False),
+        )
+        
+        if result['success']:
+            invite_serializer = OrganizationInviteSerializer(result['invite'])
+            return Response({
+                'message': result['message'],
+                'invite': invite_serializer.data
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response(
+                {'error': result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['get'])
+    def pending_invites(self, request, pk=None):
+        """Get all pending invites for the organization"""
+        organization = self.get_object()
+        
+        # Check permission
+        membership = OrganizationUser.objects.filter(
+            organization=organization,
+            user=request.user,
+            is_active=True
+        ).first()
+        
+        if not membership or not membership.can_manage_users:
+            return Response(
+                {'error': 'You do not have permission to view invites'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        invites = OrganizationInviteService.get_pending_invites(organization)
+        serializer = OrganizationInviteSerializer(invites, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='resend-invite/(?P<invite_id>[^/.]+)')
+    def resend_invite(self, request, pk=None, invite_id=None):
+        """Resend an invitation"""
+        organization = self.get_object()
+        
+        # Check permission
+        membership = OrganizationUser.objects.filter(
+            organization=organization,
+            user=request.user,
+            is_active=True
+        ).first()
+        
+        if not membership or not membership.can_manage_users:
+            return Response(
+                {'error': 'You do not have permission to resend invites'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            invite = OrganizationInvite.objects.get(
+                id=invite_id,
+                organization=organization
+            )
+        except OrganizationInvite.DoesNotExist:
+            return Response(
+                {'error': 'Invite not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        result = OrganizationInviteService.resend_invite(invite)
+        
+        if result['success']:
+            return Response({'message': result['message']})
+        else:
+            return Response(
+                {'error': result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['delete'], url_path='cancel-invite/(?P<invite_id>[^/.]+)')
+    def cancel_invite(self, request, pk=None, invite_id=None):
+        """Cancel a pending invitation"""
+        organization = self.get_object()
+        
+        # Check permission
+        membership = OrganizationUser.objects.filter(
+            organization=organization,
+            user=request.user,
+            is_active=True
+        ).first()
+        
+        if not membership or not membership.can_manage_users:
+            return Response(
+                {'error': 'You do not have permission to cancel invites'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            invite = OrganizationInvite.objects.get(
+                id=invite_id,
+                organization=organization
+            )
+        except OrganizationInvite.DoesNotExist:
+            return Response(
+                {'error': 'Invite not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        result = OrganizationInviteService.cancel_invite(invite)
+        
+        if result['success']:
+            return Response({'message': result['message']}, status=status.HTTP_204_NO_CONTENT)
+        else:
+            return Response(
+                {'error': result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class OrganizationUserViewSet(viewsets.ModelViewSet):
@@ -242,4 +392,84 @@ class OrganizationUserViewSet(viewsets.ModelViewSet):
             )
         
         return super().update(request, *args, **kwargs)
+
+
+class InviteInfoView(APIView):
+    """View for getting invite information (public endpoint)"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request, token):
+        """Get invite information by token"""
+        result = OrganizationInviteService.get_invite_info(token)
+        
+        if result['success']:
+            return Response({
+                'organization_name': result['organization_name'],
+                'email': result['email'],
+                'role': result['role'],
+                'is_valid': result['is_valid'],
+                'is_expired': result['is_expired'],
+                'status': result['status'],
+                'has_existing_user': result['has_existing_user'],
+                'invited_by': result['invited_by']
+            })
+        else:
+            return Response(
+                {'error': result['message']},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class AcceptInviteView(APIView):
+    """View for accepting organization invites"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, token):
+        """Accept an organization invite"""
+        serializer = AcceptInviteSerializer(data={'token': token, **request.data})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get the current user if authenticated
+        user = request.user if request.user.is_authenticated else None
+        
+        # Prepare create_user_data if provided
+        create_user_data = None
+        if serializer.validated_data.get('username') and serializer.validated_data.get('password'):
+            create_user_data = {
+                'username': serializer.validated_data['username'],
+                'password': serializer.validated_data['password'],
+                'first_name': serializer.validated_data.get('first_name', ''),
+                'last_name': serializer.validated_data.get('last_name', '')
+            }
+        
+        result = OrganizationInviteService.accept_invite(
+            token=token,
+            user=user,
+            create_user_data=create_user_data
+        )
+        
+        if result['success']:
+            response_data = {
+                'message': result['message'],
+                'organization': {
+                    'id': str(result['organization'].id),
+                    'name': result['organization'].name
+                }
+            }
+            
+            # If a new user was created, include their info
+            if create_user_data and result.get('user'):
+                response_data['user'] = {
+                    'id': result['user'].id,
+                    'username': result['user'].username,
+                    'email': result['user'].email
+                }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+        else:
+            response_data = {'error': result['message']}
+            if result.get('requires_registration'):
+                response_data['requires_registration'] = True
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 

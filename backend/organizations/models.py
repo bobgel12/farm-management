@@ -198,3 +198,91 @@ class OrganizationUser(models.Model):
         
         return permission_map.get(permission, False)
 
+
+class OrganizationInvite(models.Model):
+    """Invitation to join an organization"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='invites'
+    )
+    email = models.EmailField(validators=[EmailValidator()], help_text="Email address to invite")
+    token = models.CharField(max_length=64, unique=True, help_text="Unique invite token")
+    
+    # Invite details
+    role = models.CharField(max_length=20, choices=OrganizationUser.ROLE_CHOICES, default='worker')
+    can_manage_farms = models.BooleanField(default=False)
+    can_manage_users = models.BooleanField(default=False)
+    can_view_reports = models.BooleanField(default=True)
+    can_export_data = models.BooleanField(default=False)
+    
+    # Status tracking
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    expires_at = models.DateTimeField(help_text="When the invite expires")
+    
+    # Metadata
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='sent_invites'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='accepted_invites'
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Organization Invite'
+        verbose_name_plural = 'Organization Invites'
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['email']),
+            models.Index(fields=['organization', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"Invite to {self.organization.name} for {self.email}"
+    
+    @property
+    def is_expired(self):
+        """Check if invite has expired"""
+        return timezone.now() > self.expires_at
+    
+    @property
+    def is_valid(self):
+        """Check if invite is valid (pending and not expired)"""
+        return self.status == 'pending' and not self.is_expired
+    
+    def mark_expired(self):
+        """Mark invite as expired"""
+        self.status = 'expired'
+        self.save(update_fields=['status', 'updated_at'])
+    
+    def mark_accepted(self, user):
+        """Mark invite as accepted"""
+        self.status = 'accepted'
+        self.accepted_at = timezone.now()
+        self.accepted_by = user
+        self.save(update_fields=['status', 'accepted_at', 'accepted_by', 'updated_at'])
+    
+    def cancel(self):
+        """Cancel the invite"""
+        self.status = 'cancelled'
+        self.save(update_fields=['status', 'updated_at'])
+

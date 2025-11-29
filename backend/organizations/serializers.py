@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Organization, OrganizationUser
+from .models import Organization, OrganizationUser, OrganizationInvite
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -88,3 +88,42 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'joined_at']
 
+
+class OrganizationInviteSerializer(serializers.ModelSerializer):
+    """Serializer for OrganizationInvite model"""
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    invited_by_name = serializers.CharField(source='invited_by.username', read_only=True)
+    is_expired = serializers.ReadOnlyField()
+    is_valid = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = OrganizationInvite
+        fields = [
+            'id', 'organization', 'organization_name', 'email', 'token',
+            'role', 'can_manage_farms', 'can_manage_users', 'can_view_reports', 'can_export_data',
+            'status', 'expires_at',
+            'invited_by', 'invited_by_name', 'created_at', 'updated_at',
+            'accepted_at', 'accepted_by',
+            'is_expired', 'is_valid'
+        ]
+        read_only_fields = ['id', 'token', 'created_at', 'updated_at', 'accepted_at', 'accepted_by']
+
+
+class CreateInviteSerializer(serializers.Serializer):
+    """Serializer for creating an invite"""
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(choices=OrganizationUser.ROLE_CHOICES, default='worker')
+    can_manage_farms = serializers.BooleanField(default=False)
+    can_manage_users = serializers.BooleanField(default=False)
+    can_view_reports = serializers.BooleanField(default=True)
+    can_export_data = serializers.BooleanField(default=False)
+
+
+class AcceptInviteSerializer(serializers.Serializer):
+    """Serializer for accepting an invite"""
+    token = serializers.CharField()
+    # For new users who need to register
+    username = serializers.CharField(required=False, allow_blank=True)
+    password = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)

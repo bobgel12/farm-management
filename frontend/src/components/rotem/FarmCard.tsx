@@ -20,12 +20,12 @@ import {
   Edit,
   Visibility,
 } from '@mui/icons-material';
-import { RotemFarm, FarmDataSummary } from '../../types/rotem';
+import { IntegratedFarm, FarmDataSummary } from '../../types/rotem';
 import { useRotem } from '../../contexts/RotemContext';
 import { useNavigate } from 'react-router-dom';
 
 interface FarmCardProps {
-  farm: RotemFarm;
+  farm: IntegratedFarm;
   summary?: FarmDataSummary;
 }
 

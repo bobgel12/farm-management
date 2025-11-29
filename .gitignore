@@ -99,3 +99,5 @@ settings.local.py
 *.cache
 backend/chicken_management/settings_prod.py
 backend/chicken_management/settings_prod.py
+frontend/playwright-report/
+playwright-auth.json

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { flocksApi } from '../services/flocksApi';
+import { useOrganization } from './OrganizationContext';
 import {
   Breed,
   Flock,
@@ -65,6 +66,22 @@ export const FlockProvider: React.FC<FlockProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Get current organization from context
+  const { currentOrganization } = useOrganization();
+  const prevOrgIdRef = useRef<string | null>(null);
+
+  // Clear flocks when organization changes (they will be refetched when needed)
+  useEffect(() => {
+    const currentOrgId = currentOrganization?.id || null;
+    
+    if (currentOrgId !== prevOrgIdRef.current) {
+      prevOrgIdRef.current = currentOrgId;
+      // Clear flocks to trigger refetch with new organization
+      setFlocks([]);
+      setCurrentFlock(null);
+    }
+  }, [currentOrganization?.id]);
+
   const fetchBreeds = useCallback(async () => {
     try {
       setLoading(true);
@@ -93,7 +110,12 @@ export const FlockProvider: React.FC<FlockProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await flocksApi.getFlocks(params);
+      // Auto-include organization_id if not provided and organization is selected
+      const fetchParams = {
+        ...params,
+        organization_id: params?.organization_id || currentOrganization?.id,
+      };
+      const data = await flocksApi.getFlocks(fetchParams);
       // getFlocks already handles pagination and returns Flock[]
       const flocksArray = Array.isArray(data) ? data : ((data as any)?.results || []);
       console.log('FlockContext: Fetched flocks:', flocksArray.length, flocksArray);

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import {
-  RotemFarm,
+  IntegratedFarm,
   RotemDataPoint,
   FarmDataSummary,
   RotemScrapeLog,
@@ -11,7 +11,7 @@ import { rotemApi } from '../services/rotemApi';
 import { useAuth } from './AuthContext';
 
 interface RotemState {
-  farms: RotemFarm[];
+  farms: IntegratedFarm[];
   dataSummary: FarmDataSummary[];
   recentData: RotemDataPoint[];
   scrapeLogs: RotemScrapeLog[];
@@ -25,9 +25,9 @@ interface RotemState {
 type RotemAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_FARMS'; payload: RotemFarm[] }
-  | { type: 'ADD_FARM'; payload: RotemFarm }
-  | { type: 'UPDATE_FARM'; payload: RotemFarm }
+  | { type: 'SET_FARMS'; payload: IntegratedFarm[] }
+  | { type: 'ADD_FARM'; payload: IntegratedFarm }
+  | { type: 'UPDATE_FARM'; payload: IntegratedFarm }
   | { type: 'DELETE_FARM'; payload: string }
   | { type: 'SET_DATA_SUMMARY'; payload: FarmDataSummary[] }
   | { type: 'SET_RECENT_DATA'; payload: RotemDataPoint[] }

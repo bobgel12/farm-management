@@ -1,4 +1,32 @@
 // Rotem Integration Types
+
+/**
+ * IntegratedFarm - Farm model with Rotem integration
+ * This replaces the legacy RotemFarm interface
+ */
+export interface IntegratedFarm {
+  id: number;
+  farm_id: string;        // rotem_farm_id
+  farm_name: string;      // name field alias for backward compatibility
+  name: string;           // Farm name
+  location: string;
+  gateway_name: string;   // rotem_gateway_name
+  gateway_alias: string;  // rotem_gateway_alias
+  integration_type: string;
+  integration_status: string;
+  rotem_username?: string;
+  rotem_farm_id?: string;
+  rotem_gateway_name?: string;
+  rotem_gateway_alias?: string;
+  is_active: boolean;
+  created_at: string;
+  controllers_count: number;
+}
+
+/**
+ * @deprecated Use IntegratedFarm instead
+ * Legacy RotemFarm interface for backward compatibility
+ */
 export interface RotemFarm {
   id: string;
   farm_id: string;
@@ -163,7 +191,7 @@ export interface SensorChartData {
 }
 
 export interface FarmDashboardData {
-  farm: RotemFarm;
+  farm: IntegratedFarm;
   controllers: RotemController[];
   recent_data: RotemDataPoint[];
   summary: FarmDataSummary;

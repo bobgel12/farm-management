@@ -8,5 +8,8 @@ router.register(r'organization-users', views.OrganizationUserViewSet, basename='
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Public invite endpoints
+    path('invites/<str:token>/info/', views.InviteInfoView.as_view(), name='invite-info'),
+    path('invites/<str:token>/accept/', views.AcceptInviteView.as_view(), name='accept-invite'),
 ]
 

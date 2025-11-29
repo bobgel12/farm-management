@@ -37,6 +37,9 @@ import FlockForm from './components/flocks/FlockForm';
 import FlockDetail from './components/flocks/FlockDetail';
 import BIDashboard from './components/analytics/BIDashboard';
 import OrganizationSettings from './components/organizations/OrganizationSettings';
+import OrganizationList from './components/organizations/OrganizationList';
+import OrganizationForm from './components/organizations/OrganizationForm';
+import AcceptInvite from './components/organizations/AcceptInvite';
 import ReportList from './components/reporting/ReportList';
 import PerformanceRecordForm from './components/flocks/PerformanceRecordForm';
 import theme from './theme';
@@ -65,6 +68,7 @@ function App() {
                         <Route path="/login" element={<Login />} />
                         <Route path="/forgot-password" element={<PasswordResetRequest />} />
                         <Route path="/reset-password" element={<PasswordResetForm />} />
+                        <Route path="/accept-invite/:token" element={<AcceptInvite />} />
                         <Route path="/" element={
                           <ProtectedRoute>
                             <ProfessionalLayout>
@@ -202,6 +206,27 @@ function App() {
                           <ProtectedRoute>
                             <ProfessionalLayout>
                               <PerformanceRecordForm />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/organizations" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <OrganizationList />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/organizations/new" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <OrganizationForm />
+                            </ProfessionalLayout>
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/organizations/:id/edit" element={
+                          <ProtectedRoute>
+                            <ProfessionalLayout>
+                              <OrganizationForm />
                             </ProfessionalLayout>
                           </ProtectedRoute>
                         } />

@@ -3,6 +3,8 @@
 
 .PHONY: help install dev build up down restart logs clean test seed email-test deploy-railway railway-env railway-up railway-dev railway-link logs-email
 
+DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo docker-compose; else echo "docker compose"; fi)
+
 # Default target
 help: ## Show this help message
 	@echo "Chicken House Management System"
@@ -21,7 +23,7 @@ install: ## Install dependencies and setup project
 
 dev: ## Start development environment
 	@echo "🔧 Starting development environment..."
-	docker-compose up -d
+	$(DOCKER_COMPOSE) up -d
 	@echo "✅ Development environment started!"
 	@echo "📱 Frontend: http://localhost:3002"
 	@echo "🔧 Backend: http://localhost:8002"
@@ -107,7 +109,7 @@ railway-dev: railway-env dev ## Fetch Railway env vars and start development env
 # Docker Commands
 build: ## Build Docker images
 	@echo "🔨 Building Docker images..."
-	docker-compose build
+	$(DOCKER_COMPOSE) build
 
 up: ## Start all services
 	@echo "🚀 Starting all services..."
@@ -115,36 +117,36 @@ up: ## Start all services
 		echo "⚠️  .env file not found. Using default environment variables."; \
 		echo "   Run 'make railway-env' to fetch from Railway, or create .env manually."; \
 	fi
-	docker-compose up -d
+	$(DOCKER_COMPOSE) up -d
 
 down: ## Stop all services
 	@echo "🛑 Stopping all services..."
-	docker-compose down
+	$(DOCKER_COMPOSE) down
 
 restart: ## Restart all services
 	@echo "🔄 Restarting all services..."
-	docker-compose restart
+	$(DOCKER_COMPOSE) restart
 
 logs: ## Show logs for all services
 	@echo "📋 Showing logs..."
-	docker-compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 logs-backend: ## Show backend logs only
 	@echo "📋 Showing backend logs..."
-	docker-compose logs -f backend
+	$(DOCKER_COMPOSE) logs -f backend
 
 logs-frontend: ## Show frontend logs only
 	@echo "📋 Showing frontend logs..."
-	docker-compose logs -f frontend
+	$(DOCKER_COMPOSE) logs -f frontend
 
 logs-email: ## Show email-related logs only
 	@echo "📧 Showing email logs..."
-	docker-compose logs -f backend | grep -i -E "(email|smtp|mail|send.*email|test.*email|email.*test|email.*service|email.*error|email.*fail)"
+	$(DOCKER_COMPOSE) logs -f backend | grep -i -E "(email|smtp|mail|send.*email|test.*email|email.*test|email.*service|email.*error|email.*fail)"
 
 # Database Commands
 migrate: ## Run database migrations
 	@echo "🗄️ Running database migrations..."
-	docker-compose exec backend python manage.py migrate
+	$(DOCKER_COMPOSE) exec backend python manage.py migrate
 	@echo "✅ Migrations applied successfully!"
 
 migrate-all: ## Run migrations for all apps including new features
@@ -153,23 +155,23 @@ migrate-all: ## Run migrations for all apps including new features
 	@echo "   - Farms (flock management)"
 	@echo "   - Reporting"
 	@echo "   - Analytics"
-	docker-compose exec backend python manage.py migrate organizations farms reporting analytics
+	$(DOCKER_COMPOSE) exec backend python manage.py migrate organizations farms reporting analytics
 	@echo "✅ All migrations applied successfully!"
 
 migrate-create: ## Create new migration
 	@echo "📝 Creating new migration..."
 	@read -p "Enter migration name: " name; \
-	docker-compose exec backend python manage.py makemigrations $$name
+	$(DOCKER_COMPOSE) exec backend python manage.py makemigrations $$name
 
 # Data Management
 seed: ## Seed database with sample data
 	@echo "🌱 Seeding database with sample data..."
-	docker-compose exec backend python manage.py seed_data --clear
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_data --clear
 	@echo "✅ Database seeded!"
 
 seed-variety: ## Seed database with variety of data
 	@echo "🌱 Seeding database with variety of data..."
-	docker-compose exec backend python manage.py seed_data --clear --variety
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_data --clear --variety
 	@echo "✅ Database seeded with variety!"
 
 seed-custom: ## Seed database with custom parameters
@@ -177,7 +179,7 @@ seed-custom: ## Seed database with custom parameters
 	@read -p "Number of farms (default 3): " farms; \
 	read -p "Houses per farm (default 5): " houses; \
 	read -p "Workers per farm (default 3): " workers; \
-	docker-compose exec backend python manage.py seed_data --clear --farms $${farms:-3} --houses-per-farm $${houses:-5} --workers-per-farm $${workers:-3}
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_data --clear --farms $${farms:-3} --houses-per-farm $${houses:-5} --workers-per-farm $${workers:-3}
 	@echo "✅ Database seeded with custom data!"
 
 # Email Commands
@@ -192,12 +194,12 @@ email-test: ## Send test email
 
 email-daily: ## Send daily task emails
 	@echo "📧 Sending daily task emails..."
-	docker-compose exec backend python manage.py send_daily_tasks
+	$(DOCKER_COMPOSE) exec backend python manage.py send_daily_tasks
 
 # Rotem Scraper Commands
 rotem-test: ## Test Rotem scraper
 	@echo "🔍 Testing Rotem scraper..."
-	docker-compose exec backend python manage.py test_scraper
+	$(DOCKER_COMPOSE) exec backend python manage.py test_scraper
 
 rotem-setup: ## Setup Rotem credentials
 	@echo "⚙️ Setting up Rotem credentials..."
@@ -216,42 +218,84 @@ rotem-setup: ## Setup Rotem credentials
 
 rotem-logs: ## Show Rotem scraper logs
 	@echo "📋 Showing Rotem scraper logs..."
-	docker-compose logs -f backend | grep -i rotem
+	$(DOCKER_COMPOSE) logs -f backend | grep -i rotem
+
+rotem-seed: ## Seed Rotem test data for Playwright tests
+	@echo "🌱 Seeding Rotem test data..."
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_rotem_data --days=7
+	@echo "✅ Rotem test data seeded!"
+
+rotem-seed-clear: ## Clear and re-seed Rotem test data
+	@echo "🧹 Clearing and re-seeding Rotem test data..."
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_rotem_data --clear --days=7
+	@echo "✅ Rotem test data re-seeded!"
 
 # Testing Commands
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	docker-compose exec backend python manage.py test
+	$(DOCKER_COMPOSE) exec backend python manage.py test
 
 test-email-config: ## Test email configuration
 	@echo "📧 Testing email configuration..."
 	python test_railway_email.py
 
+# Playwright E2E Tests
+test-e2e: ## Run Playwright E2E tests (requires frontend running)
+	@echo "🎭 Running Playwright E2E tests..."
+	cd frontend && npx playwright test
+
+test-e2e-ui: ## Run Playwright tests with UI
+	@echo "🎭 Running Playwright tests with UI..."
+	cd frontend && npx playwright test --ui
+
+test-e2e-headed: ## Run Playwright tests in headed mode
+	@echo "🎭 Running Playwright tests in headed mode..."
+	cd frontend && npx playwright test --headed
+
+test-e2e-rotem: ## Run Rotem integration E2E tests only
+	@echo "🎭 Running Rotem integration tests..."
+	cd frontend && npx playwright test rotem-integration.spec.ts
+
+test-e2e-ml: ## Run ML analytics E2E tests only
+	@echo "🎭 Running ML analytics tests..."
+	cd frontend && npx playwright test ml-analytics.spec.ts
+
+test-e2e-farm: ## Run Farm integration E2E tests only
+	@echo "🎭 Running Farm integration tests..."
+	cd frontend && npx playwright test farm-integration.spec.ts
+
+test-e2e-setup: ## Setup Playwright and seed test data
+	@echo "🔧 Setting up Playwright tests..."
+	cd frontend && npm install @playwright/test playwright
+	cd frontend && npx playwright install chromium
+	$(MAKE) rotem-seed
+	@echo "✅ Playwright setup complete!"
+
 # Cleanup Commands
 clean: ## Clean up Docker containers and volumes
 	@echo "🧹 Cleaning up..."
-	docker-compose down -v
+	$(DOCKER_COMPOSE) down -v
 	docker system prune -f
 	@echo "✅ Cleanup complete!"
 
 clean-all: ## Clean up everything including images
 	@echo "🧹 Deep cleaning..."
-	docker-compose down -v --rmi all
+	$(DOCKER_COMPOSE) down -v --rmi all
 	docker system prune -af
 	@echo "✅ Deep cleanup complete!"
 
 # Production Commands
 prod-build: ## Build production images
 	@echo "🏗️ Building production images..."
-	docker-compose -f docker-compose.prod.yml build
+	$(DOCKER_COMPOSE) -f docker-compose.prod.yml build
 
 prod-up: ## Start production environment
 	@echo "🚀 Starting production environment..."
-	docker-compose -f docker-compose.prod.yml up -d
+	$(DOCKER_COMPOSE) -f docker-compose.prod.yml up -d
 
 prod-down: ## Stop production environment
 	@echo "🛑 Stopping production environment..."
-	docker-compose -f docker-compose.prod.yml down
+	$(DOCKER_COMPOSE) -f docker-compose.prod.yml down
 
 # Railway Deployment
 deploy-railway: ## Deploy to Railway
@@ -277,16 +321,16 @@ deploy-railway: ## Deploy to Railway
 # Utility Commands
 shell-backend: ## Open backend shell
 	@echo "🐚 Opening backend shell..."
-	docker-compose exec backend bash
+	$(DOCKER_COMPOSE) exec backend bash
 
 shell-db: ## Open database shell
 	@echo "🐚 Opening database shell..."
-	docker-compose exec db psql -U postgres -d chicken_management
+	$(DOCKER_COMPOSE) exec db psql -U postgres -d chicken_management
 
 status: ## Show service status
 	@echo "📊 Service Status:"
 	@echo "=================="
-	@docker-compose ps
+	@$(DOCKER_COMPOSE) ps
 
 # Quick Commands
 quick-start: install up migrate seed ## Quick start: install, start, migrate, and seed

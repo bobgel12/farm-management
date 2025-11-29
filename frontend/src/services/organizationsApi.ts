@@ -3,6 +3,8 @@ import {
   Organization,
   OrganizationUser,
   OrganizationMembership,
+  OrganizationInvite,
+  InviteInfo,
   PaginatedResponse
 } from '../types';
 
@@ -113,6 +115,72 @@ export const organizationsApi = {
    */
   async deleteOrganizationUser(id: number): Promise<void> {
     await api.delete(`/organization-users/${id}/`);
+  },
+
+  // ==================== Invite Methods ====================
+
+  /**
+   * Send an invitation to join an organization
+   */
+  async sendInvite(organizationId: string, data: {
+    email: string;
+    role?: 'owner' | 'admin' | 'manager' | 'worker' | 'viewer';
+    can_manage_farms?: boolean;
+    can_manage_users?: boolean;
+    can_view_reports?: boolean;
+    can_export_data?: boolean;
+  }): Promise<{ message: string; invite: OrganizationInvite }> {
+    const response = await api.post(`/organizations/${organizationId}/invite/`, data);
+    return response.data;
+  },
+
+  /**
+   * Get pending invites for an organization
+   */
+  async getPendingInvites(organizationId: string): Promise<OrganizationInvite[]> {
+    const response = await api.get(`/organizations/${organizationId}/pending_invites/`);
+    return response.data;
+  },
+
+  /**
+   * Resend an invitation
+   */
+  async resendInvite(organizationId: string, inviteId: string): Promise<{ message: string }> {
+    const response = await api.post(`/organizations/${organizationId}/resend-invite/${inviteId}/`);
+    return response.data;
+  },
+
+  /**
+   * Cancel an invitation
+   */
+  async cancelInvite(organizationId: string, inviteId: string): Promise<void> {
+    await api.delete(`/organizations/${organizationId}/cancel-invite/${inviteId}/`);
+  },
+
+  /**
+   * Get invite information (public endpoint)
+   */
+  async getInviteInfo(token: string): Promise<InviteInfo> {
+    const response = await api.get(`/invites/${token}/info/`);
+    return response.data;
+  },
+
+  /**
+   * Accept an invitation (public endpoint)
+   */
+  async acceptInvite(token: string, data?: {
+    username?: string;
+    password?: string;
+    first_name?: string;
+    last_name?: string;
+  }): Promise<{
+    message: string;
+    organization: { id: string; name: string };
+    user?: { id: number; username: string; email: string };
+    requires_registration?: boolean;
+  }> {
+    const response = await api.post(`/invites/${token}/accept/`, data || {});
+    return response.data;
   },
 };
 

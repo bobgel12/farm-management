@@ -4,7 +4,15 @@ import uuid
 
 
 class RotemFarm(models.Model):
-    """Farm information from Rotem API"""
+    """
+    DEPRECATED: Legacy Farm information from Rotem API.
+    
+    This model is deprecated in favor of the farms.Farm model with integration_type='rotem'.
+    It is kept temporarily for backward compatibility and will be removed in a future version.
+    
+    Use farms.Farm instead:
+        Farm.objects.filter(integration_type='rotem')
+    """
     farm_id = models.CharField(max_length=100, unique=True)
     farm_name = models.CharField(max_length=200)
     gateway_name = models.CharField(max_length=100)
@@ -45,9 +53,26 @@ class RotemUser(models.Model):
 
 
 class RotemController(models.Model):
-    """Controller hardware information"""
+    """Controller hardware information - linked to Farm model"""
     controller_id = models.CharField(max_length=100, unique=True)
-    farm = models.ForeignKey(RotemFarm, on_delete=models.CASCADE, related_name='controllers')
+    # New FK to farms.Farm (nullable during migration)
+    farm = models.ForeignKey(
+        'farms.Farm',
+        on_delete=models.CASCADE,
+        related_name='rotem_controllers',
+        null=True,  # Temporarily nullable for migration
+        blank=True,
+        help_text="Farm this controller belongs to"
+    )
+    # Legacy FK to RotemFarm (for migration, will be removed later)
+    legacy_rotem_farm = models.ForeignKey(
+        RotemFarm,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='legacy_controllers',
+        help_text="Legacy RotemFarm reference - for migration only"
+    )
     controller_name = models.CharField(max_length=200)
     controller_type = models.CharField(max_length=50)
     is_connected = models.BooleanField(default=False)

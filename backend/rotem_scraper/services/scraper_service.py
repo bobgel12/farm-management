@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.utils import timezone
 from ..models import RotemFarm, RotemUser, RotemController, RotemDataPoint, RotemScrapeLog
+from farms.models import Farm
 from ..scraper import RotemScraper
 import logging
 import random
@@ -12,16 +13,18 @@ logger = logging.getLogger(__name__)
 class DjangoRotemScraperService:
     def __init__(self, farm_id=None):
         self.farm_id = farm_id
+        self.farm = None  # Will hold the Farm model instance
+        
         if farm_id:
-            # Get credentials for specific farm
+            # Get credentials for specific farm (lookup by rotem_farm_id)
             try:
-                farm = RotemFarm.objects.get(farm_id=farm_id)
+                self.farm = Farm.objects.get(rotem_farm_id=farm_id, integration_type='rotem')
                 self.credentials = {
-                    'username': farm.rotem_username,
-                    'password': farm.rotem_password,
+                    'username': self.farm.rotem_username,
+                    'password': self.farm.rotem_password,
                 }
-            except RotemFarm.DoesNotExist:
-                raise Exception(f"Farm with ID {farm_id} not found")
+            except Farm.DoesNotExist:
+                raise Exception(f"Farm with Rotem ID {farm_id} not found")
         else:
             # Use default credentials
             self.credentials = {
@@ -59,24 +62,11 @@ class DjangoRotemScraperService:
             controller = self._process_controller_data(data, farm)
             self._process_data_points(data, controller)
             
-            # Create monitoring snapshots for houses (if using Farm model from farms app)
+            # Create monitoring snapshots for houses
             try:
-                from farms.models import Farm as FarmModel
                 from houses.services.monitoring_service import MonitoringService
                 
-                # Try to find matching Farm model from farms app
-                # This requires farm_id mapping or matching by name
-                django_farm = None
-                if hasattr(farm, 'farm_name'):
-                    try:
-                        django_farm = FarmModel.objects.filter(
-                            name__icontains=farm.farm_name,
-                            integration_type='rotem'
-                        ).first()
-                    except Exception as e:
-                        logger.warning(f"Could not find Django Farm model: {e}")
-                
-                if django_farm:
+                if farm:
                     monitoring_service = MonitoringService()
                     # Extract house data from scraped data
                     house_data_dict = {}
@@ -86,9 +76,9 @@ class DjangoRotemScraperService:
                     
                     if house_data_dict:
                         snapshots_created = monitoring_service.create_snapshots_for_farm(
-                            django_farm, house_data_dict
+                            farm, house_data_dict
                         )
-                        logger.info(f"Created {snapshots_created} monitoring snapshots for farm {django_farm.id}")
+                        logger.info(f"Created {snapshots_created} monitoring snapshots for farm {farm.id}")
             except Exception as e:
                 logger.warning(f"Failed to create monitoring snapshots: {e}")
             
@@ -111,32 +101,36 @@ class DjangoRotemScraperService:
             return scrape_log
     
     def scrape_all_farms(self):
-        """Scrape data for all farms with their individual credentials"""
+        """Scrape data for all farms with Rotem integration"""
         results = []
-        farms = RotemFarm.objects.filter(is_active=True)
+        # Query Farm model for farms with Rotem integration
+        farms = Farm.objects.filter(integration_type='rotem', is_active=True)
         
         for farm in farms:
             if farm.rotem_username and farm.rotem_password:
                 try:
-                    logger.info(f"Scraping data for farm: {farm.farm_name}")
-                    service = DjangoRotemScraperService(farm_id=farm.farm_id)
+                    logger.info(f"Scraping data for farm: {farm.name}")
+                    service = DjangoRotemScraperService(farm_id=farm.rotem_farm_id)
                     result = service.scrape_and_save_data()
                     results.append({
-                        'farm': farm.farm_name,
+                        'farm': farm.name,
+                        'farm_id': farm.rotem_farm_id,
                         'status': result.status,
-                        'data_points': result.data_points_collected
+                        'data_points_collected': result.data_points_collected
                     })
                 except Exception as e:
-                    logger.error(f"Failed to scrape farm {farm.farm_name}: {str(e)}")
+                    logger.error(f"Failed to scrape farm {farm.name}: {str(e)}")
                     results.append({
-                        'farm': farm.farm_name,
+                        'farm': farm.name,
+                        'farm_id': farm.rotem_farm_id,
                         'status': 'failed',
                         'error': str(e)
                     })
             else:
-                logger.warning(f"Farm {farm.farm_name} has no Rotem credentials")
+                logger.warning(f"Farm {farm.name} has no Rotem credentials")
                 results.append({
-                    'farm': farm.farm_name,
+                    'farm': farm.name,
+                    'farm_id': farm.rotem_farm_id,
                     'status': 'skipped',
                     'error': 'No credentials configured'
                 })
@@ -144,14 +138,44 @@ class DjangoRotemScraperService:
         return results
     
     def _process_farm_data(self, data):
-        """Process and save farm data from login response"""
-        # The farm connection info is in the login response, not JS globals
-        # We need to extract it from the scraper's login response
-        # For now, let's create a farm with the credentials we have
+        """Process and save farm data - returns or creates Farm model instance"""
+        from organizations.models import Organization
+        
+        # If we already have a farm from initialization, use it
+        if self.farm:
+            # Update integration status
+            self.farm.integration_status = 'active'
+            self.farm.save()
+            return self.farm
+        
+        # Otherwise, create or get a farm
         farm_id = f"farm_{self.credentials['username']}"
         farm_name = f"Farm for {self.credentials['username']}"
         
-        farm, created = RotemFarm.objects.update_or_create(
+        # Get default organization
+        default_org = Organization.objects.filter(slug='default').first()
+        
+        # Create or update Farm in farms app
+        farm, created = Farm.objects.update_or_create(
+            rotem_farm_id=farm_id,
+            defaults={
+                'organization': default_org,
+                'name': farm_name,
+                'location': 'Auto-created from Rotem',
+                'has_system_integration': True,
+                'integration_type': 'rotem',
+                'integration_status': 'active',
+                'rotem_username': self.credentials['username'],
+                'rotem_password': self.credentials['password'],
+                'rotem_gateway_name': farm_id,
+                'rotem_gateway_alias': farm_name,
+                'is_active': True,
+            }
+        )
+        logger.info(f"Farm {'created' if created else 'updated'}: {farm.name}")
+        
+        # Also maintain legacy RotemFarm for backward compatibility (will be removed later)
+        RotemFarm.objects.update_or_create(
             farm_id=farm_id,
             defaults={
                 'farm_name': farm_name,
@@ -162,7 +186,8 @@ class DjangoRotemScraperService:
                 'is_active': True,
             }
         )
-        logger.info(f"Farm {'created' if created else 'updated'}: {farm.farm_name}")
+        
+        self.farm = farm
         return farm
     
     def _process_user_data(self, data):
@@ -184,21 +209,33 @@ class DjangoRotemScraperService:
         return user
     
     def _process_controller_data(self, data, farm):
-        """Process and save controller data"""
-        # Since we don't have controller data in the current API response,
-        # we'll create a default controller for the farm
+        """Process and save controller data - links to Farm model"""
         if farm:
-            controller, created = RotemController.objects.update_or_create(
-                controller_id=f"{farm.farm_id}_main",
-                defaults={
-                    'farm': farm,
-                    'controller_name': f"{farm.farm_name} Main Controller",
-                    'controller_type': 'Main',
-                    'is_connected': True,
-                    'last_seen': timezone.now(),
-                }
-            )
-            logger.info(f"Controller {'created' if created else 'updated'}: {controller.controller_name}")
+            controller_id = f"{farm.rotem_farm_id or farm.id}_main"
+            
+            # Try to find existing controller
+            controller = RotemController.objects.filter(controller_id=controller_id).first()
+            
+            if controller:
+                # Update existing controller to point to Farm
+                controller.farm = farm
+                controller.controller_name = f"{farm.name} Main Controller"
+                controller.is_connected = True
+                controller.last_seen = timezone.now()
+                controller.save()
+                logger.info(f"Controller updated: {controller.controller_name}")
+            else:
+                # Create new controller linked to Farm
+                controller = RotemController.objects.create(
+                    controller_id=controller_id,
+                    farm=farm,
+                    controller_name=f"{farm.name} Main Controller",
+                    controller_type='Main',
+                    is_connected=True,
+                    last_seen=timezone.now(),
+                )
+                logger.info(f"Controller created: {controller.controller_name}")
+            
             return controller
         return None
     

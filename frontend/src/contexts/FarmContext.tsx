@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, ReactNode } from 'react';
 import api from '../services/api';
+import { useOrganization } from './OrganizationContext';
 
 interface Farm {
   id: number;
@@ -128,21 +129,34 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
   const [farmTaskSummary, setFarmTaskSummary] = useState<FarmTaskSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Get current organization from context
+  const { currentOrganization } = useOrganization();
+  const prevOrgIdRef = useRef<string | null>(null);
 
-  // Fetch farms on mount if not already loaded
+  // Fetch farms when organization changes
   useEffect(() => {
-    if (farms.length === 0) {
-      console.log('FarmProvider: Fetching farms on mount...');
+    const currentOrgId = currentOrganization?.id || null;
+    
+    // Only fetch if organization has changed
+    if (currentOrgId !== prevOrgIdRef.current) {
+      prevOrgIdRef.current = currentOrgId;
+      console.log('FarmProvider: Organization changed, fetching farms...', currentOrgId);
       fetchFarms();
     }
-  }, []);
+  }, [currentOrganization?.id]);
 
   const fetchFarms = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       console.log('FarmContext: Fetching farms from API...');
-      const response = await api.get('/farms/');
+      // Include organization_id in the request if available
+      const params: Record<string, string> = {};
+      if (currentOrganization?.id) {
+        params.organization_id = currentOrganization.id;
+      }
+      const response = await api.get('/farms/', { params });
       console.log('FarmContext: API response:', response.data);
       // Handle paginated response - farms are in the 'results' property
       const farmsData = response.data.results || response.data;
@@ -156,7 +170,7 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentOrganization?.id]);
 
   const fetchHouses = useCallback(async (farmId?: number) => {
     setLoading(true);
@@ -219,14 +233,18 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
 
   const createFarm = useCallback(async (farmData: Partial<Farm>): Promise<Farm | null> => {
     try {
-      const response = await api.post('/farms/', farmData);
+      // Add organization_id to farm data if available
+      const dataWithOrg = currentOrganization?.id 
+        ? { ...farmData, organization: currentOrganization.id }
+        : farmData;
+      const response = await api.post('/farms/', dataWithOrg);
       setFarms(prev => [...prev, response.data]);
       return response.data;
     } catch (err) {
       setError('Failed to create farm');
       return null;
     }
-  }, []);
+  }, [currentOrganization?.id]);
 
   const createHouse = useCallback(async (houseData: Partial<House>): Promise<House | null> => {
     try {
@@ -315,6 +333,7 @@ export const FarmProvider: React.FC<FarmProviderProps> = ({ children }) => {
     updateHouse,
     deleteFarm,
     deleteHouse,
+    currentOrganization?.id,
   ]);
 
   return (

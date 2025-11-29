@@ -1,10 +1,11 @@
 from rest_framework import serializers
 from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog, RotemDailySummary
+from farms.models import Farm
 
 
 class RotemDataPointSerializer(serializers.ModelSerializer):
     controller_name = serializers.CharField(source='controller.controller_name', read_only=True)
-    farm_name = serializers.CharField(source='controller.farm.farm_name', read_only=True)
+    farm_name = serializers.CharField(source='controller.farm.name', read_only=True)
     
     class Meta:
         model = RotemDataPoint
@@ -13,7 +14,7 @@ class RotemDataPointSerializer(serializers.ModelSerializer):
 
 class MLPredictionSerializer(serializers.ModelSerializer):
     controller_name = serializers.CharField(source='controller.controller_name', read_only=True)
-    farm_name = serializers.CharField(source='controller.farm.farm_name', read_only=True)
+    farm_name = serializers.CharField(source='controller.farm.name', read_only=True)
     
     class Meta:
         model = MLPrediction
@@ -21,7 +22,7 @@ class MLPredictionSerializer(serializers.ModelSerializer):
 
 
 class RotemControllerSerializer(serializers.ModelSerializer):
-    farm_name = serializers.CharField(source='farm.farm_name', read_only=True)
+    farm_name = serializers.CharField(source='farm.name', read_only=True)
     data_points_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -32,7 +33,32 @@ class RotemControllerSerializer(serializers.ModelSerializer):
         return obj.data_points.count()
 
 
+class IntegratedFarmSerializer(serializers.ModelSerializer):
+    """Serializer for farms with Rotem integration"""
+    controllers_count = serializers.SerializerMethodField()
+    # Provide fields with names matching the old RotemFarm structure for backward compatibility
+    farm_id = serializers.CharField(source='rotem_farm_id', read_only=True)
+    farm_name = serializers.CharField(source='name', read_only=True)
+    gateway_name = serializers.CharField(source='rotem_gateway_name', read_only=True)
+    gateway_alias = serializers.CharField(source='rotem_gateway_alias', read_only=True)
+    
+    class Meta:
+        model = Farm
+        fields = [
+            'id', 'farm_id', 'farm_name', 'name', 'location',
+            'gateway_name', 'gateway_alias', 
+            'integration_type', 'integration_status',
+            'rotem_username', 'rotem_farm_id', 'rotem_gateway_name', 'rotem_gateway_alias',
+            'is_active', 'created_at', 'controllers_count'
+        ]
+    
+    def get_controllers_count(self, obj):
+        return obj.rotem_controllers.count()
+
+
+# Keep legacy serializer for backward compatibility (will be removed later)
 class RotemFarmSerializer(serializers.ModelSerializer):
+    """Legacy serializer - use IntegratedFarmSerializer instead"""
     controllers_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -40,7 +66,7 @@ class RotemFarmSerializer(serializers.ModelSerializer):
         fields = ['id', 'farm_id', 'farm_name', 'gateway_name', 'gateway_alias', 'is_active', 'created_at', 'controllers_count']
     
     def get_controllers_count(self, obj):
-        return obj.controllers.count()
+        return obj.legacy_controllers.count()
 
 
 class RotemUserSerializer(serializers.ModelSerializer):
@@ -63,7 +89,7 @@ class MLModelSerializer(serializers.ModelSerializer):
 
 class RotemDailySummarySerializer(serializers.ModelSerializer):
     controller_name = serializers.CharField(source='controller.controller_name', read_only=True)
-    farm_name = serializers.CharField(source='controller.farm.farm_name', read_only=True)
+    farm_name = serializers.CharField(source='controller.farm.name', read_only=True)
     
     class Meta:
         model = RotemDailySummary

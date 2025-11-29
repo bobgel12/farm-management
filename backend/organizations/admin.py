@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Organization, OrganizationUser
+from .models import Organization, OrganizationUser, OrganizationInvite
 
 
 @admin.register(Organization)
@@ -53,3 +53,25 @@ class OrganizationUserAdmin(admin.ModelAdmin):
         }),
     )
 
+
+@admin.register(OrganizationInvite)
+class OrganizationInviteAdmin(admin.ModelAdmin):
+    list_display = ['email', 'organization', 'role', 'status', 'expires_at', 'invited_by', 'created_at']
+    list_filter = ['status', 'role', 'organization']
+    search_fields = ['email', 'organization__name', 'invited_by__username']
+    readonly_fields = ['id', 'token', 'created_at', 'updated_at', 'accepted_at', 'accepted_by']
+    
+    fieldsets = (
+        ('Invite Details', {
+            'fields': ('id', 'organization', 'email', 'token', 'status')
+        }),
+        ('Role & Permissions', {
+            'fields': ('role', 'can_manage_farms', 'can_manage_users', 'can_view_reports', 'can_export_data')
+        }),
+        ('Timing', {
+            'fields': ('expires_at', 'created_at', 'updated_at')
+        }),
+        ('Tracking', {
+            'fields': ('invited_by', 'accepted_at', 'accepted_by')
+        }),
+    )

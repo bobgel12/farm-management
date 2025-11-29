@@ -14,10 +14,10 @@ import {
   Schedule,
   TrendingUp,
 } from '@mui/icons-material';
-import { RotemFarm, FarmDataSummary } from '../../types/rotem';
+import { IntegratedFarm, FarmDataSummary } from '../../types/rotem';
 
 interface FarmInfoCardProps {
-  farm: RotemFarm;
+  farm: IntegratedFarm;
   summary: FarmDataSummary;
 }
 

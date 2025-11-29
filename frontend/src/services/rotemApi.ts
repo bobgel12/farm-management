@@ -1,5 +1,6 @@
 import axios from 'axios';
 import {
+  IntegratedFarm,
   RotemFarm,
   RotemUser,
   RotemController,
@@ -37,29 +38,29 @@ class RotemApiService {
     };
   }
 
-  // Farm Management
-  async getFarms(): Promise<RotemFarm[]> {
+  // Farm Management - Now uses Farm model with Rotem integration
+  async getFarms(): Promise<IntegratedFarm[]> {
     const response = await axios.get(`${this.baseURL}/rotem/farms/`, {
       headers: this.getAuthHeaders()
     });
     return response.data;
   }
 
-  async getFarm(farmId: string): Promise<RotemFarm> {
+  async getFarm(farmId: string): Promise<IntegratedFarm> {
     const response = await axios.get(`${this.baseURL}/rotem/farms/${farmId}/`, {
       headers: this.getAuthHeaders()
     });
     return response.data;
   }
 
-  async addFarm(farmData: AddFarmFormData): Promise<RotemFarm> {
+  async addFarm(farmData: AddFarmFormData): Promise<IntegratedFarm> {
     const response = await axios.post(`${this.baseURL}/rotem/farms/`, farmData, {
       headers: this.getAuthHeaders()
     });
     return response.data;
   }
 
-  async updateFarm(farmId: string, farmData: Partial<RotemFarm>): Promise<RotemFarm> {
+  async updateFarm(farmId: string, farmData: Partial<IntegratedFarm>): Promise<IntegratedFarm> {
     const response = await axios.put(`${this.baseURL}/rotem/farms/${farmId}/`, farmData, {
       headers: this.getAuthHeaders()
     });

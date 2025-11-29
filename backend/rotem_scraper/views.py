@@ -7,10 +7,12 @@ from django.shortcuts import get_object_or_404
 from .models import RotemDataPoint, MLPrediction, MLModel, RotemController, RotemFarm, RotemUser, RotemScrapeLog, RotemDailySummary
 from .serializers import (
     RotemDataPointSerializer, MLPredictionSerializer, MLModelSerializer, RotemControllerSerializer,
-    RotemFarmSerializer, RotemUserSerializer, RotemScrapeLogSerializer, RotemDailySummarySerializer
+    RotemFarmSerializer, RotemUserSerializer, RotemScrapeLogSerializer, RotemDailySummarySerializer,
+    IntegratedFarmSerializer
 )
 from .services.scraper_service import DjangoRotemScraperService
 from .services.ml_service import MLAnalysisService
+from farms.models import Farm
 from django.utils import timezone
 from datetime import timedelta
 
@@ -29,14 +31,14 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
         """Filter queryset based on query parameters"""
         queryset = super().get_queryset()
         
-        # Filter by farm_id if provided
+        # Filter by farm_id if provided (uses rotem_farm_id from Farm model)
         farm_id = self.request.query_params.get('farm_id')
         if farm_id:
             try:
-                farm = RotemFarm.objects.get(farm_id=farm_id)
-                controllers = farm.controllers.all()
+                farm = Farm.objects.get(rotem_farm_id=farm_id)
+                controllers = farm.rotem_controllers.all()
                 queryset = queryset.filter(controller__in=controllers)
-            except RotemFarm.DoesNotExist:
+            except Farm.DoesNotExist:
                 queryset = queryset.none()
         
         return queryset
@@ -85,23 +87,23 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
                           status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            farm = RotemFarm.objects.get(farm_id=farm_id)
-            controllers = farm.controllers.all()
+            farm = Farm.objects.get(rotem_farm_id=farm_id)
+            controllers = farm.rotem_controllers.all()
             data_points = self.queryset.filter(controller__in=controllers)
             serializer = self.get_serializer(data_points, many=True)
             return Response(serializer.data)
-        except RotemFarm.DoesNotExist:
+        except Farm.DoesNotExist:
             return Response({'error': 'Farm not found'}, 
                           status=status.HTTP_404_NOT_FOUND)
     
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Get data summary by farm"""
-        farms = RotemFarm.objects.filter(is_active=True)
+        farms = Farm.objects.filter(is_active=True, integration_type='rotem')
         summary = []
         
         for farm in farms:
-            controllers = farm.controllers.all()
+            controllers = farm.rotem_controllers.all()
             total_points = self.queryset.filter(controller__in=controllers).count()
             recent_points = self.queryset.filter(
                 controller__in=controllers,
@@ -109,145 +111,14 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
             ).count()
             
             summary.append({
-                'farm_id': farm.farm_id,
-                'farm_name': farm.farm_name,
+                'farm_id': farm.rotem_farm_id,
+                'farm_name': farm.name,
                 'total_data_points': total_points,
                 'recent_data_points': recent_points,
                 'controllers': controllers.count()
             })
         
         return Response(summary)
-
-
-class MLPredictionViewSet(viewsets.ReadOnlyModelViewSet):
-    """API for ML predictions and insights"""
-    queryset = MLPrediction.objects.filter(is_active=True)
-    serializer_class = MLPredictionSerializer
-    
-    @action(detail=False, methods=['get'])
-    def active_predictions(self, request):
-        """Get active predictions"""
-        predictions = self.queryset.filter(
-            predicted_at__gte=timezone.now() - timedelta(hours=24)
-        ).order_by('-predicted_at')
-        
-        serializer = self.get_serializer(predictions, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def anomalies(self, request):
-        """Get anomaly predictions"""
-        anomalies = self.queryset.filter(
-            prediction_type='anomaly',
-            predicted_at__gte=timezone.now() - timedelta(hours=24)
-        ).order_by('-confidence_score')
-        
-        serializer = self.get_serializer(anomalies, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def failures(self, request):
-        """Get failure predictions"""
-        failures = self.queryset.filter(
-            prediction_type='failure',
-            predicted_at__gte=timezone.now() - timedelta(hours=24)
-        ).order_by('-confidence_score')
-        
-        serializer = self.get_serializer(failures, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def optimizations(self, request):
-        """Get optimization suggestions"""
-        optimizations = self.queryset.filter(
-            prediction_type='optimization',
-            predicted_at__gte=timezone.now() - timedelta(hours=24)
-        ).order_by('-predicted_at')
-        
-        serializer = self.get_serializer(optimizations, many=True)
-        return Response(serializer.data)
-
-
-class RotemControllerViewSet(viewsets.ReadOnlyModelViewSet):
-    """API for Rotem controllers"""
-    queryset = RotemController.objects.all()
-    serializer_class = RotemControllerSerializer
-
-
-class RotemFarmViewSet(viewsets.ReadOnlyModelViewSet):
-    """API for Rotem farms"""
-    queryset = RotemFarm.objects.all()
-    serializer_class = RotemFarmSerializer
-    lookup_field = 'farm_id'
-
-
-class RotemUserViewSet(viewsets.ReadOnlyModelViewSet):
-    """API for Rotem users"""
-    queryset = RotemUser.objects.all()
-    serializer_class = RotemUserSerializer
-
-
-class RotemScrapeLogViewSet(viewsets.ReadOnlyModelViewSet):
-    """API for Rotem scrape logs"""
-    queryset = RotemScrapeLog.objects.all()
-    serializer_class = RotemScrapeLogSerializer
-    
-    @action(detail=False, methods=['get'])
-    def recent(self, request):
-        """Get recent scrape logs"""
-        logs = self.queryset.order_by('-started_at')[:10]
-        data = []
-        for log in logs:
-            data.append({
-                'scrape_id': str(log.scrape_id),
-                'started_at': log.started_at,
-                'completed_at': log.completed_at,
-                'status': log.status,
-                'data_points_collected': log.data_points_collected,
-                'error_message': log.error_message
-            })
-        return Response(data)
-
-
-class RotemScraperViewSet(viewsets.ViewSet):
-    """API endpoint for scraper operations"""
-    
-    @action(detail=False, methods=['post'])
-    def scrape_farm(self, request):
-        """Trigger scraping for a specific farm"""
-        farm_id = request.data.get('farm_id')
-        if not farm_id:
-            return Response({'error': 'farm_id required'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            service = DjangoRotemScraperService(farm_id=farm_id)
-            result = service.scrape_and_save_data()
-            
-            return Response({
-                'status': result.status,
-                'data_points_collected': result.data_points_collected,
-                'completed_at': result.completed_at,
-                'error_message': result.error_message
-            })
-        except Exception as e:
-            return Response({'error': str(e)}, 
-                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=False, methods=['post'])
-    def scrape_all(self, request):
-        """Trigger scraping for all farms"""
-        try:
-            service = DjangoRotemScraperService()
-            results = service.scrape_all_farms()
-            
-            return Response({
-                'results': results,
-                'total_farms': len(results)
-            })
-        except Exception as e:
-            return Response({'error': str(e)}, 
-                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class MLPredictionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -358,6 +229,96 @@ class MLPredictionViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(summary)
 
 
+class RotemControllerViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for Rotem controllers"""
+    queryset = RotemController.objects.all()
+    serializer_class = RotemControllerSerializer
+
+
+class RotemFarmViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for farms with Rotem integration - now uses Farm model"""
+    queryset = Farm.objects.filter(integration_type='rotem')
+    serializer_class = IntegratedFarmSerializer
+    lookup_field = 'rotem_farm_id'
+    lookup_url_kwarg = 'farm_id'
+    
+    def get_queryset(self):
+        """Return farms with Rotem integration"""
+        return Farm.objects.filter(
+            integration_type='rotem',
+            is_active=True
+        ).prefetch_related('rotem_controllers')
+
+
+class RotemUserViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for Rotem users"""
+    queryset = RotemUser.objects.all()
+    serializer_class = RotemUserSerializer
+
+
+class RotemScrapeLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """API for Rotem scrape logs"""
+    queryset = RotemScrapeLog.objects.all()
+    serializer_class = RotemScrapeLogSerializer
+    
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        """Get recent scrape logs"""
+        logs = self.queryset.order_by('-started_at')[:10]
+        data = []
+        for log in logs:
+            data.append({
+                'scrape_id': str(log.scrape_id),
+                'started_at': log.started_at,
+                'completed_at': log.completed_at,
+                'status': log.status,
+                'data_points_collected': log.data_points_collected,
+                'error_message': log.error_message
+            })
+        return Response(data)
+
+
+class RotemScraperViewSet(viewsets.ViewSet):
+    """API endpoint for scraper operations"""
+    
+    @action(detail=False, methods=['post'])
+    def scrape_farm(self, request):
+        """Trigger scraping for a specific farm"""
+        farm_id = request.data.get('farm_id')
+        if not farm_id:
+            return Response({'error': 'farm_id required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            service = DjangoRotemScraperService(farm_id=farm_id)
+            result = service.scrape_and_save_data()
+            
+            return Response({
+                'status': result.status,
+                'data_points_collected': result.data_points_collected,
+                'completed_at': result.completed_at,
+                'error_message': result.error_message
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def scrape_all(self, request):
+        """Trigger scraping for all farms"""
+        try:
+            service = DjangoRotemScraperService()
+            results = service.scrape_all_farms()
+            
+            return Response({
+                'results': results,
+                'total_farms': len(results)
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class MLModelViewSet(viewsets.ReadOnlyModelViewSet):
     """API for ML model information"""
     queryset = MLModel.objects.filter(is_active=True)
@@ -463,7 +424,7 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RotemDailySummarySerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['controller', 'date']
-    search_fields = ['controller__controller_name', 'controller__farm__farm_name']
+    search_fields = ['controller__controller_name', 'controller__farm__name']
     ordering_fields = ['date', 'total_data_points']
     ordering = ['-date']
     
@@ -471,14 +432,14 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
         """Filter queryset based on query parameters"""
         queryset = super().get_queryset()
         
-        # Filter by farm_id if provided
+        # Filter by farm_id if provided (uses rotem_farm_id from Farm model)
         farm_id = self.request.query_params.get('farm_id')
         if farm_id:
             try:
-                farm = RotemFarm.objects.get(farm_id=farm_id)
-                controllers = farm.controllers.all()
+                farm = Farm.objects.get(rotem_farm_id=farm_id)
+                controllers = farm.rotem_controllers.all()
                 queryset = queryset.filter(controller__in=controllers)
-            except RotemFarm.DoesNotExist:
+            except Farm.DoesNotExist:
                 queryset = queryset.none()
         
         # Filter by date range
@@ -507,15 +468,15 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
             )
         
         try:
-            farm = RotemFarm.objects.get(farm_id=farm_id)
-            controllers = farm.controllers.all()
+            farm = Farm.objects.get(rotem_farm_id=farm_id)
+            controllers = farm.rotem_controllers.all()
             summaries = RotemDailySummary.objects.filter(
                 controller__in=controllers
             ).order_by('-date')
             
             serializer = self.get_serializer(summaries, many=True)
             return Response(serializer.data)
-        except RotemFarm.DoesNotExist:
+        except Farm.DoesNotExist:
             return Response(
                 {'error': 'Farm not found'}, 
                 status=status.HTTP_404_NOT_FOUND

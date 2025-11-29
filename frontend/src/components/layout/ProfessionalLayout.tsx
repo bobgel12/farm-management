@@ -38,6 +38,7 @@ import {
   Sensors as SensorsIcon,
   Analytics as AnalyticsIcon,
   Pets as PoultryIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import EmailStatus from '../EmailStatus';
@@ -255,17 +256,23 @@ const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({ children }) => 
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        <MenuItem onClick={() => setAnchorEl(null)}>
+        <MenuItem onClick={() => { navigate('/organizations'); setAnchorEl(null); }}>
           <ListItemIcon>
-            <AccountIcon />
+            <BusinessIcon />
           </ListItemIcon>
-          <ListItemText>Profile</ListItemText>
+          <ListItemText>Organizations</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => setAnchorEl(null)}>
+        <MenuItem onClick={() => { navigate('/organization/settings'); setAnchorEl(null); }}>
           <ListItemIcon>
             <SettingsIcon />
           </ListItemIcon>
-          <ListItemText>Settings</ListItemText>
+          <ListItemText>Organization Settings</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { navigate('/security'); setAnchorEl(null); }}>
+          <ListItemIcon>
+            <SecurityIcon />
+          </ListItemIcon>
+          <ListItemText>Security</ListItemText>
         </MenuItem>
         <Divider />
         <MenuItem onClick={handleLogout}>
