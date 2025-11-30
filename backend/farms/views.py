@@ -4,14 +4,17 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
-from .models import Farm, Worker, Program, ProgramTask, ProgramChangeLog, Breed, Flock, FlockPerformance, FlockComparison
+from datetime import timedelta
+from .models import Farm, Worker, Program, ProgramTask, ProgramChangeLog, Breed, Flock, FlockPerformance, FlockComparison, MortalityRecord
 from .serializers import (
     FarmSerializer, FarmListSerializer, WorkerSerializer,
     ProgramSerializer, ProgramListSerializer, ProgramTaskSerializer,
     FarmWithProgramSerializer, BreedSerializer, BreedListSerializer,
     FlockSerializer, FlockListSerializer, FlockPerformanceSerializer,
-    FlockComparisonSerializer
+    FlockComparisonSerializer, MortalityRecordSerializer, MortalityRecordCreateSerializer,
+    MortalitySummarySerializer
 )
 from .program_change_service import ProgramChangeService
 from integrations.rotem import RotemIntegration
@@ -1097,3 +1100,236 @@ class FlockComparisonViewSet(ModelViewSet):
             return flock.mortality_count
         # Add more metrics as needed
         return None
+
+
+class MortalityViewSet(ModelViewSet):
+    """
+    ViewSet for managing mortality records.
+    
+    Endpoints:
+    - GET /api/mortality/ - List mortality records (filterable by flock, house, date range)
+    - POST /api/mortality/ - Create mortality record
+    - GET /api/mortality/{id}/ - Get record details
+    - PUT/PATCH /api/mortality/{id}/ - Update record
+    - DELETE /api/mortality/{id}/ - Delete record
+    - GET /api/mortality/summary/ - Get mortality summary for a flock
+    - GET /api/mortality/trends/ - Get mortality trends over time
+    """
+    
+    def get_queryset(self):
+        queryset = MortalityRecord.objects.select_related(
+            'flock', 'house', 'house__farm', 'recorded_by'
+        ).order_by('-record_date', '-created_at')
+        
+        # Filter by flock
+        flock_id = self.request.query_params.get('flock_id')
+        if flock_id:
+            queryset = queryset.filter(flock_id=flock_id)
+        
+        # Filter by house
+        house_id = self.request.query_params.get('house_id')
+        if house_id:
+            queryset = queryset.filter(house_id=house_id)
+        
+        # Filter by farm
+        farm_id = self.request.query_params.get('farm_id')
+        if farm_id:
+            queryset = queryset.filter(house__farm_id=farm_id)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(record_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(record_date__lte=end_date)
+        
+        return queryset
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return MortalityRecordCreateSerializer
+        return MortalityRecordSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(recorded_by=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get mortality summary for a flock"""
+        flock_id = request.query_params.get('flock_id')
+        if not flock_id:
+            return Response(
+                {'error': 'flock_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flock = Flock.objects.get(id=flock_id)
+        except Flock.DoesNotExist:
+            return Response(
+                {'error': 'Flock not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate mortality statistics
+        records = MortalityRecord.objects.filter(flock=flock)
+        
+        # Get totals
+        totals = records.aggregate(
+            total_mortality=Sum('total_deaths'),
+            disease_total=Sum('disease_deaths'),
+            culling_total=Sum('culling_deaths'),
+            accident_total=Sum('accident_deaths'),
+            heat_stress_total=Sum('heat_stress_deaths'),
+            cold_stress_total=Sum('cold_stress_deaths'),
+            unknown_total=Sum('unknown_deaths'),
+            other_total=Sum('other_deaths'),
+        )
+        
+        total_mortality = totals['total_mortality'] or 0
+        
+        # Calculate trends
+        today = timezone.now().date()
+        last_7_days = records.filter(
+            record_date__gte=today - timedelta(days=7)
+        ).aggregate(total=Sum('total_deaths'))['total'] or 0
+        
+        last_30_days = records.filter(
+            record_date__gte=today - timedelta(days=30)
+        ).aggregate(total=Sum('total_deaths'))['total'] or 0
+        
+        # Daily average (over the flock's lifetime)
+        days_active = flock.current_age_days or 1
+        daily_average = total_mortality / days_active if days_active > 0 else 0
+        
+        summary_data = {
+            'flock_id': flock.id,
+            'flock_code': flock.flock_code,
+            'house_number': flock.house.house_number,
+            'initial_count': flock.initial_chicken_count,
+            'current_count': flock.current_chicken_count,
+            'total_mortality': total_mortality,
+            'mortality_rate': flock.mortality_rate,
+            'livability': flock.livability,
+            'records_count': records.count(),
+            'disease_total': totals['disease_total'] or 0,
+            'culling_total': totals['culling_total'] or 0,
+            'accident_total': totals['accident_total'] or 0,
+            'heat_stress_total': totals['heat_stress_total'] or 0,
+            'cold_stress_total': totals['cold_stress_total'] or 0,
+            'unknown_total': totals['unknown_total'] or 0,
+            'other_total': totals['other_total'] or 0,
+            'last_7_days': last_7_days,
+            'last_30_days': last_30_days,
+            'daily_average': round(daily_average, 2),
+        }
+        
+        serializer = MortalitySummarySerializer(data=summary_data)
+        serializer.is_valid()
+        
+        return Response(summary_data)
+    
+    @action(detail=False, methods=['get'])
+    def trends(self, request):
+        """Get mortality trends over time"""
+        flock_id = request.query_params.get('flock_id')
+        house_id = request.query_params.get('house_id')
+        days = int(request.query_params.get('days', 30))
+        
+        queryset = MortalityRecord.objects.all()
+        
+        if flock_id:
+            queryset = queryset.filter(flock_id=flock_id)
+        elif house_id:
+            queryset = queryset.filter(house_id=house_id)
+        else:
+            return Response(
+                {'error': 'flock_id or house_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get records for the specified time period
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=days)
+        
+        records = queryset.filter(
+            record_date__gte=start_date,
+            record_date__lte=end_date
+        ).order_by('record_date')
+        
+        # Build daily data
+        trend_data = []
+        for record in records:
+            trend_data.append({
+                'date': record.record_date.isoformat(),
+                'total_deaths': record.total_deaths,
+                'disease': record.disease_deaths,
+                'culling': record.culling_deaths,
+                'accident': record.accident_deaths,
+                'heat_stress': record.heat_stress_deaths,
+                'cold_stress': record.cold_stress_deaths,
+                'unknown': record.unknown_deaths,
+                'other': record.other_deaths,
+            })
+        
+        return Response({
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'data': trend_data,
+            'total_records': len(trend_data)
+        })
+    
+    @action(detail=False, methods=['post'], url_path='quick-entry')
+    def quick_entry(self, request):
+        """Quick mortality entry (just total count)"""
+        flock_id = request.data.get('flock_id')
+        house_id = request.data.get('house_id')
+        total_deaths = request.data.get('total_deaths', 0)
+        record_date = request.data.get('record_date', timezone.now().date())
+        notes = request.data.get('notes', '')
+        
+        if not flock_id or not house_id:
+            return Response(
+                {'error': 'flock_id and house_id are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not total_deaths or int(total_deaths) < 0:
+            return Response(
+                {'error': 'total_deaths must be a positive number'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if record exists for this date
+        existing = MortalityRecord.objects.filter(
+            flock_id=flock_id,
+            record_date=record_date
+        ).first()
+        
+        if existing:
+            # Update existing record
+            existing.total_deaths += int(total_deaths)
+            if notes:
+                existing.notes = f"{existing.notes}\n{notes}".strip() if existing.notes else notes
+            existing.save()
+            record = existing
+            created = False
+        else:
+            # Create new record
+            record = MortalityRecord.objects.create(
+                flock_id=flock_id,
+                house_id=house_id,
+                record_date=record_date,
+                total_deaths=int(total_deaths),
+                notes=notes,
+                recorded_by=request.user
+            )
+            created = True
+        
+        serializer = MortalityRecordSerializer(record)
+        return Response({
+            'record': serializer.data,
+            'created': created,
+            'message': 'Mortality recorded successfully'
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

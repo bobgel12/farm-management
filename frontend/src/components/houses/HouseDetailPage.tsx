@@ -27,6 +27,8 @@ import {
   Home,
   CompareArrows,
   Assignment as TasksIcon,
+  TrendingDown as MortalityIcon,
+  Report as IssuesIcon,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { useFarm } from '../../contexts/FarmContext';
@@ -36,6 +38,9 @@ import HouseFlockTab from './HouseFlockTab';
 import HouseMessagesTab from './HouseMessagesTab';
 import HouseMenuTab from './HouseMenuTab';
 import HouseTasksTab from './HouseTasksTab';
+import HouseMortalityTab from './HouseMortalityTab';
+import HouseIssuesTab from './HouseIssuesTab';
+import { QuickIssueButton } from '../issues';
 
 interface HouseDetails {
   house: any;
@@ -265,11 +270,25 @@ const HouseDetailPage: React.FC = () => {
             aria-controls="house-tabpanel-4"
           />
           <Tab
+            icon={<MortalityIcon />}
+            iconPosition="start"
+            label="Mortality"
+            id="house-tab-5"
+            aria-controls="house-tabpanel-5"
+          />
+          <Tab
+            icon={<IssuesIcon />}
+            iconPosition="start"
+            label="Issues"
+            id="house-tab-6"
+            aria-controls="house-tabpanel-6"
+          />
+          <Tab
             icon={<SettingsIcon />}
             iconPosition="start"
             label="House Menu"
-            id="house-tab-5"
-            aria-controls="house-tabpanel-5"
+            id="house-tab-7"
+            aria-controls="house-tabpanel-7"
           />
         </Tabs>
       </Box>
@@ -307,8 +326,20 @@ const HouseDetailPage: React.FC = () => {
         <HouseMessagesTab houseId={houseId!} house={house} />
       </TabPanel>
       <TabPanel value={activeTab} index={5}>
+        <HouseMortalityTab houseId={parseInt(houseId!)} house={house} />
+      </TabPanel>
+      <TabPanel value={activeTab} index={6}>
+        <HouseIssuesTab houseId={parseInt(houseId!)} house={house} />
+      </TabPanel>
+      <TabPanel value={activeTab} index={7}>
         <HouseMenuTab houseId={houseId!} house={house} />
       </TabPanel>
+
+      {/* Quick Issue Report Button */}
+      <QuickIssueButton
+        houseId={parseInt(houseId!)}
+        houseName={`House ${house.house_number}`}
+      />
     </Box>
   );
 };

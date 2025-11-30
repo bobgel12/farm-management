@@ -230,6 +230,16 @@ rotem-seed-clear: ## Clear and re-seed Rotem test data
 	$(DOCKER_COMPOSE) exec backend python manage.py seed_rotem_data --clear --days=7
 	@echo "✅ Rotem test data re-seeded!"
 
+issues-seed: ## Seed issues and mortality test data
+	@echo "🌱 Seeding issues and mortality test data..."
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_issues_data --days=30
+	@echo "✅ Issues and mortality test data seeded!"
+
+issues-seed-clear: ## Clear and re-seed issues and mortality test data
+	@echo "🧹 Clearing and re-seeding issues and mortality test data..."
+	$(DOCKER_COMPOSE) exec backend python manage.py seed_issues_data --clear --days=30
+	@echo "✅ Issues and mortality test data re-seeded!"
+
 # Testing Commands
 test: ## Run tests
 	@echo "🧪 Running tests..."
@@ -263,6 +273,14 @@ test-e2e-ml: ## Run ML analytics E2E tests only
 test-e2e-farm: ## Run Farm integration E2E tests only
 	@echo "🎭 Running Farm integration tests..."
 	cd frontend && npx playwright test farm-integration.spec.ts
+
+test-e2e-mortality: ## Run Mortality tracking E2E tests only
+	@echo "🎭 Running Mortality tracking tests..."
+	cd frontend && npx playwright test mortality.spec.ts
+
+test-e2e-issues: ## Run Issue reporting E2E tests only
+	@echo "🎭 Running Issue reporting tests..."
+	cd frontend && npx playwright test issues.spec.ts
 
 test-e2e-setup: ## Setup Playwright and seed test data
 	@echo "🔧 Setting up Playwright tests..."

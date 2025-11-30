@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Farm, Worker, Program, ProgramTask, Breed, Flock, FlockPerformance, FlockComparison
+from django.db.models import Sum
+from .models import Farm, Worker, Program, ProgramTask, Breed, Flock, FlockPerformance, FlockComparison, MortalityRecord
 
 
 class WorkerSerializer(serializers.ModelSerializer):
@@ -336,3 +337,108 @@ class FlockComparisonSerializer(serializers.ModelSerializer):
             comparison.flocks.set(flock_ids)
         
         return comparison
+
+
+# Mortality Recording Serializers
+
+class MortalityRecordSerializer(serializers.ModelSerializer):
+    """Serializer for MortalityRecord model"""
+    flock_code = serializers.CharField(source='flock.flock_code', read_only=True)
+    house_number = serializers.IntegerField(source='house.house_number', read_only=True)
+    farm_name = serializers.CharField(source='house.farm.name', read_only=True)
+    recorded_by_name = serializers.CharField(source='recorded_by.username', read_only=True)
+    has_detailed_breakdown = serializers.ReadOnlyField()
+    breakdown_total = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = MortalityRecord
+        fields = [
+            'id', 'flock', 'flock_code', 'house', 'house_number', 'farm_name',
+            'record_date', 'total_deaths',
+            'disease_deaths', 'culling_deaths', 'accident_deaths',
+            'heat_stress_deaths', 'cold_stress_deaths', 'unknown_deaths', 'other_deaths',
+            'notes', 'recorded_by', 'recorded_by_name',
+            'has_detailed_breakdown', 'breakdown_total',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'recorded_by', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        """Validate that breakdown doesn't exceed total"""
+        total = data.get('total_deaths', 0)
+        breakdown = (
+            data.get('disease_deaths', 0) +
+            data.get('culling_deaths', 0) +
+            data.get('accident_deaths', 0) +
+            data.get('heat_stress_deaths', 0) +
+            data.get('cold_stress_deaths', 0) +
+            data.get('unknown_deaths', 0) +
+            data.get('other_deaths', 0)
+        )
+        
+        if breakdown > 0 and breakdown > total:
+            raise serializers.ValidationError(
+                "Sum of detailed breakdown cannot exceed total deaths"
+            )
+        
+        return data
+
+
+class MortalityRecordCreateSerializer(serializers.ModelSerializer):
+    """Simplified serializer for creating mortality records"""
+    
+    class Meta:
+        model = MortalityRecord
+        fields = [
+            'flock', 'house', 'record_date', 'total_deaths',
+            'disease_deaths', 'culling_deaths', 'accident_deaths',
+            'heat_stress_deaths', 'cold_stress_deaths', 'unknown_deaths', 'other_deaths',
+            'notes'
+        ]
+    
+    def validate(self, data):
+        """Validate data and check for duplicate records"""
+        # Check for existing record on same date
+        flock = data.get('flock')
+        record_date = data.get('record_date')
+        
+        if MortalityRecord.objects.filter(flock=flock, record_date=record_date).exists():
+            raise serializers.ValidationError(
+                "A mortality record already exists for this flock on this date"
+            )
+        
+        return data
+    
+    def create(self, validated_data):
+        """Create mortality record and set recorded_by"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['recorded_by'] = request.user
+        return super().create(validated_data)
+
+
+class MortalitySummarySerializer(serializers.Serializer):
+    """Serializer for mortality summary data"""
+    flock_id = serializers.IntegerField()
+    flock_code = serializers.CharField()
+    house_number = serializers.IntegerField()
+    initial_count = serializers.IntegerField()
+    current_count = serializers.IntegerField()
+    total_mortality = serializers.IntegerField()
+    mortality_rate = serializers.FloatField()
+    livability = serializers.FloatField()
+    records_count = serializers.IntegerField()
+    
+    # Breakdown by cause
+    disease_total = serializers.IntegerField()
+    culling_total = serializers.IntegerField()
+    accident_total = serializers.IntegerField()
+    heat_stress_total = serializers.IntegerField()
+    cold_stress_total = serializers.IntegerField()
+    unknown_total = serializers.IntegerField()
+    other_total = serializers.IntegerField()
+    
+    # Recent trends
+    last_7_days = serializers.IntegerField()
+    last_30_days = serializers.IntegerField()
+    daily_average = serializers.FloatField()

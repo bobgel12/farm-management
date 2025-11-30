@@ -571,3 +571,105 @@ class FlockComparison(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.flocks.count()} flocks)"
+
+
+class MortalityRecord(models.Model):
+    """Daily mortality recording per house/flock"""
+    CAUSE_CHOICES = [
+        ('disease', 'Disease'),
+        ('culling', 'Culling'),
+        ('accident', 'Accident'),
+        ('heat_stress', 'Heat Stress'),
+        ('cold_stress', 'Cold Stress'),
+        ('unknown', 'Unknown'),
+        ('other', 'Other'),
+    ]
+    
+    flock = models.ForeignKey(
+        Flock,
+        on_delete=models.CASCADE,
+        related_name='mortality_records',
+        help_text="Flock this mortality record belongs to"
+    )
+    house = models.ForeignKey(
+        'houses.House',
+        on_delete=models.CASCADE,
+        related_name='mortality_records',
+        help_text="House where mortality occurred"
+    )
+    record_date = models.DateField(help_text="Date of mortality recording")
+    total_deaths = models.IntegerField(help_text="Total number of deaths")
+    
+    # Optional detailed breakdown by cause
+    disease_deaths = models.IntegerField(default=0, help_text="Deaths due to disease")
+    culling_deaths = models.IntegerField(default=0, help_text="Deaths due to culling")
+    accident_deaths = models.IntegerField(default=0, help_text="Deaths due to accidents")
+    heat_stress_deaths = models.IntegerField(default=0, help_text="Deaths due to heat stress")
+    cold_stress_deaths = models.IntegerField(default=0, help_text="Deaths due to cold stress")
+    unknown_deaths = models.IntegerField(default=0, help_text="Deaths from unknown causes")
+    other_deaths = models.IntegerField(default=0, help_text="Deaths from other causes")
+    
+    notes = models.TextField(blank=True, help_text="Additional notes about the mortality")
+    recorded_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recorded_mortalities',
+        help_text="User who recorded this mortality"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-record_date', '-created_at']
+        verbose_name = 'Mortality Record'
+        verbose_name_plural = 'Mortality Records'
+        unique_together = ['flock', 'record_date']  # One record per flock per day
+        indexes = [
+            models.Index(fields=['flock', '-record_date']),
+            models.Index(fields=['house', '-record_date']),
+            models.Index(fields=['-record_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.flock} - {self.record_date} ({self.total_deaths} deaths)"
+    
+    @property
+    def has_detailed_breakdown(self):
+        """Check if detailed breakdown was provided"""
+        return (
+            self.disease_deaths > 0 or
+            self.culling_deaths > 0 or
+            self.accident_deaths > 0 or
+            self.heat_stress_deaths > 0 or
+            self.cold_stress_deaths > 0 or
+            self.unknown_deaths > 0 or
+            self.other_deaths > 0
+        )
+    
+    @property
+    def breakdown_total(self):
+        """Calculate total from breakdown categories"""
+        return (
+            self.disease_deaths +
+            self.culling_deaths +
+            self.accident_deaths +
+            self.heat_stress_deaths +
+            self.cold_stress_deaths +
+            self.unknown_deaths +
+            self.other_deaths
+        )
+    
+    def save(self, *args, **kwargs):
+        """Update flock's current chicken count when mortality is recorded"""
+        super().save(*args, **kwargs)
+        
+        # Update the flock's current chicken count
+        if self.flock:
+            total_mortality = self.flock.mortality_records.aggregate(
+                total=models.Sum('total_deaths')
+            )['total'] or 0
+            self.flock.current_chicken_count = self.flock.initial_chicken_count - total_mortality
+            self.flock.save(update_fields=['current_chicken_count'])

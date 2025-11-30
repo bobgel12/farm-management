@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/', include('organizations.urls')),
     path('api/', include('reporting.urls')),
     path('api/', include('analytics.urls')),
+    path('api/issues/', include('issues.urls')),
     # API root endpoint
     path('', lambda request: JsonResponse({
         'status': 'ok', 
@@ -32,6 +33,8 @@ urlpatterns = [
             'health': '/api/health/',
             'integrations': '/api/ml/',
             'rotem': '/api/rotem/',
+            'issues': '/api/issues/',
+            'mortality': '/api/mortality/',
             'admin': '/admin/'
         }
     })),

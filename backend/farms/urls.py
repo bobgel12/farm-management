@@ -9,6 +9,7 @@ router.register(r'breeds', views.BreedViewSet, basename='breed')
 router.register(r'flocks', views.FlockViewSet, basename='flock')
 router.register(r'flock-performance', views.FlockPerformanceViewSet, basename='flock-performance')
 router.register(r'flock-comparisons', views.FlockComparisonViewSet, basename='flock-comparison')
+router.register(r'mortality', views.MortalityViewSet, basename='mortality')
 
 urlpatterns = [
     # Include router URLs

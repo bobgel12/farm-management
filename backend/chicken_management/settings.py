@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'organizations',  # Multi-tenancy support
     'reporting',  # Advanced reporting
     'analytics',  # Business Intelligence
+    'issues',  # Issue reporting and tracking
 ]
 
 MIDDLEWARE = [
@@ -382,3 +383,18 @@ CELERY_BEAT_SCHEDULE = {
 
 # ML Models Directory
 ML_MODELS_DIR = os.path.join(BASE_DIR, 'ml_models')
+
+# Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME', default='')
+CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY', default='')
+CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET', default='')
+
+# Configure cloudinary
+import cloudinary
+if CLOUDINARY_CLOUD_NAME:
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True
+    )

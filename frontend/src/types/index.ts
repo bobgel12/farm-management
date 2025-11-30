@@ -629,3 +629,184 @@ export interface BenchmarkComparison {
   performance_category: 'above_expectation' | 'within_expectation' | 'below_expectation';
   unit?: string;
 }
+
+// Mortality Recording Types
+export interface MortalityRecord {
+  id: number;
+  flock: number;
+  flock_code: string;
+  house: number;
+  house_number: number;
+  farm_name: string;
+  record_date: string;
+  total_deaths: number;
+  disease_deaths: number;
+  culling_deaths: number;
+  accident_deaths: number;
+  heat_stress_deaths: number;
+  cold_stress_deaths: number;
+  unknown_deaths: number;
+  other_deaths: number;
+  notes: string;
+  recorded_by: number | null;
+  recorded_by_name: string;
+  has_detailed_breakdown: boolean;
+  breakdown_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MortalityRecordCreate {
+  flock: number;
+  house: number;
+  record_date: string;
+  total_deaths: number;
+  disease_deaths?: number;
+  culling_deaths?: number;
+  accident_deaths?: number;
+  heat_stress_deaths?: number;
+  cold_stress_deaths?: number;
+  unknown_deaths?: number;
+  other_deaths?: number;
+  notes?: string;
+}
+
+export interface MortalitySummary {
+  flock_id: number;
+  flock_code: string;
+  house_number: number;
+  initial_count: number;
+  current_count: number;
+  total_mortality: number;
+  mortality_rate: number;
+  livability: number;
+  records_count: number;
+  disease_total: number;
+  culling_total: number;
+  accident_total: number;
+  heat_stress_total: number;
+  cold_stress_total: number;
+  unknown_total: number;
+  other_total: number;
+  last_7_days: number;
+  last_30_days: number;
+  daily_average: number;
+}
+
+export interface MortalityTrend {
+  date: string;
+  total_deaths: number;
+  disease: number;
+  culling: number;
+  accident: number;
+  heat_stress: number;
+  cold_stress: number;
+  unknown: number;
+  other: number;
+}
+
+// Issue Reporting Types
+export type IssueCategory = 'equipment' | 'health' | 'environment' | 'maintenance' | 'other';
+export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
+export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+export interface IssuePhoto {
+  id: number;
+  cloudinary_url: string;
+  cloudinary_public_id: string;
+  caption: string;
+  uploaded_at: string;
+  uploaded_by: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+}
+
+export interface IssueComment {
+  id: number;
+  content: string;
+  user: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Issue {
+  id: number;
+  title: string;
+  description: string;
+  category: IssueCategory;
+  priority: IssuePriority;
+  status: IssueStatus;
+  location_in_house: string;
+  house: number;
+  house_number: number;
+  farm_name: string;
+  reported_by: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  assigned_to: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  resolved_by: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  created_task: number | null;
+  photos: IssuePhoto[];
+  comments: IssueComment[];
+  photo_count: number;
+  age_display: string;
+  is_open: boolean;
+  resolution_notes: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IssueListItem {
+  id: number;
+  title: string;
+  category: IssueCategory;
+  priority: IssuePriority;
+  status: IssueStatus;
+  house: number;
+  house_number: number;
+  farm_name: string;
+  reported_by: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  assigned_to: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  photo_count: number;
+  age_display: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IssueCreate {
+  house: number;
+  title: string;
+  description: string;
+  category: IssueCategory;
+  priority: IssuePriority;
+  location_in_house?: string;
+  photos?: Array<{
+    image: string;
+    caption?: string;
+  }>;
+}
