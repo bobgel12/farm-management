@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -22,30 +22,39 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { House } from '../../types';
 import { rotemApi } from '../../services/rotemApi';
+import { useFarm } from '../../contexts/FarmContext';
 import dayjs from 'dayjs';
 
 interface HouseWaterHistoryTabProps {
   houseId: string;
-  house: House;
+  house: House & { farm?: { is_integrated?: boolean } };
 }
 
 export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ houseId, house }) => {
+  const { farms } = useFarm();
   const [waterHistory, setWaterHistory] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [daysFilter, setDaysFilter] = useState<number>(30);
+  const isRequestInFlightRef = useRef<boolean>(false);
 
-  useEffect(() => {
-    loadWaterHistory();
-  }, [houseId, daysFilter]);
+  // Get farm info to check if it's integrated
+  const farm = house.farm_id ? farms.find(f => f.id === house.farm_id) : null;
+  const isIntegrated = house.farm?.is_integrated || farm?.is_integrated || false;
 
-  const loadWaterHistory = async () => {
-    if (!house.farm?.is_integrated) {
+  const loadWaterHistory = useCallback(async () => {
+    // Prevent duplicate concurrent requests
+    if (isRequestInFlightRef.current) {
+      return;
+    }
+
+    if (!isIntegrated) {
       setError('This house is not connected to a Rotem-integrated farm');
       setLoading(false);
       return;
     }
 
+    isRequestInFlightRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -59,8 +68,13 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
       setError(err.response?.data?.error || 'Failed to load water history');
     } finally {
       setLoading(false);
+      isRequestInFlightRef.current = false;
     }
-  };
+  }, [houseId, daysFilter, isIntegrated]);
+
+  useEffect(() => {
+    loadWaterHistory();
+  }, [loadWaterHistory]);
 
   if (loading) {
     return <CircularProgress />;
