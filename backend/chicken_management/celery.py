@@ -34,6 +34,16 @@ app.conf.beat_schedule = {
         'task': 'reporting.tasks.calculate_organization_kpis',
         'schedule': crontab(hour=0, minute=0),  # Daily at midnight
     },
+    # Water consumption monitoring (run daily at 6 AM)
+    'monitor-water-consumption-daily': {
+        'task': 'houses.tasks.monitor_water_consumption',
+        'schedule': crontab(hour=6, minute=0),  # Daily at 6 AM
+    },
+    # Cleanup old water alerts (run weekly on Sunday at 2 AM)
+    'cleanup-old-water-alerts-weekly': {
+        'task': 'houses.tasks.cleanup_old_water_alerts',
+        'schedule': crontab(day_of_week=0, hour=2, minute=0),  # Weekly on Sunday at 2 AM
+    },
 }
 
 @app.task(bind=True)

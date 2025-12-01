@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import House, HouseMonitoringSnapshot, HouseAlarm
+from .models import House, HouseMonitoringSnapshot, HouseAlarm, WaterConsumptionAlert
 
 
 @admin.register(House)
@@ -42,3 +42,59 @@ class HouseAlarmAdmin(admin.ModelAdmin):
         )
         self.message_user(request, f'{count} alarms marked as resolved.')
     mark_as_resolved.short_description = 'Mark selected alarms as resolved'
+
+
+@admin.register(WaterConsumptionAlert)
+class WaterConsumptionAlertAdmin(admin.ModelAdmin):
+    list_display = [
+        'house', 'farm', 'alert_date', 'current_consumption', 'baseline_consumption',
+        'increase_percentage', 'severity', 'is_acknowledged', 'email_sent', 'created_at'
+    ]
+    list_filter = ['severity', 'is_acknowledged', 'email_sent', 'alert_date', 'farm']
+    search_fields = ['house__farm__name', 'house__house_number', 'message']
+    readonly_fields = ['created_at', 'updated_at', 'email_sent_at', 'acknowledged_at']
+    date_hierarchy = 'alert_date'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('Alert Information', {
+            'fields': ('house', 'farm', 'alert_date', 'growth_day', 'severity')
+        }),
+        ('Consumption Data', {
+            'fields': ('current_consumption', 'baseline_consumption', 'increase_percentage')
+        }),
+        ('Alert Details', {
+            'fields': ('message', 'detection_method')
+        }),
+        ('Status', {
+            'fields': ('is_acknowledged', 'acknowledged_by', 'acknowledged_at')
+        }),
+        ('Email Notification', {
+            'fields': ('email_sent', 'email_sent_at', 'email_recipients')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+    
+    actions = ['acknowledge_alerts', 'resend_email_alerts']
+    
+    def acknowledge_alerts(self, request, queryset):
+        """Mark selected alerts as acknowledged"""
+        from django.utils import timezone
+        count = 0
+        for alert in queryset:
+            alert.acknowledge(user=request.user)
+            count += 1
+        self.message_user(request, f'{count} alerts marked as acknowledged.')
+    acknowledge_alerts.short_description = 'Acknowledge selected alerts'
+    
+    def resend_email_alerts(self, request, queryset):
+        """Resend email alerts for selected alerts"""
+        from houses.services.water_alert_email_service import WaterAlertEmailService
+        count = 0
+        for alert in queryset:
+            if WaterAlertEmailService.send_alert_email(alert):
+                count += 1
+        self.message_user(request, f'Resent {count} email alerts.')
+    resend_email_alerts.short_description = 'Resend email alerts'

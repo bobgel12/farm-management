@@ -48,6 +48,7 @@ import {
   Timeline,
   Restaurant,
   WaterDrop,
+  Search as SearchIcon,
   Air,
   ExpandMore as ExpandMoreIcon,
   Schedule as ScheduleIcon,
@@ -64,6 +65,7 @@ import monitoringApi from '../../services/monitoringApi';
 import { MonitoringDashboardData } from '../../types/monitoring';
 import IntegrationManagement from './IntegrationManagement';
 import { useProgram } from '../../contexts/ProgramContext';
+import { rotemApi } from '../../services/rotemApi';
 // Removed logger import - using console instead
 
 interface Farm {
@@ -225,6 +227,14 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [monitoringDashboard, setMonitoringDashboard] = useState<MonitoringDashboard | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
   const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
+  
+  // Water anomaly detection state
+  const [detectingWaterAnomalies, setDetectingWaterAnomalies] = useState(false);
+  const [waterDetectionSuccess, setWaterDetectionSuccess] = useState<string | null>(null);
+  const [waterDetectionError, setWaterDetectionError] = useState<string | null>(null);
+  const [waterDetectionResults, setWaterDetectionResults] = useState<any>(null);
+  const [waterDetectionTaskId, setWaterDetectionTaskId] = useState<string | null>(null);
+  const waterDetectionPollingRef = React.useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (farmId && !propFarm) {
@@ -515,6 +525,125 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
     return 'default';
   };
 
+  const handleTriggerWaterAnomalyDetection = async () => {
+    if (!farm || !farm.is_integrated) return;
+    
+    setDetectingWaterAnomalies(true);
+    setWaterDetectionError(null);
+    setWaterDetectionSuccess(null);
+    setWaterDetectionResults(null);
+    setWaterDetectionTaskId(null);
+
+    // Clear any existing polling
+    if (waterDetectionPollingRef.current) {
+      clearInterval(waterDetectionPollingRef.current);
+      waterDetectionPollingRef.current = null;
+    }
+
+    try {
+      const result = await rotemApi.triggerWaterAnomalyDetection(
+        undefined, // No house_id - check all houses
+        farm.id    // farm_id to check all houses in this farm
+      );
+      
+      // Check if task ran synchronously
+      if (result.execution_mode === 'synchronous' || result.execution_mode === 'synchronous_fallback' || !result.task_id) {
+        // Task completed synchronously
+        setDetectingWaterAnomalies(false);
+        if (result.result) {
+          setWaterDetectionResults({
+            houses_checked: result.result.houses_checked,
+            alerts_created: result.result.alerts_created,
+            emails_sent: result.result.emails_sent,
+          });
+          
+          const resultMessage = result.warning 
+            ? `${result.message} ${result.warning}`
+            : result.message;
+          setWaterDetectionSuccess(resultMessage);
+        } else {
+          setWaterDetectionSuccess(result.message || 'Detection completed');
+        }
+      } else {
+        // Task is running asynchronously, start polling
+        setWaterDetectionTaskId(result.task_id);
+        setWaterDetectionSuccess('Water consumption anomaly detection started. Checking status...');
+        
+        // Start polling for task status
+        startPollingWaterDetectionStatus(result.task_id);
+      }
+    } catch (err: any) {
+      setWaterDetectionError(
+        err.response?.data?.error || 'Failed to trigger anomaly detection'
+      );
+      setDetectingWaterAnomalies(false);
+    }
+  };
+
+  const startPollingWaterDetectionStatus = (taskId: string) => {
+    let pollCount = 0;
+    const maxPolls = 120; // Maximum 120 polls (4 minutes total for multiple houses)
+    
+    // Poll every 2 seconds
+    waterDetectionPollingRef.current = setInterval(async () => {
+      pollCount++;
+      
+      // Timeout after max polls
+      if (pollCount > maxPolls) {
+        if (waterDetectionPollingRef.current) {
+          clearInterval(waterDetectionPollingRef.current);
+          waterDetectionPollingRef.current = null;
+        }
+        setDetectingWaterAnomalies(false);
+        setWaterDetectionError('Detection is taking longer than expected. Please check back later or check your email for alerts.');
+        setWaterDetectionTaskId(null);
+        return;
+      }
+      
+      try {
+        const status = await rotemApi.checkWaterAnomalyDetectionStatus(taskId);
+        
+        if (status.state === 'SUCCESS') {
+          // Task completed successfully
+          if (waterDetectionPollingRef.current) {
+            clearInterval(waterDetectionPollingRef.current);
+            waterDetectionPollingRef.current = null;
+          }
+          setDetectingWaterAnomalies(false);
+          setWaterDetectionResults({
+            houses_checked: status.houses_checked,
+            alerts_created: status.alerts_created,
+            emails_sent: status.emails_sent,
+          });
+          
+          const resultMessage = `Detection completed! Checked ${status.houses_checked || 0} house(s), created ${status.alerts_created || 0} alert(s), and sent ${status.emails_sent || 0} email(s).`;
+          setWaterDetectionSuccess(resultMessage);
+          setWaterDetectionTaskId(null);
+        } else if (status.state === 'FAILURE') {
+          // Task failed
+          if (waterDetectionPollingRef.current) {
+            clearInterval(waterDetectionPollingRef.current);
+            waterDetectionPollingRef.current = null;
+          }
+          setDetectingWaterAnomalies(false);
+          setWaterDetectionError(`Detection failed: ${status.error || 'Unknown error'}`);
+          setWaterDetectionTaskId(null);
+        } else {
+          // Task still pending or in progress
+          setWaterDetectionSuccess(`Detection status: ${status.status}. ${status.message}`);
+        }
+      } catch (err: any) {
+        if (waterDetectionPollingRef.current) {
+          clearInterval(waterDetectionPollingRef.current);
+          waterDetectionPollingRef.current = null;
+        }
+        setDetectingWaterAnomalies(false);
+        setWaterDetectionError(err.response?.data?.error || 'Failed to check detection status');
+        setWaterDetectionTaskId(null);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -678,6 +807,35 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         </CardContent>
       </Card>
 
+      {/* Water Anomaly Detection Results */}
+      {waterDetectionSuccess && (
+        <Alert 
+          severity="success" 
+          icon={<CheckCircle fontSize="inherit" />} 
+          sx={{ mb: 2 }}
+          onClose={() => setWaterDetectionSuccess(null)}
+        >
+          {waterDetectionSuccess}
+          {waterDetectionResults && (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Houses Checked: {waterDetectionResults.houses_checked}, 
+              Alerts Created: {waterDetectionResults.alerts_created}, 
+              Emails Sent: {waterDetectionResults.emails_sent}
+            </Typography>
+          )}
+        </Alert>
+      )}
+      {waterDetectionError && (
+        <Alert 
+          severity="error" 
+          icon={<ErrorIcon fontSize="inherit" />} 
+          sx={{ mb: 2 }}
+          onClose={() => setWaterDetectionError(null)}
+        >
+          {waterDetectionError}
+        </Alert>
+      )}
+
       {/* Houses Section */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -694,6 +852,18 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                   size="small"
                 >
                   Compare Houses
+                </Button>
+              )}
+              {farm.is_integrated && farm.houses && farm.houses.length > 0 && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={detectingWaterAnomalies ? <CircularProgress size={16} /> : <SearchIcon />}
+                  onClick={handleTriggerWaterAnomalyDetection}
+                  disabled={detectingWaterAnomalies}
+                  size="small"
+                >
+                  {detectingWaterAnomalies ? 'Detecting...' : 'Check Water Anomalies'}
                 </Button>
               )}
             <Button

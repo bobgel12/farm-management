@@ -18,11 +18,14 @@ import {
   Card,
   CardContent,
   Grid,
+  Button,
+  Snackbar,
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { House } from '../../types';
 import { rotemApi } from '../../services/rotemApi';
 import { useFarm } from '../../contexts/FarmContext';
+import { Search as SearchIcon, CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
 import dayjs from 'dayjs';
 
 interface HouseWaterHistoryTabProps {
@@ -36,11 +39,25 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [daysFilter, setDaysFilter] = useState<number>(30);
+  const [detecting, setDetecting] = useState(false);
+  const [detectionSuccess, setDetectionSuccess] = useState<string | null>(null);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
+  const [detectionResults, setDetectionResults] = useState<{
+    houses_checked?: number;
+    alerts_created?: number;
+    emails_sent?: number;
+  } | null>(null);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isRequestInFlightRef = useRef<boolean>(false);
 
-  // Get farm info to check if it's integrated
+  // Get farm info to check if it's integrated with Rotem
   const farm = house.farm_id ? farms.find(f => f.id === house.farm_id) : null;
-  const isIntegrated = house.farm?.is_integrated || farm?.is_integrated || false;
+  const farmData = house.farm || farm;
+  const isIntegrated = farmData && (
+    farmData.integration_type === 'rotem' && 
+    (farmData.has_system_integration || farmData.is_integrated)
+  );
 
   const loadWaterHistory = useCallback(async () => {
     // Prevent duplicate concurrent requests
@@ -76,6 +93,130 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
     loadWaterHistory();
   }, [loadWaterHistory]);
 
+  const handleTriggerDetection = async () => {
+    setDetecting(true);
+    setDetectionError(null);
+    setDetectionSuccess(null);
+    setDetectionResults(null);
+    setCurrentTaskId(null);
+
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+
+    try {
+      const result = await rotemApi.triggerWaterAnomalyDetection(
+        parseInt(houseId),
+        house.farm_id
+      );
+      
+      // Check if task ran synchronously (no task_id means it completed immediately)
+      if (result.execution_mode === 'synchronous' || result.execution_mode === 'synchronous_fallback' || !result.task_id) {
+        // Task completed synchronously
+        setDetecting(false);
+        if (result.result) {
+          setDetectionResults({
+            houses_checked: result.result.houses_checked,
+            alerts_created: result.result.alerts_created,
+            emails_sent: result.result.emails_sent,
+          });
+          
+          const resultMessage = result.warning 
+            ? `${result.message} ${result.warning}`
+            : result.message;
+          setDetectionSuccess(resultMessage);
+        } else {
+          setDetectionSuccess(result.message || 'Detection completed');
+        }
+      } else {
+        // Task is running asynchronously, start polling
+        setCurrentTaskId(result.task_id);
+        setDetectionSuccess('Water consumption anomaly detection started. Checking status...');
+        
+        // Start polling for task status
+        startPollingTaskStatus(result.task_id);
+      }
+    } catch (err: any) {
+      setDetectionError(
+        err.response?.data?.error || 'Failed to trigger anomaly detection'
+      );
+      setDetecting(false);
+    }
+  };
+
+  const startPollingTaskStatus = (taskId: string) => {
+    let pollCount = 0;
+    const maxPolls = 60; // Maximum 60 polls (2 minutes total)
+    
+    // Poll every 2 seconds
+    pollingIntervalRef.current = setInterval(async () => {
+      pollCount++;
+      
+      // Timeout after max polls
+      if (pollCount > maxPolls) {
+        clearInterval(pollingIntervalRef.current!);
+        pollingIntervalRef.current = null;
+        setDetecting(false);
+        setDetectionError('Detection is taking longer than expected. Please check back later or check your email for alerts.');
+        setCurrentTaskId(null);
+        return;
+      }
+      
+      try {
+        const status = await rotemApi.checkWaterAnomalyDetectionStatus(taskId);
+        
+        if (status.state === 'SUCCESS') {
+          // Task completed successfully
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          setDetecting(false);
+          setDetectionResults({
+            houses_checked: status.houses_checked,
+            alerts_created: status.alerts_created,
+            emails_sent: status.emails_sent,
+          });
+          
+          const resultMessage = `Detection completed! Checked ${status.houses_checked || 0} house(s), created ${status.alerts_created || 0} alert(s), and sent ${status.emails_sent || 0} email(s).`;
+          setDetectionSuccess(resultMessage);
+          setCurrentTaskId(null);
+        } else if (status.state === 'FAILURE') {
+          // Task failed
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          setDetecting(false);
+          setDetectionError(
+            status.error || 'Anomaly detection task failed'
+          );
+          setCurrentTaskId(null);
+        } else if (status.state === 'PENDING' || status.state === 'PROGRESS') {
+          // Task still running, continue polling
+          setDetectionSuccess(status.message || 'Detection in progress...');
+        }
+      } catch (err: any) {
+        // Error checking status - stop polling after a few failures
+        if (pollCount > 5) {
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          setDetecting(false);
+          setDetectionError('Failed to check detection status. The task may still be running in the background.');
+          setCurrentTaskId(null);
+        }
+        console.error('Error checking task status:', err);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   if (loading) {
     return <CircularProgress />;
   }
@@ -105,20 +246,94 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Water Consumption History - House {house.house_number}</Typography>
-        <FormControl size="small" sx={{ minWidth: 150 }}>
-          <InputLabel>Time Period</InputLabel>
-          <Select
-            value={daysFilter}
-            label="Time Period"
-            onChange={(e) => setDaysFilter(e.target.value as number)}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={detecting ? <CircularProgress size={16} /> : <SearchIcon />}
+            onClick={handleTriggerDetection}
+            disabled={detecting || !isIntegrated}
+            sx={{ minWidth: 200 }}
           >
-            <MenuItem value={7}>Last 7 days</MenuItem>
-            <MenuItem value={30}>Last 30 days</MenuItem>
-            <MenuItem value={60}>Last 60 days</MenuItem>
-            <MenuItem value={90}>Last 90 days</MenuItem>
-          </Select>
-        </FormControl>
+            {detecting 
+              ? (detectionSuccess && detectionSuccess.includes('in progress') 
+                  ? 'Detecting...' 
+                  : 'Processing...')
+              : 'Detect Anomalies'}
+          </Button>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Time Period</InputLabel>
+            <Select
+              value={daysFilter}
+              label="Time Period"
+              onChange={(e) => setDaysFilter(e.target.value as number)}
+            >
+              <MenuItem value={7}>Last 7 days</MenuItem>
+              <MenuItem value={30}>Last 30 days</MenuItem>
+              <MenuItem value={60}>Last 60 days</MenuItem>
+              <MenuItem value={90}>Last 90 days</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
       </Box>
+
+      {/* Detection Results Card */}
+      {detectionResults && (
+        <Card sx={{ mb: 3, bgcolor: 'success.light', color: 'success.contrastText' }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Detection Results
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={4}>
+                <Typography variant="body2">Houses Checked</Typography>
+                <Typography variant="h5">{detectionResults.houses_checked || 0}</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="body2">Alerts Created</Typography>
+                <Typography variant="h5">{detectionResults.alerts_created || 0}</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="body2">Emails Sent</Typography>
+                <Typography variant="h5">{detectionResults.emails_sent || 0}</Typography>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Success/Error Snackbars */}
+      <Snackbar
+        open={!!detectionSuccess}
+        autoHideDuration={detectionResults ? 10000 : 6000}
+        onClose={() => setDetectionSuccess(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setDetectionSuccess(null)}
+          severity="success"
+          icon={<CheckCircle />}
+          sx={{ width: '100%' }}
+        >
+          {detectionSuccess}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={!!detectionError}
+        autoHideDuration={6000}
+        onClose={() => setDetectionError(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setDetectionError(null)}
+          severity="error"
+          icon={<ErrorIcon />}
+          sx={{ width: '100%' }}
+        >
+          {detectionError}
+        </Alert>
+      </Snackbar>
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={4}>

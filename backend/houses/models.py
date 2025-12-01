@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from farms.models import Farm
@@ -527,4 +528,87 @@ class HouseAlarm(models.Model):
         self.is_active = False
         self.resolved_at = timezone.now()
         self.resolved_by = resolved_by
+        self.save()
+
+
+class WaterConsumptionAlert(models.Model):
+    """Alert for abnormal water consumption detected"""
+    SEVERITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+    
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='water_alerts')
+    farm = models.ForeignKey('farms.Farm', on_delete=models.CASCADE, related_name='water_alerts')
+    
+    # Alert details
+    alert_date = models.DateField(help_text="Date when the abnormal consumption was detected")
+    growth_day = models.IntegerField(null=True, blank=True, help_text="Growth day when alert occurred")
+    current_consumption = models.FloatField(help_text="Current water consumption (L/day)")
+    baseline_consumption = models.FloatField(help_text="Baseline/average consumption (L/day)")
+    expected_consumption = models.FloatField(
+        null=True, 
+        blank=True, 
+        help_text="Age-adjusted expected consumption (L/day) based on growth day and bird count"
+    )
+    increase_percentage = models.FloatField(help_text="Percentage increase from baseline")
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='medium')
+    
+    # Alert metadata
+    message = models.TextField(help_text="Alert message describing the anomaly")
+    detection_method = models.CharField(
+        max_length=50,
+        default='statistical',
+        help_text="Method used to detect anomaly (statistical, threshold, ml)"
+    )
+    
+    # Status
+    is_acknowledged = models.BooleanField(default=False)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='acknowledged_water_alerts'
+    )
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    
+    # Email notification
+    email_sent = models.BooleanField(default=False)
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    email_recipients = models.JSONField(
+        default=list,
+        help_text="List of email addresses that received the alert"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['house', '-created_at']),
+            models.Index(fields=['farm', '-created_at']),
+            models.Index(fields=['is_acknowledged', '-created_at']),
+            models.Index(fields=['severity', '-created_at']),
+            models.Index(fields=['alert_date', '-created_at']),
+        ]
+        verbose_name = "Water Consumption Alert"
+        verbose_name_plural = "Water Consumption Alerts"
+        # Prevent duplicate alerts for the same house on the same date
+        unique_together = ['house', 'alert_date']
+    
+    def __str__(self):
+        return f"Water Alert - House {self.house.house_number} ({self.severity}) - {self.alert_date}"
+    
+    def acknowledge(self, user=None):
+        """Mark alert as acknowledged"""
+        from django.utils import timezone
+        self.is_acknowledged = True
+        self.acknowledged_at = timezone.now()
+        if user:
+            self.acknowledged_by = user
         self.save()

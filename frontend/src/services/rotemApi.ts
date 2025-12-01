@@ -543,6 +543,49 @@ class RotemApiService {
     });
     return response.data;
   }
+
+  // Water Consumption Anomaly Detection
+  async triggerWaterAnomalyDetection(houseId?: number, farmId?: number): Promise<{
+    status: string;
+    message: string;
+    task_id?: string | null;
+    house_id?: number;
+    farm_id?: number;
+    execution_mode?: 'asynchronous' | 'synchronous' | 'synchronous_fallback';
+    result?: {
+      houses_checked: number;
+      alerts_created: number;
+      emails_sent: number;
+    };
+    warning?: string;
+  }> {
+    const url = houseId
+      ? `${this.baseURL}/houses/${houseId}/water/detect-anomalies/`
+      : `${this.baseURL}/houses/water/detect-anomalies/`;
+    
+    const response = await axios.post(url, { farm_id: farmId }, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async checkWaterAnomalyDetectionStatus(taskId: string): Promise<{
+    task_id: string;
+    state: string;
+    status: string;
+    message: string;
+    houses_checked?: number;
+    alerts_created?: number;
+    emails_sent?: number;
+    timestamp?: string;
+    error?: string;
+  }> {
+    const response = await axios.get(
+      `${this.baseURL}/houses/water/detection-status/${taskId}/`,
+      { headers: this.getAuthHeaders() }
+    );
+    return response.data;
+  }
 }
 
 export const rotemApi = new RotemApiService();

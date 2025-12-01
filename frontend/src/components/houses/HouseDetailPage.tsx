@@ -97,8 +97,35 @@ const HouseDetailPage: React.FC = () => {
   const houseFarmId = houseDetails?.house?.farm_id || houseDetails?.house?.farm?.id || (farmId ? parseInt(farmId) : null);
   const houseFarm = houseFarmId ? farms.find(f => f.id === houseFarmId) : null;
   
-  // Check if farm is integrated (from nested farm object or context)
-  const isFarmIntegrated = houseDetails?.house?.farm?.is_integrated || houseFarm?.is_integrated || currentFarm?.is_integrated || false;
+  // Check if farm is integrated with Rotem (from nested farm object or context)
+  // Show water history tab if Rotem integration is configured (regardless of status)
+  // This allows access to historical data even if integration status is not 'active'
+  const farmFromDetails = houseDetails?.house?.farm;
+  const farmFromContext = houseFarm || currentFarm;
+  const farm = farmFromDetails || farmFromContext;
+  
+  // Check multiple conditions to ensure we catch all cases
+  const isFarmIntegrated = farm && (
+    // Primary check: integration_type is rotem and has system integration
+    (farm.integration_type === 'rotem' && farm.has_system_integration) ||
+    // Fallback: is_integrated property (which checks has_system_integration AND status='active')
+    (farm.is_integrated && farm.integration_type === 'rotem') ||
+    // Also check if rotem_farm_id exists (indicates Rotem is configured)
+    (farm.rotem_farm_id && farm.integration_type === 'rotem')
+  );
+  
+  // Debug logging (remove in production if needed)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Farm integration check:', {
+      farm: farm ? { id: farm.id, name: farm.name } : null,
+      integration_type: farm?.integration_type,
+      has_system_integration: farm?.has_system_integration,
+      is_integrated: farm?.is_integrated,
+      integration_status: farm?.integration_status,
+      rotem_farm_id: farm?.rotem_farm_id ? 'exists' : 'missing',
+      isFarmIntegrated
+    });
+  }
 
   useEffect(() => {
     if (houseId) {

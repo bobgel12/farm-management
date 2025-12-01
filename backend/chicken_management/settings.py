@@ -375,6 +375,15 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'integrations.tasks.cleanup_old_predictions',
         'schedule': 86400.0,  # Every day (86400 seconds)
     },
+    # Water consumption monitoring
+    'monitor-water-consumption-daily': {
+        'task': 'houses.tasks.monitor_water_consumption',
+        'schedule': 86400.0,  # Every day (86400 seconds) - check once per day
+    },
+    'cleanup-old-water-alerts-weekly': {
+        'task': 'houses.tasks.cleanup_old_water_alerts',
+        'schedule': 604800.0,  # Every week (604800 seconds)
+    },
     'generate-daily-report': {
         'task': 'integrations.tasks.generate_daily_report',
         'schedule': 86400.0,  # Every day at midnight (86400 seconds)

@@ -72,7 +72,7 @@ class FarmListSerializer(serializers.ModelSerializer):
             'id', 'organization', 'name', 'location', 'description', 'is_active',
             'total_houses', 'active_houses', 'has_system_integration',
             'integration_type', 'integration_status', 'last_sync',
-            'is_integrated', 'integration_display_name'
+            'is_integrated', 'integration_display_name', 'rotem_farm_id'
         ]
 
 

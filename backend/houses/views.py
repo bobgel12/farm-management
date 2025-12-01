@@ -755,3 +755,197 @@ def house_sensors(request, house_id):
             serializer.save(house=house)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def trigger_water_anomaly_detection(request, house_id=None):
+    """
+    Trigger water consumption anomaly detection on demand
+    
+    Can be called with:
+    - house_id in URL path: Check specific house
+    - farm_id in request body: Check all houses in farm
+    - No parameters: Check all Rotem-integrated houses
+    
+    If Celery workers are not available, runs synchronously as fallback.
+    """
+    from houses.tasks import monitor_water_consumption
+    from celery.result import AsyncResult
+    from django.conf import settings
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        farm_id = request.data.get('farm_id')
+        run_sync = request.data.get('run_sync', False)  # Allow forcing synchronous execution
+        
+        # Import the implementation function for synchronous execution
+        from houses.tasks import monitor_water_consumption_impl
+        
+        # Check if we should run synchronously (if CELERY_TASK_ALWAYS_EAGER is set or run_sync is True)
+        if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False) or run_sync:
+            logger.info(f"Running water consumption monitoring synchronously (house_id={house_id}, farm_id={farm_id})")
+            # Run synchronously using the implementation function
+            result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Water consumption anomaly detection completed',
+                'task_id': None,
+                'house_id': house_id,
+                'farm_id': farm_id,
+                'result': result,
+                'execution_mode': 'synchronous',
+            }, status=status.HTTP_200_OK)
+        
+        # Try to run asynchronously
+        try:
+            task_result = monitor_water_consumption.delay(house_id=house_id, farm_id=farm_id)
+            
+            # Check if task is actually queued (not stuck in PENDING)
+            # Wait a moment to see if it gets picked up
+            import time
+            time.sleep(0.5)
+            
+            async_result = AsyncResult(task_result.id)
+            if async_result.state == 'PENDING':
+                # Task is still pending - workers might not be running
+                # Check if we can connect to the broker
+                try:
+                    from celery import current_app
+                    inspect = current_app.control.inspect()
+                    active_workers = inspect.active()
+                    
+                    if not active_workers:
+                        # No active workers, run synchronously as fallback
+                        logger.warning("No Celery workers available, running synchronously as fallback")
+                        result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+                        
+                        return Response({
+                            'status': 'success',
+                            'message': 'Water consumption anomaly detection completed (ran synchronously - no workers available)',
+                            'task_id': None,
+                            'house_id': house_id,
+                            'farm_id': farm_id,
+                            'result': result,
+                            'execution_mode': 'synchronous_fallback',
+                            'warning': 'Celery workers are not running. Task executed synchronously.',
+                        }, status=status.HTTP_200_OK)
+                except Exception as inspect_error:
+                    logger.warning(f"Could not inspect Celery workers: {inspect_error}. Running synchronously as fallback.")
+                    result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+                    
+                    return Response({
+                        'status': 'success',
+                        'message': 'Water consumption anomaly detection completed (ran synchronously)',
+                        'task_id': None,
+                        'house_id': house_id,
+                        'farm_id': farm_id,
+                        'result': result,
+                        'execution_mode': 'synchronous_fallback',
+                        'warning': 'Could not verify Celery workers. Task executed synchronously.',
+                    }, status=status.HTTP_200_OK)
+            
+            logger.info(f"Triggered water consumption monitoring task {task_result.id} (house_id={house_id}, farm_id={farm_id})")
+            
+            return Response({
+                'status': 'success',
+                'message': 'Water consumption anomaly detection started',
+                'task_id': task_result.id,
+                'house_id': house_id,
+                'farm_id': farm_id,
+                'execution_mode': 'asynchronous',
+            }, status=status.HTTP_202_ACCEPTED)
+        
+        except Exception as celery_error:
+            # Celery error - fallback to synchronous execution
+            logger.warning(f"Celery task submission failed: {celery_error}. Running synchronously as fallback.")
+            result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Water consumption anomaly detection completed (ran synchronously)',
+                'task_id': None,
+                'house_id': house_id,
+                'farm_id': farm_id,
+                'result': result,
+                'execution_mode': 'synchronous_fallback',
+                'warning': f'Celery unavailable: {str(celery_error)}. Task executed synchronously.',
+            }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        logger.error(f"Error triggering water anomaly detection: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_water_anomaly_detection_status(request, task_id):
+    """
+    Check the status and results of a water consumption anomaly detection task
+    """
+    from celery.result import AsyncResult
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get task result
+        task_result = AsyncResult(task_id)
+        
+        # Check task state
+        task_state = task_result.state
+        
+        response_data = {
+            'task_id': task_id,
+            'state': task_state,
+        }
+        
+        if task_state == 'PENDING':
+            response_data['status'] = 'pending'
+            response_data['message'] = 'Task is waiting to be processed'
+        elif task_state == 'PROGRESS':
+            response_data['status'] = 'running'
+            response_data['message'] = 'Task is currently running'
+            # Include progress info if available
+            if task_result.info:
+                response_data['info'] = task_result.info
+        elif task_state == 'SUCCESS':
+            response_data['status'] = 'success'
+            response_data['message'] = 'Task completed successfully'
+            # Get the result
+            result = task_result.result
+            if isinstance(result, dict):
+                response_data.update({
+                    'houses_checked': result.get('houses_checked', 0),
+                    'alerts_created': result.get('alerts_created', 0),
+                    'emails_sent': result.get('emails_sent', 0),
+                    'timestamp': result.get('timestamp'),
+                })
+            else:
+                response_data['result'] = result
+        elif task_state == 'FAILURE':
+            response_data['status'] = 'failure'
+            response_data['message'] = 'Task failed'
+            # Get error info
+            try:
+                response_data['error'] = str(task_result.info)
+            except:
+                response_data['error'] = 'Unknown error occurred'
+        else:
+            response_data['status'] = 'unknown'
+            response_data['message'] = f'Task state: {task_state}'
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        logger.error(f"Error checking task status: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

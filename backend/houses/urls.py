@@ -35,4 +35,9 @@ urlpatterns = [
     # Configuration endpoints
     path('houses/<int:house_id>/configuration/', views.house_configuration, name='house-configuration'),
     path('houses/<int:house_id>/sensors/', views.house_sensors, name='house-sensors'),
+    
+    # Water consumption monitoring
+    path('houses/<int:house_id>/water/detect-anomalies/', views.trigger_water_anomaly_detection, name='trigger-water-anomaly-detection'),
+    path('houses/water/detect-anomalies/', views.trigger_water_anomaly_detection, name='trigger-water-anomaly-detection-all'),
+    path('houses/water/detection-status/<str:task_id>/', views.check_water_anomaly_detection_status, name='check-water-anomaly-detection-status'),
 ]
