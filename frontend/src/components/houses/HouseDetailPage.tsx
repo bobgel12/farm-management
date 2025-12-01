@@ -96,6 +96,9 @@ const HouseDetailPage: React.FC = () => {
   const currentFarm = farmId ? farms.find(f => f.id === parseInt(farmId)) : null;
   const houseFarmId = houseDetails?.house?.farm_id || houseDetails?.house?.farm?.id || (farmId ? parseInt(farmId) : null);
   const houseFarm = houseFarmId ? farms.find(f => f.id === houseFarmId) : null;
+  
+  // Check if farm is integrated (from nested farm object or context)
+  const isFarmIntegrated = houseDetails?.house?.farm?.is_integrated || houseFarm?.is_integrated || currentFarm?.is_integrated || false;
 
   useEffect(() => {
     if (houseId) {
@@ -292,7 +295,7 @@ const HouseDetailPage: React.FC = () => {
             id="house-tab-7"
             aria-controls="house-tabpanel-7"
           />
-          {house.farm?.is_integrated && (
+          {isFarmIntegrated && (
             <Tab
               icon={<WaterDropIcon />}
               iconPosition="start"
@@ -345,7 +348,7 @@ const HouseDetailPage: React.FC = () => {
       <TabPanel value={activeTab} index={7}>
         <HouseMenuTab houseId={houseId!} house={house} />
       </TabPanel>
-      {house.farm?.is_integrated && (
+      {isFarmIntegrated && (
         <TabPanel value={activeTab} index={8}>
           <HouseWaterHistoryTab houseId={houseId!} house={house} />
         </TabPanel>
