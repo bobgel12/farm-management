@@ -60,12 +60,37 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
   const isRequestInFlightRef = useRef<boolean>(false);
 
   // Get farm info to check if it's integrated with Rotem
+  // Use the same permissive check as HouseDetailPage to ensure consistency
   const farm = house.farm_id ? farms.find(f => f.id === house.farm_id) : null;
   const farmData = (house.farm || farm) as any;
-  const isIntegrated = farmData && (
-    farmData.integration_type === 'rotem' && 
-    (farmData.has_system_integration || farmData.is_integrated || farmData.rotem_farm_id)
+  
+  // Simple check: Show tab if integration_type is 'rotem' (regardless of status or other flags)
+  // Also check rotem_farm_id as a fallback indicator that Rotem is configured
+  // And check house-level is_integrated flag as additional fallback
+  const isIntegrated = (
+    (farmData && (
+      farmData.integration_type === 'rotem' || 
+      (farmData.rotem_farm_id && String(farmData.rotem_farm_id).trim() !== '')
+    )) ||
+    house.is_integrated === true
   );
+  
+  // Debug logging (remove in production if needed)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('HouseWaterHistoryTab integration check:', {
+      houseId,
+      farmData: farmData ? { 
+        id: farmData.id, 
+        name: farmData.name,
+        integration_type: farmData.integration_type,
+        has_system_integration: farmData.has_system_integration,
+        is_integrated: farmData.is_integrated,
+        rotem_farm_id: farmData.rotem_farm_id
+      } : null,
+      houseIsIntegrated: house.is_integrated,
+      isIntegrated
+    });
+  }
 
   const loadWaterHistory = useCallback(async () => {
     // Prevent duplicate concurrent requests
