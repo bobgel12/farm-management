@@ -64,6 +64,7 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
   const farm = house.farm_id ? farms.find(f => f.id === house.farm_id) : null;
   const farmData = (house.farm || farm) as any;
   
+  // Calculate isIntegrated for UI (button disabled state, etc.)
   // Simple check: Show tab if integration_type is 'rotem' (regardless of status or other flags)
   // Also check rotem_farm_id as a fallback indicator that Rotem is configured
   // And check house-level is_integrated flag as additional fallback
@@ -98,7 +99,35 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
       return;
     }
 
-    if (!isIntegrated) {
+    // Recheck integration status with latest data (recalculate to ensure we have latest)
+    const currentFarm = house.farm_id ? farms.find(f => f.id === house.farm_id) : null;
+    const currentFarmData = (house.farm || currentFarm) as any;
+    
+    // More permissive check - if any indicator suggests Rotem integration, allow it
+    const isIntegratedNow = (
+      // Check farm integration_type
+      (currentFarmData && currentFarmData.integration_type === 'rotem') ||
+      // Check rotem_farm_id
+      (currentFarmData && currentFarmData.rotem_farm_id && String(currentFarmData.rotem_farm_id).trim() !== '') ||
+      // Check farm is_integrated flag
+      (currentFarmData && currentFarmData.is_integrated === true) ||
+      // Check house is_integrated flag
+      house.is_integrated === true
+    );
+    
+    // Log for debugging (including production)
+    console.log('HouseWaterHistoryTab - Integration check:', {
+      houseId,
+      houseFarmId: house.farm_id,
+      houseIsIntegrated: house.is_integrated,
+      farmDataExists: !!currentFarmData,
+      farmIntegrationType: currentFarmData?.integration_type,
+      farmIsIntegrated: currentFarmData?.is_integrated,
+      farmRotemFarmId: currentFarmData?.rotem_farm_id,
+      isIntegratedNow
+    });
+    
+    if (!isIntegratedNow) {
       setError('This house is not connected to a Rotem-integrated farm');
       setLoading(false);
       return;
@@ -120,7 +149,7 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
       setLoading(false);
       isRequestInFlightRef.current = false;
     }
-  }, [houseId, daysFilter, isIntegrated]);
+  }, [houseId, daysFilter, house.farm, house.farm_id, house.is_integrated, farms]);
 
   useEffect(() => {
     loadWaterHistory();
