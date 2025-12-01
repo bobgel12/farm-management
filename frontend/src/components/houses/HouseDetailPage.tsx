@@ -104,20 +104,22 @@ const HouseDetailPage: React.FC = () => {
   const farmFromContext = houseFarm || currentFarm;
   const farm = farmFromDetails || farmFromContext;
   
-  // Check multiple conditions to ensure we catch all cases
-  const isFarmIntegrated = farm && (
-    // Primary check: integration_type is rotem and has system integration
-    (farm.integration_type === 'rotem' && farm.has_system_integration) ||
-    // Fallback: is_integrated property (which checks has_system_integration AND status='active')
-    (farm.is_integrated && farm.integration_type === 'rotem') ||
-    // Also check if rotem_farm_id exists (indicates Rotem is configured)
-    (farm.rotem_farm_id && farm.integration_type === 'rotem')
+  // Simple check: Show tab if integration_type is 'rotem' (regardless of status or other flags)
+  // This is the most permissive check to ensure the tab shows for all Rotem-configured farms
+  // Check multiple sources: farm integration_type, rotem_farm_id, or house is_integrated
+  const isFarmIntegrated = (
+    // Check farm integration_type
+    (farm && (farm.integration_type === 'rotem' || (farm.rotem_farm_id && String(farm.rotem_farm_id).trim() !== ''))) ||
+    // Fallback: check house is_integrated flag (house-level integration indicator)
+    (houseDetails?.house?.is_integrated === true)
   );
   
   // Debug logging (remove in production if needed)
   if (process.env.NODE_ENV === 'development') {
     console.log('Farm integration check:', {
       farm: farm ? { id: farm.id, name: farm.name } : null,
+      farmFromDetails: farmFromDetails ? { id: farmFromDetails.id, integration_type: farmFromDetails.integration_type } : null,
+      farmFromContext: farmFromContext ? { id: farmFromContext.id, integration_type: farmFromContext.integration_type } : null,
       integration_type: farm?.integration_type,
       has_system_integration: farm?.has_system_integration,
       is_integrated: farm?.is_integrated,
