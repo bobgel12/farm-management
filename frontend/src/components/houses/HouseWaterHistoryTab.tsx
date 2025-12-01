@@ -30,7 +30,15 @@ import dayjs from 'dayjs';
 
 interface HouseWaterHistoryTabProps {
   houseId: string;
-  house: House & { farm?: { is_integrated?: boolean } };
+  house: House & { 
+    farm?: { 
+      is_integrated?: boolean;
+      has_system_integration?: boolean;
+      integration_type?: 'none' | 'rotem' | 'future_system';
+      rotem_farm_id?: string;
+    };
+    farm_id?: number;
+  };
 }
 
 export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ houseId, house }) => {
@@ -48,15 +56,15 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
     emails_sent?: number;
   } | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRequestInFlightRef = useRef<boolean>(false);
 
   // Get farm info to check if it's integrated with Rotem
   const farm = house.farm_id ? farms.find(f => f.id === house.farm_id) : null;
-  const farmData = house.farm || farm;
+  const farmData = (house.farm || farm) as any;
   const isIntegrated = farmData && (
     farmData.integration_type === 'rotem' && 
-    (farmData.has_system_integration || farmData.is_integrated)
+    (farmData.has_system_integration || farmData.is_integrated || farmData.rotem_farm_id)
   );
 
   const loadWaterHistory = useCallback(async () => {

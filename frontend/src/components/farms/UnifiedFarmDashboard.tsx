@@ -79,6 +79,8 @@ interface Farm {
   integration_type: 'none' | 'rotem' | 'future_system';
   integration_status: 'active' | 'inactive' | 'error' | 'not_configured';
   has_system_integration: boolean;
+  is_integrated?: boolean; // Computed property from backend
+  rotem_farm_id?: string; // For checking Rotem configuration
   last_sync?: string;
   houses: House[];
   workers: Worker[];
@@ -234,7 +236,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [waterDetectionError, setWaterDetectionError] = useState<string | null>(null);
   const [waterDetectionResults, setWaterDetectionResults] = useState<any>(null);
   const [waterDetectionTaskId, setWaterDetectionTaskId] = useState<string | null>(null);
-  const waterDetectionPollingRef = React.useRef<NodeJS.Timeout | null>(null);
+  const waterDetectionPollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (farmId && !propFarm) {
@@ -526,7 +528,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   };
 
   const handleTriggerWaterAnomalyDetection = async () => {
-    if (!farm || !farm.is_integrated) return;
+    if (!farm || !(farm.has_system_integration && farm.integration_type === 'rotem')) return;
     
     setDetectingWaterAnomalies(true);
     setWaterDetectionError(null);
@@ -854,7 +856,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                   Compare Houses
                 </Button>
               )}
-              {farm.is_integrated && farm.houses && farm.houses.length > 0 && (
+              {farm.has_system_integration && farm.integration_type === 'rotem' && farm.houses && farm.houses.length > 0 && (
                 <Button
                   variant="outlined"
                   color="primary"
