@@ -13,8 +13,12 @@ from .serializers import (
 from .services.scraper_service import DjangoRotemScraperService
 from .services.ml_service import MLAnalysisService
 from farms.models import Farm
+from houses.models import House
 from django.utils import timezone
 from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
@@ -511,3 +515,294 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
         
         serializer = self.get_serializer(summaries, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='water-history')
+    def water_history(self, request):
+        """Get water consumption history for a specific house directly from Rotem API"""
+        from .scraper import RotemScraper
+        from .services.scraper_service import DjangoRotemScraperService
+        import json
+        
+        house_id = request.query_params.get('house_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        days = request.query_params.get('days')  # Optional: only used if no start_date and no house start date
+        
+        if not house_id:
+            return Response(
+                {'error': 'house_id parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            house = House.objects.get(pk=house_id)
+            
+            # Get the farm and credentials
+            if not house.farm or not house.farm.rotem_farm_id:
+                return Response(
+                    {'error': 'House is not connected to a Rotem-integrated farm'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize Rotem scraper with farm credentials
+            try:
+                scraper_service = DjangoRotemScraperService(farm_id=house.farm.rotem_farm_id)
+                scraper = RotemScraper(
+                    scraper_service.credentials['username'],
+                    scraper_service.credentials['password']
+                )
+                
+                # Login to Rotem
+                if not scraper.login():
+                    return Response(
+                        {'error': 'Failed to authenticate with Rotem API'}, 
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+                
+                # Select the farm if farm_connection_token is available
+                # The farm_connection_token should be set during login, but we may need to select the farm
+                if house.farm.rotem_farm_id and scraper.farm_connection_token:
+                    logger.info(f"  Farm connection token available: {scraper.farm_connection_token[:20]}...")
+                
+                logger.info(f"Water History API Call - House ID: {house_id}, House Number: {house.house_number}")
+                logger.info(f"  Farm Rotem ID: {house.farm.rotem_farm_id}")
+                logger.info(f"  Fetching from Rotem API directly...")
+                
+                # Fetch water history from Rotem API
+                raw_water_data = scraper.get_water_history(
+                    house_number=house.house_number,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                
+                # Log the raw response from Rotem API
+                logger.info(f"  Raw Rotem API response: {json.dumps(raw_water_data, indent=2, default=str)[:5000]}")
+                
+                # Log dsData structure if available
+                if isinstance(raw_water_data, dict) and 'reponseObj' in raw_water_data:
+                    response_obj = raw_water_data['reponseObj']
+                    if 'dsData' in response_obj:
+                        ds_data = response_obj['dsData']
+                        logger.info(f"  dsData structure: {json.dumps(ds_data, indent=2, default=str)[:3000]}")
+                        if isinstance(ds_data, dict):
+                            logger.info(f"  dsData keys: {list(ds_data.keys())}")
+                            for key in ds_data.keys():
+                                if isinstance(ds_data[key], list):
+                                    logger.info(f"    {key}: array with {len(ds_data[key])} items")
+                                elif isinstance(ds_data[key], dict):
+                                    logger.info(f"    {key}: dict with keys {list(ds_data[key].keys())}")
+                
+                if not raw_water_data:
+                    return Response({
+                        'house_id': int(house_id),
+                        'house_number': house.house_number,
+                        'farm_name': house.farm.name if house.farm else None,
+                        'water_history': [],
+                        'total_days': 0,
+                        'average_consumption': 0,
+                        'message': 'No water history data available from Rotem API',
+                    })
+                
+                # Parse the Rotem API response
+                # The structure may vary, so we need to handle different response formats
+                water_history = []
+                
+                # Try to extract water history from different possible response structures
+                response_obj = raw_water_data.get('reponseObj', raw_water_data)
+                
+                # Check various possible locations for water history data
+                history_data = None
+                if 'WaterHistory' in response_obj:
+                    history_data = response_obj['WaterHistory']
+                elif 'ConsumptionHistory' in response_obj:
+                    history_data = response_obj['ConsumptionHistory']
+                elif 'History' in response_obj and 'Water' in response_obj['History']:
+                    history_data = response_obj['History']['Water']
+                elif 'dsData' in response_obj:
+                    # Check if dsData contains consumption data
+                    ds_data = response_obj['dsData']
+                    logger.info(f"  dsData keys: {list(ds_data.keys()) if isinstance(ds_data, dict) else 'Not a dict'}")
+                    
+                    # Look for Consumption array in dsData
+                    if 'Consumption' in ds_data:
+                        consumption = ds_data['Consumption']
+                        logger.info(f"  Found Consumption array with {len(consumption) if isinstance(consumption, list) else 'non-list'} items")
+                        
+                        # Look for water-related parameters in consumption array
+                        water_params = []
+                        for item in consumption:
+                            if isinstance(item, dict):
+                                param_name = item.get('ParameterKeyName', '') or item.get('ParameterName', '')
+                                param_display = item.get('ParameterDisplayName', '')
+                                # Check if this is a water-related parameter
+                                if any(keyword in param_name.lower() or keyword in param_display.lower() 
+                                       for keyword in ['water', 'consumption', 'daily_water', 'water_consumption']):
+                                    water_params.append(item)
+                                    logger.info(f"    Found water parameter: {param_name} = {item.get('ParameterValue')}")
+                        
+                        if water_params:
+                            # If we found water parameters, check if they have historical data
+                            # The ParameterData field might contain historical values
+                            for param in water_params:
+                                param_data = param.get('ParameterData')
+                                if param_data:
+                                    logger.info(f"    Parameter {param.get('ParameterKeyName')} has ParameterData: {type(param_data)}")
+                                    # ParameterData might be a list of historical values
+                                    if isinstance(param_data, list):
+                                        history_data = param_data
+                                        break
+                    
+                    # Also check other sections like "History", "Daily", etc.
+                    for section_name in ['History', 'Daily', 'ConsumptionHistory', 'WaterHistory']:
+                        if section_name in ds_data:
+                            section_data = ds_data[section_name]
+                            logger.info(f"  Found {section_name} section in dsData")
+                            if isinstance(section_data, list):
+                                # Look for water-related items
+                                for item in section_data:
+                                    if isinstance(item, dict):
+                                        param_name = item.get('ParameterKeyName', '') or item.get('ParameterName', '')
+                                        if 'water' in param_name.lower():
+                                            history_data = section_data
+                                            break
+                            elif isinstance(section_data, dict):
+                                if 'Water' in section_data:
+                                    history_data = section_data['Water']
+                                    break
+                
+                # If we found history data, parse it
+                if history_data:
+                    logger.info(f"  Found history data structure: {type(history_data)}")
+                    if isinstance(history_data, list):
+                        for entry in history_data:
+                            if isinstance(entry, dict):
+                                # Parse entry based on Rotem API structure
+                                date_str = entry.get('Date') or entry.get('date') or entry.get('RecordDate')
+                                consumption = entry.get('Consumption') or entry.get('consumption') or entry.get('Value') or entry.get('value')
+                                
+                                if date_str and consumption is not None:
+                                    water_history.append({
+                                        'date': date_str,
+                                        'consumption_avg': float(consumption),
+                                        'consumption_min': entry.get('Min', consumption),
+                                        'consumption_max': entry.get('Max', consumption),
+                                        'data_points': entry.get('Count', 1),
+                                    })
+                    elif isinstance(history_data, dict):
+                        # Handle dictionary format
+                        for date_str, value in history_data.items():
+                            if value is not None:
+                                water_history.append({
+                                    'date': date_str,
+                                    'consumption_avg': float(value) if isinstance(value, (int, float)) else 0,
+                                    'consumption_min': float(value) if isinstance(value, (int, float)) else 0,
+                                    'consumption_max': float(value) if isinstance(value, (int, float)) else 0,
+                                    'data_points': 1,
+                                })
+                
+                # Check dsData.Data array for water history records (CommandID 40 format)
+                if not water_history and 'dsData' in response_obj:
+                    ds_data = response_obj['dsData']
+                    if 'Data' in ds_data and isinstance(ds_data['Data'], list):
+                        logger.info(f"  Found dsData.Data array with {len(ds_data['Data'])} records")
+                        
+                        # Parse water history records from Data array
+                        for record in ds_data['Data']:
+                            if isinstance(record, dict):
+                                # Extract growth day (this represents the day number)
+                                growth_day = record.get('HistoryRecord_GrowthDay')
+                                if growth_day is None or growth_day < 0:
+                                    continue  # Skip invalid or summary rows (growth_day -1 is summary)
+                                
+                                # Extract total water consumption
+                                total_drink = record.get('HistoryRecord_TotalDrink')
+                                total_water = record.get('HistoryRecord_TotalWater')
+                                
+                                # Use TotalDrink as primary value, fallback to TotalWater
+                                consumption_value = total_drink or total_water
+                                
+                                if consumption_value:
+                                    try:
+                                        # Convert to float, handling string values
+                                        consumption_float = float(str(consumption_value).replace(',', ''))
+                                        
+                                        # Calculate date based on growth day and house start date
+                                        # The actual date should be calculated from house.batch_start_date + growth_day
+                                        # For now, we'll use growth_day as a relative day indicator
+                                        water_history.append({
+                                            'date': f"Day {int(growth_day)}",  # Will be converted to actual date later
+                                            'growth_day': int(growth_day),
+                                            'consumption_avg': consumption_float,
+                                            'consumption_min': consumption_float,
+                                            'consumption_max': consumption_float,
+                                            'data_points': 1,
+                                            'total_drink': consumption_float,
+                                            'daily_water_1': float(str(record.get('HistoryRecord_DailyWater_1', '0')).replace(',', '')) or 0,
+                                            'daily_water_2': float(str(record.get('HistoryRecord_DailyWater_2', '0')).replace(',', '')) or 0,
+                                            'daily_water_3': float(str(record.get('HistoryRecord_DailyWater_3', '0')).replace(',', '')) or 0,
+                                            'daily_water_4': float(str(record.get('HistoryRecord_DailyWater_4', '0')).replace(',', '')) or 0,
+                                            'cooling': float(str(record.get('HistoryRecord_Cooling', '0')).replace(',', '')) or 0,
+                                            'fogger': float(str(record.get('HistoryRecord_Fogger', '0')).replace(',', '')) or 0,
+                                        })
+                                    except (ValueError, TypeError) as e:
+                                        logger.warning(f"    Could not parse consumption value for day {growth_day}: {e}")
+                                        continue
+                        
+                        logger.info(f"  Parsed {len(water_history)} water history records from dsData.Data")
+                
+                # If no structured history found, log the full response for debugging
+                if not water_history:
+                    logger.warning(f"  Could not parse water history from Rotem API response structure")
+                    logger.warning(f"  Full response keys: {list(raw_water_data.keys()) if isinstance(raw_water_data, dict) else 'Not a dict'}")
+                    if isinstance(raw_water_data, dict) and 'reponseObj' in raw_water_data:
+                        logger.warning(f"  reponseObj keys: {list(raw_water_data['reponseObj'].keys())}")
+                
+                logger.info(f"  Parsed water history records: {len(water_history)}")
+                
+                # Convert growth_day to actual dates based on house start date
+                if water_history and house.batch_start_date:
+                    from datetime import timedelta
+                    for record in water_history:
+                        if 'growth_day' in record and record['growth_day'] >= 0:
+                            # Calculate actual date from batch_start_date + growth_day
+                            actual_date = house.batch_start_date + timedelta(days=int(record['growth_day']))
+                            record['date'] = actual_date.isoformat()
+                        elif 'date' in record and record['date'].startswith('Day '):
+                            # If we couldn't calculate date, keep the day format
+                            pass
+                
+                # Sort by growth_day or date
+                if water_history:
+                    if 'growth_day' in water_history[0]:
+                        water_history.sort(key=lambda x: x.get('growth_day', 0))
+                    else:
+                        water_history.sort(key=lambda x: x.get('date', ''))
+                
+                return Response({
+                    'house_id': int(house_id),
+                    'house_number': house.house_number,
+                    'farm_name': house.farm.name if house.farm else None,
+                    'water_history': water_history,
+                    'total_days': len(water_history),
+                    'average_consumption': sum(h['consumption_avg'] for h in water_history) / len(water_history) if water_history else 0,
+                    'raw_api_response': raw_water_data,  # Include raw response for debugging
+                })
+                
+            except Exception as e:
+                logger.error(f"Error fetching water history from Rotem API: {str(e)}", exc_info=True)
+                return Response(
+                    {'error': f'Failed to fetch water history from Rotem API: {str(e)}'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except House.DoesNotExist:
+            return Response(
+                {'error': 'House not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error in water_history endpoint: {str(e)}", exc_info=True)
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -498,6 +498,38 @@ class RotemApiService {
     return response.data;
   }
 
+  async getWaterHistory(params: {
+    house_id: number;
+    start_date?: string;
+    end_date?: string;
+    days?: number;
+  }): Promise<{
+    house_id: number;
+    house_number: number;
+    farm_name: string | null;
+    water_history: Array<{
+      date: string;
+      consumption_avg: number;
+      consumption_min: number;
+      consumption_max: number;
+      data_points: number;
+    }>;
+    total_days: number;
+    average_consumption: number;
+  }> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('house_id', params.house_id.toString());
+    if (params.start_date) queryParams.append('start_date', params.start_date);
+    if (params.end_date) queryParams.append('end_date', params.end_date);
+    if (params.days) queryParams.append('days', params.days.toString());
+    
+    const response = await axios.get(
+      `${this.baseURL}/rotem/daily-summaries/water-history/?${queryParams.toString()}`,
+      { headers: this.getAuthHeaders() }
+    );
+    return response.data;
+  }
+
   async getDailySummariesByController(controllerId: number): Promise<RotemDailySummary[]> {
     const response = await axios.get(`${this.baseURL}/rotem/daily-summaries/by_controller/?controller_id=${controllerId}`, {
       headers: this.getAuthHeaders()

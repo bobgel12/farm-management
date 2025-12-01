@@ -377,12 +377,13 @@ class RotemScraper:
         
         print("="*50)
 
-    def get_command_data(self, house_number: int = 2) -> Optional[Dict[Any, Any]]:
+    def get_command_data(self, house_number: int = 2, command_id: str = "0") -> Optional[Dict[Any, Any]]:
         """
         Get detailed command data for a specific house
         This endpoint returns real sensor data with actual values
+        command_id: "0" = General, "40" = Water History
         """
-        print(f"🏠 Fetching Command Data for House {house_number}...")
+        print(f"🏠 Fetching Command Data for House {house_number}, CommandID: {command_id}...")
         
         url = f"{self.base_url}/Host3_V1/Services/AllServices.svc/RNBL_GetCommandData"
         
@@ -399,7 +400,7 @@ class RotemScraper:
         try:
             request_data = {
                 "prmGetCommandDataParams": {
-                    "CommandID": "0",
+                    "CommandID": command_id,
                     "IsSetPointCommand": False,
                     "HouseNumber": str(house_number),
                     "RoomNumber": -1,
@@ -410,7 +411,8 @@ class RotemScraper:
                 }
             }
             
-            response = self.session.post(url, headers=headers, json=request_data, timeout=30)
+            # Increased timeout to 60 seconds for water history data which can be large
+            response = self.session.post(url, headers=headers, json=request_data, timeout=60)
             if response.status_code == 200:
                 try:
                     result = response.json()
@@ -432,6 +434,45 @@ class RotemScraper:
         except Exception as e:
             print(f"❌ Error getting Command Data for house {house_number}: {str(e)}")
             return None
+
+    def get_water_history(self, house_number: int, start_date: str = None, end_date: str = None) -> Optional[Dict[Any, Any]]:
+        """
+        Get water consumption history for a specific house from Rotem API
+        Uses CommandID 40 to fetch water history data
+        """
+        print(f"💧 Fetching Water History for House {house_number}...")
+        
+        # Use CommandID 40 to get water history (this is the correct endpoint based on the curl example)
+        command_data = self.get_command_data(house_number, command_id="40")
+        if command_data:
+            print(f"📊 RNBL_GetCommandData (CommandID: 40) response structure: {json.dumps(command_data, indent=2, default=str)[:2000]}")
+            
+            # Check if command_data contains water history data in dsData.Data
+            if 'reponseObj' in command_data:
+                response_obj = command_data['reponseObj']
+                
+                # Check if dsData.Data exists (this contains the water history records)
+                if 'dsData' in response_obj:
+                    ds_data = response_obj['dsData']
+                    if 'Data' in ds_data and isinstance(ds_data['Data'], list):
+                        print(f"✅ Found water history data in dsData.Data with {len(ds_data['Data'])} records")
+                        return command_data
+                
+                # Also check for direct water history fields
+                if 'WaterHistory' in response_obj:
+                    return response_obj['WaterHistory']
+                elif 'ConsumptionHistory' in response_obj:
+                    return response_obj['ConsumptionHistory']
+                elif 'History' in response_obj:
+                    history = response_obj['History']
+                    if 'Water' in history:
+                        return history['Water']
+            
+            # Return the data even if structure is different (for parsing)
+            return command_data
+        
+        print(f"❌ No water history data found from Rotem API")
+        return None
 
 
 def main():

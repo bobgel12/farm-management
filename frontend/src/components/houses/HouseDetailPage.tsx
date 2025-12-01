@@ -29,6 +29,7 @@ import {
   Assignment as TasksIcon,
   TrendingDown as MortalityIcon,
   Report as IssuesIcon,
+  WaterDrop as WaterDropIcon,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { useFarm } from '../../contexts/FarmContext';
@@ -40,6 +41,7 @@ import HouseMenuTab from './HouseMenuTab';
 import HouseTasksTab from './HouseTasksTab';
 import HouseMortalityTab from './HouseMortalityTab';
 import HouseIssuesTab from './HouseIssuesTab';
+import HouseWaterHistoryTab from './HouseWaterHistoryTab';
 import { QuickIssueButton } from '../issues';
 
 interface HouseDetails {
@@ -290,6 +292,15 @@ const HouseDetailPage: React.FC = () => {
             id="house-tab-7"
             aria-controls="house-tabpanel-7"
           />
+          {house.farm?.is_integrated && (
+            <Tab
+              icon={<WaterDropIcon />}
+              iconPosition="start"
+              label="Water History"
+              id="house-tab-8"
+              aria-controls="house-tabpanel-8"
+            />
+          )}
         </Tabs>
       </Box>
 
@@ -334,6 +345,11 @@ const HouseDetailPage: React.FC = () => {
       <TabPanel value={activeTab} index={7}>
         <HouseMenuTab houseId={houseId!} house={house} />
       </TabPanel>
+      {house.farm?.is_integrated && (
+        <TabPanel value={activeTab} index={8}>
+          <HouseWaterHistoryTab houseId={houseId!} house={house} />
+        </TabPanel>
+      )}
 
       {/* Quick Issue Report Button */}
       <QuickIssueButton
