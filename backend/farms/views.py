@@ -111,15 +111,25 @@ class FarmViewSet(ModelViewSet):
             
             # Test connection
             try:
+                # Get rotem_farm_id from request or use farm ID as fallback
+                rotem_farm_id = request.data.get('rotem_farm_id')
+                if not rotem_farm_id or rotem_farm_id.strip() == '':
+                    # Use farm database ID as fallback if not provided
+                    rotem_farm_id = str(farm.id)
+                
                 # Temporarily set credentials for testing
                 farm.rotem_username = username
                 farm.rotem_password = password
+                farm.rotem_farm_id = rotem_farm_id
                 farm.save()
                 
                 integration = RotemIntegration(farm)
                 if integration.test_connection():
                     farm.integration_type = 'rotem'
                     farm.integration_status = 'active'
+                    # Ensure rotem_farm_id is set (in case it wasn't saved above)
+                    if not farm.rotem_farm_id or farm.rotem_farm_id.strip() == '':
+                        farm.rotem_farm_id = rotem_farm_id
                     farm.save()
                     
                     # Sync house data

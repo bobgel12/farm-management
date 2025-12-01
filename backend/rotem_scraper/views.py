@@ -537,19 +537,46 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             house = House.objects.get(pk=house_id)
             
-            # Get the farm and credentials
-            if not house.farm or not house.farm.rotem_farm_id:
+            # Get the farm and check if it's integrated with Rotem
+            # Use permissive check: allow if integration_type is 'rotem' or if rotem_farm_id exists
+            if not house.farm:
+                return Response(
+                    {'error': 'House is not connected to a farm'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if farm is integrated with Rotem
+            is_rotem_integrated = (
+                house.farm.integration_type == 'rotem' or
+                (house.farm.rotem_farm_id and house.farm.rotem_farm_id.strip() != '') or
+                house.farm.is_integrated
+            )
+            
+            if not is_rotem_integrated:
                 return Response(
                     {'error': 'House is not connected to a Rotem-integrated farm'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Initialize Rotem scraper with farm credentials
+            # Check if farm has Rotem credentials
+            if not house.farm.rotem_username or not house.farm.rotem_password:
+                return Response(
+                    {'error': 'Farm Rotem credentials are not configured. Please configure Rotem integration settings for this farm.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get rotem_farm_id for logging (use farm database ID as fallback if not set)
+            rotem_farm_id = house.farm.rotem_farm_id
+            if not rotem_farm_id or rotem_farm_id.strip() == '':
+                # Use farm database ID as fallback for logging/reference
+                rotem_farm_id = str(house.farm.id)
+                logger.warning(f"rotem_farm_id not set for farm {house.farm.id}, using farm ID as reference: {rotem_farm_id}")
+            
+            # Initialize Rotem scraper with farm credentials directly
             try:
-                scraper_service = DjangoRotemScraperService(farm_id=house.farm.rotem_farm_id)
                 scraper = RotemScraper(
-                    scraper_service.credentials['username'],
-                    scraper_service.credentials['password']
+                    username=house.farm.rotem_username,
+                    password=house.farm.rotem_password
                 )
                 
                 # Login to Rotem
@@ -561,11 +588,11 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 
                 # Select the farm if farm_connection_token is available
                 # The farm_connection_token should be set during login, but we may need to select the farm
-                if house.farm.rotem_farm_id and scraper.farm_connection_token:
+                if rotem_farm_id and scraper.farm_connection_token:
                     logger.info(f"  Farm connection token available: {scraper.farm_connection_token[:20]}...")
                 
                 logger.info(f"Water History API Call - House ID: {house_id}, House Number: {house.house_number}")
-                logger.info(f"  Farm Rotem ID: {house.farm.rotem_farm_id}")
+                logger.info(f"  Farm Rotem ID: {rotem_farm_id}")
                 logger.info(f"  Fetching from Rotem API directly...")
                 
                 # Fetch water history from Rotem API
