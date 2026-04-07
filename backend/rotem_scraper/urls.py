@@ -9,7 +9,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import RotemFarm
-from .serializers import RotemFarmSerializer
+from .serializers import RotemFarmSerializer, IntegratedFarmSerializer
+from farms.models import Farm
 
 router = DefaultRouter()
 router.register(r'data', RotemDataViewSet)
@@ -24,10 +25,24 @@ router.register(r'daily-summaries', RotemDailySummaryViewSet, basename='daily-su
 
 @api_view(['GET'])
 def farm_detail(request, farm_id):
-    """Farm detail endpoint using farm_id as lookup field"""
+    """Farm detail endpoint using farm_id as lookup field.
+
+    Prefer the current Farm integration model and fall back to legacy RotemFarm
+    for backward compatibility.
+    """
     try:
-        farm = get_object_or_404(RotemFarm, farm_id=farm_id)
-        serializer = RotemFarmSerializer(farm)
+        farm = Farm.objects.filter(
+            rotem_farm_id=farm_id,
+            integration_type='rotem',
+            is_active=True
+        ).first()
+        if farm:
+            serializer = IntegratedFarmSerializer(farm)
+            return Response(serializer.data)
+
+        # Legacy fallback
+        legacy_farm = get_object_or_404(RotemFarm, farm_id=farm_id)
+        serializer = RotemFarmSerializer(legacy_farm)
         return Response(serializer.data)
     except Exception as e:
         return Response({'error': str(e)}, status=404)

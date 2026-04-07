@@ -51,7 +51,8 @@ class MonitoringService:
             'temperature_sensors': {},
             'consumption': {},
             'alarms': [],
-            'status': {}
+            'status': {},
+            'has_valid_response': False
         }
         
         # Extract response object (handle both 'reponseObj' typo and 'responseObj')
@@ -59,6 +60,7 @@ class MonitoringService:
         if not response_obj or not isinstance(response_obj, dict):
             self.logger.warning(f"No response object found in command data for house {house_number}")
             return parsed_data
+        parsed_data['has_valid_response'] = True
         
         ds_data = response_obj.get('dsData', {})
         if not ds_data:
@@ -236,6 +238,12 @@ class MonitoringService:
             
             # Parse the command data
             parsed_data = self.parse_command_data(command_data, house_number)
+            if not parsed_data.get('has_valid_response'):
+                # Do not create misleading empty snapshots when Rotem returned no usable payload.
+                self.logger.warning(
+                    f"Skipping snapshot creation for farm {farm.id}, house {house_number}: no valid response payload"
+                )
+                return None
             
             # Extract key metrics
             general = parsed_data.get('general', {})

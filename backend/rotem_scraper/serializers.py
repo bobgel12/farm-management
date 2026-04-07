@@ -37,7 +37,7 @@ class IntegratedFarmSerializer(serializers.ModelSerializer):
     """Serializer for farms with Rotem integration"""
     controllers_count = serializers.SerializerMethodField()
     # Provide fields with names matching the old RotemFarm structure for backward compatibility
-    farm_id = serializers.CharField(source='rotem_farm_id', read_only=True)
+    farm_id = serializers.SerializerMethodField()
     farm_name = serializers.CharField(source='name', read_only=True)
     gateway_name = serializers.CharField(source='rotem_gateway_name', read_only=True)
     gateway_alias = serializers.CharField(source='rotem_gateway_alias', read_only=True)
@@ -54,6 +54,13 @@ class IntegratedFarmSerializer(serializers.ModelSerializer):
     
     def get_controllers_count(self, obj):
         return obj.rotem_controllers.count()
+
+    def get_farm_id(self, obj):
+        """
+        Return a stable farm identifier for Rotem API routes.
+        Prefer rotem_farm_id, but fall back to DB id when missing.
+        """
+        return obj.rotem_farm_id or str(obj.id)
 
 
 # Keep legacy serializer for backward compatibility (will be removed later)

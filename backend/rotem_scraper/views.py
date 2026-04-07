@@ -21,6 +21,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def get_farm_by_identifier(farm_identifier):
+    """
+    Resolve a farm by Rotem identifier or by internal DB id.
+    This keeps endpoints working for farms that don't yet have rotem_farm_id populated.
+    """
+    if not farm_identifier:
+        raise Farm.DoesNotExist
+
+    farm = Farm.objects.filter(rotem_farm_id=farm_identifier).first()
+    if farm:
+        return farm
+
+    if str(farm_identifier).isdigit():
+        farm = Farm.objects.filter(id=int(farm_identifier)).first()
+        if farm:
+            return farm
+        raise Farm.DoesNotExist
+
+    raise Farm.DoesNotExist
+
+
 class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
     """API for Rotem data visualization"""
     queryset = RotemDataPoint.objects.all()
@@ -39,7 +60,7 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
         farm_id = self.request.query_params.get('farm_id')
         if farm_id:
             try:
-                farm = Farm.objects.get(rotem_farm_id=farm_id)
+                farm = get_farm_by_identifier(farm_id)
                 controllers = farm.rotem_controllers.all()
                 queryset = queryset.filter(controller__in=controllers)
             except Farm.DoesNotExist:
@@ -91,7 +112,7 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
                           status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            farm = Farm.objects.get(rotem_farm_id=farm_id)
+            farm = get_farm_by_identifier(farm_id)
             controllers = farm.rotem_controllers.all()
             data_points = self.queryset.filter(controller__in=controllers)
             serializer = self.get_serializer(data_points, many=True)
@@ -440,7 +461,7 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
         farm_id = self.request.query_params.get('farm_id')
         if farm_id:
             try:
-                farm = Farm.objects.get(rotem_farm_id=farm_id)
+                farm = get_farm_by_identifier(farm_id)
                 controllers = farm.rotem_controllers.all()
                 queryset = queryset.filter(controller__in=controllers)
             except Farm.DoesNotExist:
@@ -472,7 +493,7 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
             )
         
         try:
-            farm = Farm.objects.get(rotem_farm_id=farm_id)
+            farm = get_farm_by_identifier(farm_id)
             controllers = farm.rotem_controllers.all()
             summaries = RotemDailySummary.objects.filter(
                 controller__in=controllers

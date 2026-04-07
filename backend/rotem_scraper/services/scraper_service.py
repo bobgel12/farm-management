@@ -16,9 +16,19 @@ class DjangoRotemScraperService:
         self.farm = None  # Will hold the Farm model instance
         
         if farm_id:
-            # Get credentials for specific farm (lookup by rotem_farm_id)
+            # Get credentials for specific farm (lookup by rotem_farm_id, fallback to DB id)
             try:
-                self.farm = Farm.objects.get(rotem_farm_id=farm_id, integration_type='rotem')
+                self.farm = Farm.objects.filter(
+                    rotem_farm_id=farm_id,
+                    integration_type='rotem'
+                ).first()
+                if not self.farm and str(farm_id).isdigit():
+                    self.farm = Farm.objects.filter(
+                        id=int(farm_id),
+                        integration_type='rotem'
+                    ).first()
+                if not self.farm:
+                    raise Farm.DoesNotExist
                 self.credentials = {
                     'username': self.farm.rotem_username,
                     'password': self.farm.rotem_password,
@@ -48,7 +58,8 @@ class DjangoRotemScraperService:
             
             # Login and scrape
             if not scraper.login():
-                raise Exception("Login failed")
+                error_message = getattr(scraper, 'last_error_message', None) or "Login failed"
+                raise Exception(error_message)
             
             # Get all data
             data = scraper.scrape_all_data()
@@ -110,11 +121,12 @@ class DjangoRotemScraperService:
             if farm.rotem_username and farm.rotem_password:
                 try:
                     logger.info(f"Scraping data for farm: {farm.name}")
-                    service = DjangoRotemScraperService(farm_id=farm.rotem_farm_id)
+                    farm_identifier = farm.rotem_farm_id or str(farm.id)
+                    service = DjangoRotemScraperService(farm_id=farm_identifier)
                     result = service.scrape_and_save_data()
                     results.append({
                         'farm': farm.name,
-                        'farm_id': farm.rotem_farm_id,
+                        'farm_id': farm_identifier,
                         'status': result.status,
                         'data_points_collected': result.data_points_collected
                     })
@@ -122,7 +134,7 @@ class DjangoRotemScraperService:
                     logger.error(f"Failed to scrape farm {farm.name}: {str(e)}")
                     results.append({
                         'farm': farm.name,
-                        'farm_id': farm.rotem_farm_id,
+                        'farm_id': farm.rotem_farm_id or str(farm.id),
                         'status': 'failed',
                         'error': str(e)
                     })
@@ -130,7 +142,7 @@ class DjangoRotemScraperService:
                 logger.warning(f"Farm {farm.name} has no Rotem credentials")
                 results.append({
                     'farm': farm.name,
-                    'farm_id': farm.rotem_farm_id,
+                    'farm_id': farm.rotem_farm_id or str(farm.id),
                     'status': 'skipped',
                     'error': 'No credentials configured'
                 })
@@ -253,8 +265,15 @@ class DjangoRotemScraperService:
         
         for house_num in range(1, 9):
             command_data = data.get(f'command_data_house_{house_num}')
-            if command_data and isinstance(command_data, dict) and 'reponseObj' in command_data:
-                response_obj = command_data['reponseObj']
+            if command_data and isinstance(command_data, dict):
+                # Rotem API commonly uses the misspelled key `reponseObj`,
+                # but be defensive and accept `responseObj` too.
+                response_obj = command_data.get('reponseObj') or command_data.get('responseObj')
+                if not isinstance(response_obj, dict):
+                    logger.warning(
+                        f"Skipping house {house_num}: missing/invalid response object in command data"
+                    )
+                    continue
                 logger.info(f"Processing command data for house {house_num}")
                 
                 # Extract data from different sections
