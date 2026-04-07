@@ -68,6 +68,7 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
                     house=house,
                     farm=house.farm,
                     alert_date=anomaly_data['alert_date'],
+                    anomaly_direction=anomaly_data.get('anomaly_direction', 'high'),
                     defaults={
                         'growth_day': anomaly_data.get('growth_day'),
                         'current_consumption': anomaly_data['current_consumption'],
@@ -75,6 +76,7 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
                         'expected_consumption': anomaly_data.get('expected_consumption'),
                         'increase_percentage': anomaly_data['increase_percentage'],
                         'severity': anomaly_data['severity'],
+                        'anomaly_reason': anomaly_data.get('anomaly_reason', 'possible_leak'),
                         'message': anomaly_data['message'],
                         'detection_method': anomaly_data['detection_method'],
                     }
@@ -82,7 +84,14 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
                 
                 if created:
                     total_alerts += 1
-                    logger.info(f"Created water consumption alert {alert.id} for House {house.house_number}")
+                    logger.info(
+                        "Created water consumption alert %s for House %s (%s, reason=%s, deviation=%.1f%%)",
+                        alert.id,
+                        house.house_number,
+                        alert.anomaly_direction,
+                        alert.anomaly_reason,
+                        alert.increase_percentage,
+                    )
                     
                     # Send email alert
                     email_sent = WaterAlertEmailService.send_alert_email(alert)

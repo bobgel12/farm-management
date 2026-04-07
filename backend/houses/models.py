@@ -555,6 +555,17 @@ class WaterConsumptionAlert(models.Model):
     )
     increase_percentage = models.FloatField(help_text="Percentage increase from baseline")
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='medium')
+    anomaly_direction = models.CharField(
+        max_length=10,
+        choices=[('high', 'High'), ('low', 'Low')],
+        default='high',
+        help_text="Direction of anomaly compared to baseline"
+    )
+    anomaly_reason = models.CharField(
+        max_length=50,
+        default='possible_leak',
+        help_text="Reason code (e.g., possible_leak, possible_under_drinking)"
+    )
     
     # Alert metadata
     message = models.TextField(help_text="Alert message describing the anomaly")
@@ -599,7 +610,7 @@ class WaterConsumptionAlert(models.Model):
         verbose_name = "Water Consumption Alert"
         verbose_name_plural = "Water Consumption Alerts"
         # Prevent duplicate alerts for the same house on the same date
-        unique_together = ['house', 'alert_date']
+        unique_together = ['house', 'alert_date', 'anomaly_direction']
     
     def __str__(self):
         return f"Water Alert - House {self.house.house_number} ({self.severity}) - {self.alert_date}"

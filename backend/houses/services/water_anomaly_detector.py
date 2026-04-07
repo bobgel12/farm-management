@@ -18,11 +18,17 @@ logger = logging.getLogger(__name__)
 class WaterAnomalyDetector:
     """Service to detect abnormal water consumption patterns"""
     
-    # Thresholds for anomaly detection (now based on deviation from expected age-adjusted consumption)
-    LOW_THRESHOLD = 1.3  # 30% above expected for age
-    MEDIUM_THRESHOLD = 1.5  # 50% above expected
-    HIGH_THRESHOLD = 2.0  # 100% above expected (double)
-    CRITICAL_THRESHOLD = 2.5  # 150% above expected
+    # Thresholds for high anomalies (possible leak/over-consumption), as ratio to baseline
+    HIGH_LOW_THRESHOLD = 1.3
+    HIGH_MEDIUM_THRESHOLD = 1.5
+    HIGH_HIGH_THRESHOLD = 2.0
+    HIGH_CRITICAL_THRESHOLD = 2.5
+
+    # Thresholds for low anomalies (possible under-drinking), as ratio to baseline
+    LOW_LOW_THRESHOLD = 0.75
+    LOW_MEDIUM_THRESHOLD = 0.60
+    LOW_HIGH_THRESHOLD = 0.50
+    LOW_CRITICAL_THRESHOLD = 0.40
     
     # Minimum number of historical data points required
     MIN_HISTORICAL_DAYS = 3  # Reduced since we're using age-adjusted baselines
@@ -194,8 +200,14 @@ class WaterAnomalyDetector:
                     increase_percentage = 0
                     increase_ratio = 0
                 
-                # Determine severity based on increase ratio (now against age-adjusted baseline)
-                severity = self._determine_severity(increase_ratio, baseline_std, current_consumption, expected_consumption)
+                # Determine severity and anomaly direction using age-adjusted + similar-age trend.
+                severity, anomaly_direction, reason_code = self._determine_anomaly(
+                    increase_ratio=increase_ratio,
+                    baseline_std=baseline_std,
+                    current_consumption=current_consumption,
+                    expected_consumption=expected_consumption,
+                    historical_similar_values=similar_age_data
+                )
                 
                 # Only create alert if severity is at least 'low'
                 if severity:
@@ -208,12 +220,16 @@ class WaterAnomalyDetector:
                         'increase_percentage': increase_percentage,
                         'increase_ratio': increase_ratio,
                         'severity': severity,
+                        'anomaly_direction': anomaly_direction,
+                        'anomaly_reason': reason_code,
                         'message': self._generate_alert_message(
                             current_consumption,
                             baseline_consumption,
                             expected_consumption,
                             increase_percentage,
                             severity,
+                            anomaly_direction,
+                            reason_code,
                             alert_date,
                             growth_day
                         ),
@@ -321,43 +337,74 @@ class WaterAnomalyDetector:
         
         return None
     
-    def _determine_severity(
+    def _determine_anomaly(
         self, 
         increase_ratio: float, 
         baseline_std: float, 
         current_consumption: float,
-        expected_consumption: Optional[float] = None
-    ) -> Optional[str]:
+        expected_consumption: Optional[float] = None,
+        historical_similar_values: Optional[List[float]] = None
+    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """
-        Determine alert severity based on increase ratio and statistical deviation
-        Now uses age-adjusted baselines for more accurate detection
+        Determine anomaly severity, direction and reason.
+        Returns (severity, anomaly_direction, reason_code).
         
-        Returns severity level or None if no anomaly detected
+        anomaly_direction:
+        - 'high' => possible leak/over-consumption
+        - 'low' => possible under-drinking
         """
-        # Use Z-score if we have standard deviation
+        # Similar-age guardrail: if today's value sits close to similar-age history, treat as normal.
+        if historical_similar_values and len(historical_similar_values) >= 2:
+            hist_mean = statistics.mean(historical_similar_values)
+            hist_std = statistics.stdev(historical_similar_values) if len(historical_similar_values) > 1 else 0
+            if hist_std > 0:
+                z_vs_similar = (current_consumption - hist_mean) / hist_std
+                if abs(z_vs_similar) < 1.0:
+                    return None, None, 'normal_growth_pattern'
+
+        # Use Z-score if we have baseline std dev
         if baseline_std > 0:
             baseline_value = current_consumption / increase_ratio if increase_ratio > 0 else 0
             z_score = (current_consumption - baseline_value) / baseline_std
             if z_score > 3.0:
-                return 'critical'
-            elif z_score > 2.5:
-                return 'high'
-            elif z_score > 2.0:
-                return 'medium'
-            elif z_score > 1.5:
-                return 'low'
+                return 'critical', 'high', 'possible_leak'
+            if z_score > 2.5:
+                return 'high', 'high', 'possible_leak'
+            if z_score > 2.0:
+                return 'medium', 'high', 'possible_leak'
+            if z_score > 1.5:
+                return 'low', 'high', 'possible_leak'
+
+            if z_score < -3.0:
+                return 'critical', 'low', 'possible_under_drinking'
+            if z_score < -2.5:
+                return 'high', 'low', 'possible_under_drinking'
+            if z_score < -2.0:
+                return 'medium', 'low', 'possible_under_drinking'
+            if z_score < -1.5:
+                return 'low', 'low', 'possible_under_drinking'
         
-        # Ratio-based detection (now against age-adjusted expected consumption)
-        if increase_ratio >= self.CRITICAL_THRESHOLD:
-            return 'critical'
-        elif increase_ratio >= self.HIGH_THRESHOLD:
-            return 'high'
-        elif increase_ratio >= self.MEDIUM_THRESHOLD:
-            return 'medium'
-        elif increase_ratio >= self.LOW_THRESHOLD:
-            return 'low'
+        # Ratio-based fallback for high anomalies
+        if increase_ratio >= self.HIGH_CRITICAL_THRESHOLD:
+            return 'critical', 'high', 'possible_leak'
+        if increase_ratio >= self.HIGH_HIGH_THRESHOLD:
+            return 'high', 'high', 'possible_leak'
+        if increase_ratio >= self.HIGH_MEDIUM_THRESHOLD:
+            return 'medium', 'high', 'possible_leak'
+        if increase_ratio >= self.HIGH_LOW_THRESHOLD:
+            return 'low', 'high', 'possible_leak'
+
+        # Ratio-based fallback for low anomalies
+        if 0 < increase_ratio <= self.LOW_CRITICAL_THRESHOLD:
+            return 'critical', 'low', 'possible_under_drinking'
+        if 0 < increase_ratio <= self.LOW_HIGH_THRESHOLD:
+            return 'high', 'low', 'possible_under_drinking'
+        if 0 < increase_ratio <= self.LOW_MEDIUM_THRESHOLD:
+            return 'medium', 'low', 'possible_under_drinking'
+        if 0 < increase_ratio <= self.LOW_LOW_THRESHOLD:
+            return 'low', 'low', 'possible_under_drinking'
         
-        return None
+        return None, None, 'normal_growth_pattern'
     
     def _generate_alert_message(
         self,
@@ -366,12 +413,15 @@ class WaterAnomalyDetector:
         expected_consumption: Optional[float],
         increase_percentage: float,
         severity: str,
+        anomaly_direction: str,
+        anomaly_reason: str,
         alert_date: date,
         growth_day: Optional[int]
     ) -> str:
         """Generate human-readable alert message with age-adjusted context"""
         severity_text = severity.upper()
         age_info = f" (Growth Day {growth_day})" if growth_day else ""
+        direction_text = "ABOVE" if anomaly_direction == 'high' else "BELOW"
         
         message = (
             f"⚠️ {severity_text} ALERT: Abnormal water consumption detected for House {self.house.house_number}"
@@ -387,12 +437,28 @@ class WaterAnomalyDetector:
         
         message += (
             f"Baseline comparison: {baseline_consumption:.2f} L/day\n"
-            f"Increase: {increase_percentage:.1f}% above baseline\n\n"
-            f"This may indicate:\n"
-            f"- Water leak or equipment malfunction\n"
-            f"- Increased bird activity or stress\n"
-            f"- Environmental factors requiring attention\n"
-            f"- Health issues in the flock\n\n"
+            f"Deviation: {increase_percentage:.1f}% ({direction_text} baseline)\n"
+            f"Reason code: {anomaly_reason}\n\n"
+        )
+
+        if anomaly_direction == 'high':
+            message += (
+                f"This may indicate:\n"
+                f"- Water leak or equipment malfunction\n"
+                f"- Increased bird activity or stress\n"
+                f"- Environmental factors requiring attention\n"
+                f"- Health issues in the flock\n\n"
+            )
+        else:
+            message += (
+                f"This may indicate:\n"
+                f"- Birds under-drinking (health/stress)\n"
+                f"- Water delivery blockage or low pressure\n"
+                f"- Feed intake drop or system issue\n"
+                f"- Sensor/meter calibration problem\n\n"
+            )
+
+        message += (
             f"Please investigate immediately."
         )
         

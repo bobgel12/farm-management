@@ -48,7 +48,8 @@ class HouseAlarmAdmin(admin.ModelAdmin):
 class WaterConsumptionAlertAdmin(admin.ModelAdmin):
     list_display = [
         'house', 'farm', 'alert_date', 'current_consumption', 'baseline_consumption',
-        'increase_percentage', 'severity', 'is_acknowledged', 'email_sent', 'created_at'
+        'increase_percentage', 'anomaly_direction', 'anomaly_reason', 'severity',
+        'is_acknowledged', 'email_sent', 'created_at'
     ]
     list_filter = ['severity', 'is_acknowledged', 'email_sent', 'alert_date', 'farm']
     search_fields = ['house__farm__name', 'house__house_number', 'message']
@@ -58,7 +59,7 @@ class WaterConsumptionAlertAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Alert Information', {
-            'fields': ('house', 'farm', 'alert_date', 'growth_day', 'severity')
+            'fields': ('house', 'farm', 'alert_date', 'growth_day', 'severity', 'anomaly_direction', 'anomaly_reason')
         }),
         ('Consumption Data', {
             'fields': ('current_consumption', 'baseline_consumption', 'increase_percentage')

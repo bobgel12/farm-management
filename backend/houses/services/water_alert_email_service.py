@@ -274,6 +274,27 @@ class WaterAlertEmailService:
         
         # Text content
         alert_time = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
+        direction_label = "above" if alert.anomaly_direction == "high" else "below"
+        anomaly_context = (
+            "Possible leak / over-consumption"
+            if alert.anomaly_direction == "high"
+            else "Possible under-drinking / low consumption"
+        )
+        possible_causes_text = (
+            "- Water leak or equipment malfunction\n"
+            "- Increased bird activity or stress\n"
+            "- Environmental factors (high temperature/humidity)\n"
+            "- Equipment calibration issues\n"
+            "- Feed quality changes\n"
+            "- Disease/health issues in the flock"
+            if alert.anomaly_direction == "high"
+            else
+            "- Birds under-drinking due to stress/illness\n"
+            "- Water line blockage or low pressure\n"
+            "- Nipple/drinker malfunction\n"
+            "- Feed intake decline\n"
+            "- Meter/sensor calibration issue"
+        )
         text_content = f"""
 WATER CONSUMPTION ALERT - {alert.severity.upper()}
 
@@ -289,6 +310,9 @@ CONSUMPTION DATA
 Current Consumption: {alert.current_consumption:.2f} L/day
 {('Expected Consumption (Age-Adjusted): ' + f'{alert.expected_consumption:.2f} L/day') if alert.expected_consumption else ('Baseline Average: ' + f'{alert.baseline_consumption:.2f} L/day')}
 Increase: {alert.increase_percentage:.1f}% above baseline
+Direction: {alert.anomaly_direction.upper()} ({direction_label} baseline)
+Reason: {alert.anomaly_reason}
+Context: {anomaly_context}
 Absolute Increase: +{alert.current_consumption - alert.baseline_consumption:.2f} L/day
 {('Deviation from Expected: ' + f'{((alert.current_consumption - alert.expected_consumption) / alert.expected_consumption * 100):.1f}%') if alert.expected_consumption else ''}
 {'7-Day Average: ' + f'{avg_water_7d:.2f} L/day' if avg_water_7d else ''}
@@ -307,12 +331,7 @@ ANOMALY DETAILS
 ═══════════════════════════════════════════════════════════
 POSSIBLE CAUSES
 ═══════════════════════════════════════════════════════════
-- Water leak or equipment malfunction
-- Increased bird activity or stress
-- Environmental factors (high temperature/humidity)
-- Equipment calibration issues
-- Feed quality changes
-- Disease/health issues in the flock
+{possible_causes_text}
 
 ═══════════════════════════════════════════════════════════
 IMMEDIATE ACTION STEPS
@@ -332,6 +351,32 @@ Alert ID: {alert.id}
 Detection Method: {alert.detection_method}
 """
         
+        cause_title = (
+            f"⚠️ Possible Causes (Based on {alert.increase_percentage:.1f}% increase):"
+            if alert.anomaly_direction == 'high'
+            else f"⚠️ Possible Causes (Based on {abs(alert.increase_percentage):.1f}% decrease):"
+        )
+        cause_items_html = (
+            """
+                <li><strong>Water Leak:</strong> Check all water lines, connections, and drinker systems for visible leaks</li>
+                <li><strong>Equipment Malfunction:</strong> Verify water meters, pumps, and pressure regulators are functioning correctly</li>
+                <li><strong>Bird Stress/Activity:</strong> Review bird behavior, health status, and any recent changes in management</li>
+                <li><strong>Environmental Factors:</strong> High temperature or humidity may increase water consumption - verify climate control</li>
+                <li><strong>Equipment Calibration:</strong> Water meters may need recalibration if readings seem inconsistent</li>
+                <li><strong>Feed Quality:</strong> Changes in feed composition can affect water intake</li>
+                <li><strong>Disease/Health Issues:</strong> Increased water consumption can indicate health problems in the flock</li>
+            """
+            if alert.anomaly_direction == 'high'
+            else
+            """
+                <li><strong>Under-Drinking:</strong> Birds may be stressed or unhealthy and drinking less than expected</li>
+                <li><strong>Water Delivery Issue:</strong> Check line pressure, blockages, and drinker access in House {house.house_number}</li>
+                <li><strong>Equipment Malfunction:</strong> Verify water meters and regulators for under-reporting or flow problems</li>
+                <li><strong>Feed Intake Drop:</strong> Reduced feeding often accompanies reduced water intake</li>
+                <li><strong>Environmental Stress:</strong> Temperature/airflow changes can alter drinking behavior</li>
+            """
+        )
+
         # HTML content
         html_content = f"""
 <!DOCTYPE html>
@@ -452,15 +497,9 @@ Detection Method: {alert.detection_method}
         {WaterAlertEmailService._build_historical_section(avg_temp_7d, avg_humidity_7d, avg_water_7d) if (avg_temp_7d or avg_humidity_7d or avg_water_7d) else ''}
         
         <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-radius: 4px;">
-            <strong>⚠️ Possible Causes (Based on {alert.increase_percentage:.1f}% Increase):</strong>
+            <strong>{cause_title}</strong>
             <ul style="margin: 10px 0; padding-left: 20px;">
-                <li><strong>Water Leak:</strong> Check all water lines, connections, and drinker systems for visible leaks</li>
-                <li><strong>Equipment Malfunction:</strong> Verify water meters, pumps, and pressure regulators are functioning correctly</li>
-                <li><strong>Bird Stress/Activity:</strong> Review bird behavior, health status, and any recent changes in management</li>
-                <li><strong>Environmental Factors:</strong> High temperature or humidity may increase water consumption - verify climate control</li>
-                <li><strong>Equipment Calibration:</strong> Water meters may need recalibration if readings seem inconsistent</li>
-                <li><strong>Feed Quality:</strong> Changes in feed composition can affect water intake</li>
-                <li><strong>Disease/Health Issues:</strong> Increased water consumption can indicate health problems in the flock</li>
+                {cause_items_html}
             </ul>
         </div>
         
