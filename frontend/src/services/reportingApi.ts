@@ -4,7 +4,6 @@ import {
   ScheduledReport,
   ReportExecution,
   ReportBuilderQuery,
-  PaginatedResponse
 } from '../types';
 
 /**

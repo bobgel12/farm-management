@@ -1,7 +1,6 @@
 import api from './api';
 import {
   HouseMonitoringSnapshot,
-  HouseMonitoringSummary,
   HouseMonitoringStats,
   MonitoringHistoryResponse,
   FarmHousesMonitoringResponse,
@@ -97,6 +96,6 @@ class MonitoringApiService {
   }
 }
 
-// Export singleton instance
-export default new MonitoringApiService();
+const monitoringApiService = new MonitoringApiService();
+export default monitoringApiService;
 

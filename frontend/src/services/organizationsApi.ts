@@ -5,7 +5,6 @@ import {
   OrganizationMembership,
   OrganizationInvite,
   InviteInfo,
-  PaginatedResponse
 } from '../types';
 
 /**

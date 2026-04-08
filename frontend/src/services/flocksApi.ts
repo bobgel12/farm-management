@@ -5,7 +5,6 @@ import {
   FlockPerformance,
   FlockComparison,
   FlockComparisonResult,
-  PaginatedResponse
 } from '../types';
 
 /**
