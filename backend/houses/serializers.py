@@ -228,10 +228,14 @@ class HouseComparisonSerializer(serializers.Serializer):
     ventilation_mode = serializers.CharField(allow_null=True)
     ventilation_level = serializers.FloatField(allow_null=True)
     airflow_cfm = serializers.FloatField(allow_null=True)
+    airflow_percentage = serializers.FloatField(allow_null=True)
     
     # Metrics - Consumption (Daily)
     water_consumption = serializers.FloatField(allow_null=True)
     feed_consumption = serializers.FloatField(allow_null=True)
+    water_per_bird = serializers.FloatField(allow_null=True)
+    feed_per_bird = serializers.FloatField(allow_null=True)
+    water_feed_ratio = serializers.FloatField(allow_null=True)
     
     # Metrics - Bird Status
     bird_count = serializers.IntegerField(allow_null=True)
@@ -242,3 +246,10 @@ class HouseComparisonSerializer(serializers.Serializer):
     is_connected = serializers.BooleanField()
     has_alarms = serializers.BooleanField()
     alarm_status = serializers.CharField()
+    active_alarms_count = serializers.IntegerField(allow_null=True)
+    data_freshness_minutes = serializers.IntegerField(allow_null=True)
+    heater_on = serializers.BooleanField(default=False)
+    fan_on = serializers.BooleanField(default=False)
+    wind_speed = serializers.FloatField(allow_null=True)
+    wind_direction = serializers.FloatField(allow_null=True)
+    wind_chill_temperature = serializers.FloatField(allow_null=True)

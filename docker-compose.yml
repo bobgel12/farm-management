@@ -86,6 +86,9 @@ services:
     environment:
       - REACT_APP_API_URL=http://localhost:8002/api
       - CHOKIDAR_USEPOLLING=true
+      # Avoid dev-server exit after compile (OOM / default Node heap in Docker)
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - GENERATE_SOURCEMAP=false
     depends_on:
       - backend
 

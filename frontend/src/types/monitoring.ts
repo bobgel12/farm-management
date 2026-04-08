@@ -161,3 +161,49 @@ export interface MonitoringDashboardData {
   };
 }
 
+export interface HouseMonitoringKpis {
+  house_id: number;
+  window_hours: number;
+  data_quality: {
+    snapshots_24h: number;
+    snapshots_7d: number;
+    enough_for_runtime: boolean;
+    enough_for_dod_delta: boolean;
+  };
+  heater_runtime: {
+    hours_24h: number | null;
+    cycles_24h: number | null;
+    method: string;
+  };
+  fan_runtime: {
+    hours_24h: number | null;
+    method: string;
+  };
+  water_day_over_day: {
+    current: number | null;
+    previous: number | null;
+    delta: number | null;
+    delta_pct: number | null;
+  };
+  feed_day_over_day: {
+    current: number | null;
+    previous: number | null;
+    delta: number | null;
+    delta_pct: number | null;
+  };
+  water_feed_ratio: {
+    today: number | null;
+    yesterday: number | null;
+    delta_pct: number | null;
+  };
+  ventilation_effort_index: number | null;
+  alarm_burden: {
+    total_24h: number;
+    critical_24h: number;
+    high_24h: number;
+    medium_24h: number;
+    low_24h: number;
+    active_now: number;
+  };
+}
+
