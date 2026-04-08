@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Grid,
@@ -19,7 +19,12 @@ import {
   Warning,
   CheckCircle,
   Error,
+  LocalFireDepartment,
+  TrendingUp,
+  TrendingFlat,
 } from '@mui/icons-material';
+import monitoringApi from '../../services/monitoringApi';
+import { HouseMonitoringKpis } from '../../types/monitoring';
 
 interface HouseOverviewTabProps {
   house: any;
@@ -36,6 +41,39 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
   stats,
   onRefresh,
 }) => {
+  const [kpis, setKpis] = useState<HouseMonitoringKpis | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
+
+  useEffect(() => {
+    const loadKpis = async () => {
+      if (!house?.id) return;
+      try {
+        setKpiLoading(true);
+        const result = await monitoringApi.getHouseMonitoringKpis(house.id);
+        setKpis(result);
+      } catch (error) {
+        console.error('Failed to load house monitoring KPIs:', error);
+        setKpis(null);
+      } finally {
+        setKpiLoading(false);
+      }
+    };
+    loadKpis();
+  }, [house?.id, monitoring?.timestamp]);
+
+  const getTrendColor = (deltaPct: number | null | undefined): 'success' | 'warning' | 'error' | 'default' => {
+    if (deltaPct === null || deltaPct === undefined) return 'default';
+    const abs = Math.abs(deltaPct);
+    if (abs <= 10) return 'success';
+    if (abs <= 25) return 'warning';
+    return 'error';
+  };
+
+  const formatDelta = (delta: number | null | undefined, pct: number | null | undefined, unit = ''): string => {
+    if (delta === null || delta === undefined || pct === null || pct === undefined) return 'N/A';
+    const sign = delta >= 0 ? '+' : '';
+    return `${sign}${delta.toFixed(1)}${unit} (${sign}${pct.toFixed(1)}%)`;
+  };
   const formatTemperature = (temp: number | null | string | undefined): string => {
     if (temp === null || temp === undefined || temp === '') return '---';
     const numTemp = typeof temp === 'string' ? parseFloat(temp) : temp;
@@ -90,6 +128,73 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
       </Box>
 
       <Grid container spacing={3}>
+        {/* New KPI Cards */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <LocalFireDepartment color="error" />
+                  <Typography variant="subtitle2">Heater Runtime (24h)</Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={kpis?.heater_runtime?.hours_24h && kpis.heater_runtime.hours_24h > 8 ? 'warning' : 'success'}
+                  label={kpiLoading ? 'Loading...' : `${kpis?.heater_runtime?.hours_24h ?? 0} h`}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Cycles: {kpis?.heater_runtime?.cycles_24h ?? 'N/A'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Estimated from status snapshots
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <TrendingUp color="info" />
+                  <Typography variant="subtitle2">Water Day-over-Day</Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={getTrendColor(kpis?.water_day_over_day?.delta_pct)}
+                  label={formatDelta(kpis?.water_day_over_day?.delta, kpis?.water_day_over_day?.delta_pct, 'L')}
+                />
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Today: {kpis?.water_day_over_day?.current?.toFixed(1) ?? 'N/A'}L | Yesterday: {kpis?.water_day_over_day?.previous?.toFixed(1) ?? 'N/A'}L
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <TrendingFlat color="secondary" />
+                  <Typography variant="subtitle2">Feed Day-over-Day</Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={getTrendColor(kpis?.feed_day_over_day?.delta_pct)}
+                  label={formatDelta(kpis?.feed_day_over_day?.delta, kpis?.feed_day_over_day?.delta_pct, 'lb')}
+                />
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Today: {kpis?.feed_day_over_day?.current?.toFixed(1) ?? 'N/A'}lb | Yesterday: {kpis?.feed_day_over_day?.previous?.toFixed(1) ?? 'N/A'}lb
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* Average Temperature */}
         <Grid item xs={12} md={6}>
           <Card>

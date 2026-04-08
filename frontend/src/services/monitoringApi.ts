@@ -5,7 +5,8 @@ import {
   HouseMonitoringStats,
   MonitoringHistoryResponse,
   FarmHousesMonitoringResponse,
-  MonitoringDashboardData
+  MonitoringDashboardData,
+  HouseMonitoringKpis,
 } from '../types/monitoring';
 
 class MonitoringApiService {
@@ -61,6 +62,16 @@ class MonitoringApiService {
     const response = await api.get(`/houses/${houseId}/monitoring/stats/`, {
       params: { period },
       headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  /**
+   * Get derived operational KPIs for house overview
+   */
+  async getHouseMonitoringKpis(houseId: number): Promise<HouseMonitoringKpis> {
+    const response = await api.get(`/houses/${houseId}/monitoring/kpis/`, {
+      headers: this.getAuthHeaders(),
     });
     return response.data;
   }

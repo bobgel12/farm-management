@@ -18,6 +18,7 @@ from .serializers import (
 from farms.models import Farm
 from tasks.task_scheduler import TaskScheduler
 from tasks.serializers import TaskSerializer
+from collections import defaultdict
 
 
 class HouseListCreateView(generics.ListCreateAPIView):
@@ -274,6 +275,165 @@ def house_monitoring_stats(request, house_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def house_monitoring_kpis(request, house_id):
+    """Get derived operational KPIs for a house."""
+    house = get_object_or_404(House, id=house_id)
+    now = timezone.now()
+    last_24h = now - timedelta(hours=24)
+    last_7d = now - timedelta(days=7)
+
+    snapshots_24h = list(
+        HouseMonitoringSnapshot.objects.filter(
+            house=house,
+            timestamp__gte=last_24h,
+        ).order_by('timestamp')
+    )
+    snapshots_7d = list(
+        HouseMonitoringSnapshot.objects.filter(
+            house=house,
+            timestamp__gte=last_7d,
+        ).order_by('-timestamp')
+    )
+
+    # Build day buckets for day-over-day deltas.
+    day_water = defaultdict(list)
+    day_feed = defaultdict(list)
+    for snap in snapshots_7d:
+        day_key = snap.timestamp.date().isoformat()
+        if snap.water_consumption is not None:
+            day_water[day_key].append(float(snap.water_consumption))
+        if snap.feed_consumption is not None:
+            day_feed[day_key].append(float(snap.feed_consumption))
+
+    def daily_value(day_map, day):
+        values = day_map.get(day, [])
+        if not values:
+            return None
+        # Use max as daily total proxy to avoid underestimating during intra-day refreshes.
+        return max(values)
+
+    today_key = now.date().isoformat()
+    yesterday_key = (now.date() - timedelta(days=1)).isoformat()
+    water_today = daily_value(day_water, today_key)
+    water_yesterday = daily_value(day_water, yesterday_key)
+    feed_today = daily_value(day_feed, today_key)
+    feed_yesterday = daily_value(day_feed, yesterday_key)
+
+    def calc_delta(current, previous):
+        if current is None or previous is None:
+            return {'current': current, 'previous': previous, 'delta': None, 'delta_pct': None}
+        delta = current - previous
+        delta_pct = (delta / previous * 100.0) if previous != 0 else None
+        return {'current': current, 'previous': previous, 'delta': delta, 'delta_pct': delta_pct}
+
+    water_delta = calc_delta(water_today, water_yesterday)
+    feed_delta = calc_delta(feed_today, feed_yesterday)
+
+    # Water/feed ratio trend (today and yesterday)
+    ratio_today = (water_today / feed_today) if (water_today is not None and feed_today not in [None, 0]) else None
+    ratio_yesterday = (
+        water_yesterday / feed_yesterday
+        if (water_yesterday is not None and feed_yesterday not in [None, 0])
+        else None
+    )
+    ratio_delta_pct = None
+    if ratio_today is not None and ratio_yesterday not in [None, 0]:
+        ratio_delta_pct = ((ratio_today - ratio_yesterday) / ratio_yesterday) * 100.0
+
+    # Heater and fan runtime estimation from digital output statuses.
+    heater_seconds = 0.0
+    fan_seconds = 0.0
+    heater_cycles = 0
+    last_heater_on = False
+
+    for i, snap in enumerate(snapshots_24h):
+        if i == len(snapshots_24h) - 1:
+            end_time = now
+        else:
+            end_time = snapshots_24h[i + 1].timestamp
+        duration = max((end_time - snap.timestamp).total_seconds(), 0.0)
+
+        sensor_data = snap.sensor_data or {}
+        digital_outputs = sensor_data.get('digital_outputs', {})
+
+        heater_on = any(
+            isinstance(v, dict) and v.get('is_on') is True
+            for k, v in digital_outputs.items()
+            if 'heater' in k
+        )
+        fan_on = any(
+            isinstance(v, dict) and v.get('is_on') is True
+            for k, v in digital_outputs.items()
+            if ('fan' in k or 'tunnel' in k or 'exh' in k or 'stir' in k)
+        )
+
+        if heater_on:
+            heater_seconds += duration
+        if fan_on:
+            fan_seconds += duration
+        if heater_on and not last_heater_on:
+            heater_cycles += 1
+        last_heater_on = heater_on
+
+    heater_runtime_hours = round(heater_seconds / 3600.0, 2) if snapshots_24h else None
+    fan_runtime_hours = round(fan_seconds / 3600.0, 2) if snapshots_24h else None
+
+    # Ventilation effort index (0-100) from latest 24h averages.
+    vent_values = [s.ventilation_level for s in snapshots_24h if s.ventilation_level is not None]
+    airflow_values = [s.airflow_percentage for s in snapshots_24h if s.airflow_percentage is not None]
+    avg_vent = sum(vent_values) / len(vent_values) if vent_values else None
+    avg_airflow = sum(airflow_values) / len(airflow_values) if airflow_values else None
+    ventilation_effort_index = None
+    if avg_vent is not None or avg_airflow is not None or fan_runtime_hours is not None:
+        v = avg_vent if avg_vent is not None else 0.0
+        a = avg_airflow if avg_airflow is not None else 0.0
+        f = min((fan_runtime_hours or 0.0) / 24.0 * 100.0, 100.0)
+        ventilation_effort_index = round((0.4 * v) + (0.4 * a) + (0.2 * f), 2)
+
+    # Alarm burden summary.
+    alarms_24h = HouseAlarm.objects.filter(house=house, timestamp__gte=last_24h)
+    alarm_counts = {
+        'total_24h': alarms_24h.count(),
+        'critical_24h': alarms_24h.filter(severity='critical').count(),
+        'high_24h': alarms_24h.filter(severity='high').count(),
+        'medium_24h': alarms_24h.filter(severity='medium').count(),
+        'low_24h': alarms_24h.filter(severity='low').count(),
+        'active_now': HouseAlarm.objects.filter(house=house, is_active=True).count(),
+    }
+
+    response = {
+        'house_id': house.id,
+        'window_hours': 24,
+        'data_quality': {
+            'snapshots_24h': len(snapshots_24h),
+            'snapshots_7d': len(snapshots_7d),
+            'enough_for_runtime': len(snapshots_24h) >= 2,
+            'enough_for_dod_delta': water_today is not None and water_yesterday is not None,
+        },
+        'heater_runtime': {
+            'hours_24h': heater_runtime_hours,
+            'cycles_24h': heater_cycles if snapshots_24h else None,
+            'method': 'estimated_from_status_snapshots',
+        },
+        'fan_runtime': {
+            'hours_24h': fan_runtime_hours,
+            'method': 'estimated_from_status_snapshots',
+        },
+        'water_day_over_day': water_delta,
+        'feed_day_over_day': feed_delta,
+        'water_feed_ratio': {
+            'today': ratio_today,
+            'yesterday': ratio_yesterday,
+            'delta_pct': ratio_delta_pct,
+        },
+        'ventilation_effort_index': ventilation_effort_index,
+        'alarm_burden': alarm_counts,
+    }
+    return Response(response)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def farm_houses_monitoring_all(request, farm_id):
     """Get latest monitoring data for all houses in a farm"""
     farm = get_object_or_404(Farm, id=farm_id)
@@ -446,6 +606,8 @@ def houses_comparison(request):
     # Get comparison data for each house
     comparison_data = []
     
+    now = timezone.now()
+
     for house in houses:
         snapshot = house.get_latest_snapshot()
         # Use age_days which prefers Rotem's current_age_days over calculated current_day
@@ -469,6 +631,58 @@ def houses_comparison(request):
                 'Minimum Vent.'  # Default
             )
         
+        active_alarms_count = HouseAlarm.objects.filter(house=house, is_active=True).count()
+
+        water_consumption = snapshot.water_consumption if snapshot else None
+        feed_consumption = snapshot.feed_consumption if snapshot else None
+        bird_count = snapshot.bird_count if snapshot else None
+        water_per_bird = (
+            (float(water_consumption) / float(bird_count))
+            if (water_consumption is not None and bird_count not in [None, 0])
+            else None
+        )
+        feed_per_bird = (
+            (float(feed_consumption) / float(bird_count))
+            if (feed_consumption is not None and bird_count not in [None, 0])
+            else None
+        )
+        water_feed_ratio = (
+            (float(water_consumption) / float(feed_consumption))
+            if (water_consumption is not None and feed_consumption not in [None, 0])
+            else None
+        )
+
+        # Freshness in minutes since last snapshot.
+        data_freshness_minutes = None
+        if snapshot and snapshot.timestamp:
+            data_freshness_minutes = max(int((now - snapshot.timestamp).total_seconds() / 60), 0)
+
+        # Runtime proxies from parsed digital outputs.
+        heater_on = False
+        fan_on = False
+        wind_speed = None
+        wind_direction = None
+        wind_chill_temperature = None
+        if snapshot and snapshot.sensor_data:
+            sensor_data = snapshot.sensor_data or {}
+            digital_outputs = sensor_data.get('digital_outputs', {})
+            if isinstance(digital_outputs, dict):
+                heater_on = any(
+                    isinstance(v, dict) and v.get('is_on') is True
+                    for k, v in digital_outputs.items()
+                    if 'heater' in k
+                )
+                fan_on = any(
+                    isinstance(v, dict) and v.get('is_on') is True
+                    for k, v in digital_outputs.items()
+                    if ('fan' in k or 'tunnel' in k or 'exh' in k or 'stir' in k)
+                )
+            wind_ctx = sensor_data.get('wind', {}) if isinstance(sensor_data, dict) else {}
+            if isinstance(wind_ctx, dict):
+                wind_speed = wind_ctx.get('wind_speed')
+                wind_direction = wind_ctx.get('wind_direction')
+                wind_chill_temperature = wind_ctx.get('wind_chill_temperature')
+
         house_comparison = {
             'house_id': house.id,
             'house_number': house.house_number,
@@ -498,13 +712,17 @@ def houses_comparison(request):
             'ventilation_mode': ventilation_mode,
             'ventilation_level': snapshot.ventilation_level if snapshot else None,
             'airflow_cfm': snapshot.airflow_cfm if snapshot else None,
+            'airflow_percentage': snapshot.airflow_percentage if snapshot else None,
             
             # Metrics - Consumption (Daily)
-            'water_consumption': snapshot.water_consumption if snapshot else None,
-            'feed_consumption': snapshot.feed_consumption if snapshot else None,
+            'water_consumption': water_consumption,
+            'feed_consumption': feed_consumption,
+            'water_per_bird': water_per_bird,
+            'feed_per_bird': feed_per_bird,
+            'water_feed_ratio': water_feed_ratio,
             
             # Metrics - Bird Status
-            'bird_count': snapshot.bird_count if snapshot else None,
+            'bird_count': bird_count,
             'livability': snapshot.livability if snapshot else None,
             'growth_day': snapshot.growth_day if snapshot else None,
             
@@ -512,6 +730,13 @@ def houses_comparison(request):
             'is_connected': snapshot.is_connected if snapshot else False,
             'has_alarms': snapshot.has_alarms if snapshot else False,
             'alarm_status': snapshot.alarm_status if snapshot else 'normal',
+            'active_alarms_count': active_alarms_count,
+            'data_freshness_minutes': data_freshness_minutes,
+            'heater_on': heater_on,
+            'fan_on': fan_on,
+            'wind_speed': wind_speed,
+            'wind_direction': wind_direction,
+            'wind_chill_temperature': wind_chill_temperature,
         }
         
         # Extract tunnel temperature from sensor data if available

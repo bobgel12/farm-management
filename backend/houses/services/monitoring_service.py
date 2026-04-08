@@ -149,6 +149,37 @@ class MonitoringService:
                         'type': self._determine_alarm_type(alarm_message),
                         'severity': self._determine_alarm_severity(alarm_message)
                     })
+
+        # Parse DigitalOut section for runtime proxy metrics (heater/fans/lights/etc.)
+        digital_outputs = {}
+        digital_out_data = ds_data.get('DigitalOut', [])
+        for item in digital_out_data:
+            if not isinstance(item, dict):
+                continue
+            key_name = item.get('ParameterKeyName', '') or item.get('ParameterName', '')
+            if not key_name:
+                continue
+
+            # Normalize key for stable API/analytics usage
+            normalized_key = key_name.lower().replace(' ', '_')
+            display_value = str(item.get('ParameterValue', '')).strip()
+            raw_value = str(item.get('ParameterData', '')).strip()
+
+            # Determine on/off state robustly
+            is_on = False
+            numeric_value = self.safe_float_convert(raw_value, default=None)
+            if numeric_value is not None:
+                is_on = numeric_value > 0
+            elif display_value and display_value.lower() not in ['langkey_off', 'off', '0', 'false']:
+                is_on = True
+
+            digital_outputs[normalized_key] = {
+                'key_name': key_name,
+                'value': display_value,
+                'raw_value': raw_value,
+                'numeric_value': numeric_value,
+                'is_on': is_on,
+            }
         
         # Parse Wind data
         wind_data = ds_data.get('Wind', [])
@@ -169,6 +200,7 @@ class MonitoringService:
             'temperature_sensors': parsed_data['temperature_sensors'],
             'wind': parsed_data.get('sensor_data', {}),
             'consumption': parsed_data['consumption'],
+            'digital_outputs': digital_outputs,
         }
         
         # Determine alarm status
@@ -328,9 +360,16 @@ class MonitoringService:
         created_count = 0
         
         for house_key, house_data in all_house_data.items():
-            # Extract house number from key (e.g., 'house_1' -> 1)
+            # Extract house number from keys like:
+            # - 'house_1'
+            # - 'command_data_house_1'
             try:
-                house_number = int(house_key.replace('house_', ''))
+                normalized = str(house_key)
+                if normalized.startswith('command_data_house_'):
+                    normalized = normalized.replace('command_data_house_', '')
+                elif normalized.startswith('house_'):
+                    normalized = normalized.replace('house_', '')
+                house_number = int(normalized)
             except (ValueError, AttributeError):
                 self.logger.warning(f"Could not extract house number from key: {house_key}")
                 continue
