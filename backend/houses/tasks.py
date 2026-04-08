@@ -7,6 +7,8 @@ from django.db.models import Q
 from houses.models import House, WaterConsumptionAlert
 from houses.services.water_anomaly_detector import WaterAnomalyDetector
 from houses.services.water_alert_email_service import WaterAlertEmailService
+from houses.services.anomaly_orchestrator import AnomalyOrchestrator
+from houses.services.water_forecast_service import WaterForecastService
 from farms.models import Farm
 import logging
 
@@ -55,9 +57,17 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
     
     total_alerts = 0
     total_emails = 0
+    total_non_water_alarms = 0
+    total_forecasts = 0
+    orchestrator = AnomalyOrchestrator()
+    forecast_service = WaterForecastService()
     
     for house in houses:
         try:
+            # Generate short-horizon water forecasts for monitoring UI.
+            forecasts = forecast_service.generate_forecasts(house)
+            total_forecasts += len(forecasts)
+
             # Detect anomalies
             detector = WaterAnomalyDetector(house)
             anomalies = detector.detect_anomalies(days_to_check=1)  # Check today's data
@@ -102,6 +112,10 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
                         logger.warning(f"Failed to send email for water consumption alert {alert.id}")
                 else:
                     logger.debug(f"Alert already exists for House {house.house_number} on {anomaly_data['alert_date']}")
+
+            # Run multi-domain anomaly checks and persist non-water anomalies as HouseAlarm.
+            domain_anomalies = orchestrator.run_for_house(house)
+            total_non_water_alarms += orchestrator.persist_non_water_anomalies(house, domain_anomalies)
         
         except Exception as e:
             logger.error(f"Error monitoring water consumption for house {house.id}: {str(e)}", exc_info=True)
@@ -113,6 +127,8 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
         'houses_checked': houses.count(),
         'alerts_created': total_alerts,
         'emails_sent': total_emails,
+        'non_water_alarms_created': total_non_water_alarms,
+        'forecasts_generated': total_forecasts,
         'timestamp': timezone.now().isoformat()
     }
     

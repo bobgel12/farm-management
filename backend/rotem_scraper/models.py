@@ -145,6 +145,8 @@ class MLPrediction(models.Model):
         ('anomaly', 'Anomaly Detection'),
         ('failure', 'Equipment Failure'),
         ('optimization', 'Environmental Optimization'),
+        ('performance', 'Performance Analysis'),
+        ('water_forecast', 'Water Forecast'),
     ]
     
     controller = models.ForeignKey(RotemController, on_delete=models.CASCADE, related_name='predictions')

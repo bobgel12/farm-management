@@ -42,6 +42,17 @@ export interface HouseMonitoringSnapshot {
   };
   raw_data?: any;
   alarms?: HouseAlarm[];
+  normalized_contract?: {
+    source_timestamp: string;
+    ingested_timestamp: string;
+    units: Record<string, string>;
+    environment: Record<string, number | null>;
+    consumption: Record<string, number | null>;
+    ventilation: Record<string, number | null>;
+    birds: Record<string, number | null>;
+    connectivity: Record<string, number | string | null>;
+    digital_outputs: Record<string, any>;
+  };
 }
 
 export interface TemperatureSensorData {
@@ -124,6 +135,49 @@ export interface MonitoringHistoryResponse {
   start_date: string;
   end_date: string;
   results: HouseMonitoringSummary[];
+}
+
+export interface WaterConsumptionAlert {
+  id: number;
+  house: number;
+  house_number: number;
+  farm: number;
+  farm_name: string;
+  alert_date: string;
+  growth_day: number | null;
+  current_consumption: number;
+  baseline_consumption: number;
+  expected_consumption: number | null;
+  increase_percentage: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  anomaly_direction: 'high' | 'low';
+  anomaly_reason: string;
+  message: string;
+  detection_method: string;
+  is_acknowledged: boolean;
+  acknowledged_at: string | null;
+  is_resolved: boolean;
+  resolved_at: string | null;
+  snoozed_until: string | null;
+  created_at: string;
+}
+
+export interface WaterConsumptionForecast {
+  id: number;
+  house: number;
+  house_number: number;
+  farm: number;
+  farm_name: string;
+  forecast_date: string;
+  horizon_hours: number;
+  predicted_consumption: number;
+  lower_bound: number | null;
+  upper_bound: number | null;
+  confidence_score: number;
+  model_version: string;
+  features: Record<string, any>;
+  source_date: string | null;
+  created_at: string;
 }
 
 export interface FarmHousesMonitoringResponse {

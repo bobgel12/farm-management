@@ -24,6 +24,8 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { House } from '../../types';
 import { rotemApi } from '../../services/rotemApi';
+import monitoringApiService from '../../services/monitoringApi';
+import { WaterConsumptionForecast } from '../../types/monitoring';
 import { useFarm } from '../../contexts/FarmContext';
 import { Search as SearchIcon, CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -56,6 +58,7 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
     emails_sent?: number;
   } | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [forecasts, setForecasts] = useState<WaterConsumptionForecast[]>([]);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRequestInFlightRef = useRef<boolean>(false);
 
@@ -138,11 +141,15 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
     setError(null);
 
     try {
-      const data = await rotemApi.getWaterHistory({
-        house_id: parseInt(houseId),
-        days: daysFilter,
-      });
+      const [data, forecastData] = await Promise.all([
+        rotemApi.getWaterHistory({
+          house_id: parseInt(houseId),
+          days: daysFilter,
+        }),
+        monitoringApiService.listWaterForecasts(parseInt(houseId)).catch(() => ({ count: 0, results: [] })),
+      ]);
       setWaterHistory(data);
+      setForecasts(forecastData.results || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load water history');
     } finally {
@@ -205,6 +212,17 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
         err.response?.data?.error || 'Failed to trigger anomaly detection'
       );
       setDetecting(false);
+    }
+  };
+
+  const handleGenerateForecast = async () => {
+    try {
+      await monitoringApiService.generateWaterForecasts(parseInt(houseId));
+      const forecastData = await monitoringApiService.listWaterForecasts(parseInt(houseId));
+      setForecasts(forecastData.results || []);
+      setDetectionSuccess('Water forecast generated successfully.');
+    } catch (err: any) {
+      setDetectionError(err.response?.data?.error || 'Failed to generate water forecast');
     }
   };
 
@@ -323,6 +341,14 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
                   : 'Processing...')
               : 'Detect Anomalies'}
           </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={handleGenerateForecast}
+            disabled={!isIntegrated}
+          >
+            Generate 72h Forecast
+          </Button>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Time Period</InputLabel>
             <Select
@@ -438,6 +464,19 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
             <Line type="monotone" dataKey="avg" stroke="#1976d2" name="Average (L/day)" />
             <Line type="monotone" dataKey="min" stroke="#90caf9" name="Min (L/day)" strokeDasharray="5 5" />
             <Line type="monotone" dataKey="max" stroke="#42a5f5" name="Max (L/day)" strokeDasharray="5 5" />
+            {forecasts.length > 0 && (
+              <Line
+                type="monotone"
+                data={forecasts.map((f) => ({
+                  date: dayjs(f.forecast_date).format('MMM DD'),
+                  avg: f.predicted_consumption,
+                }))}
+                dataKey="avg"
+                stroke="#ef6c00"
+                name="Forecast (L/day)"
+                strokeDasharray="4 4"
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </Paper>

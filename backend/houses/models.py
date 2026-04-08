@@ -585,6 +585,16 @@ class WaterConsumptionAlert(models.Model):
         related_name='acknowledged_water_alerts'
     )
     acknowledged_at = models.DateTimeField(null=True, blank=True)
+    is_resolved = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_water_alerts'
+    )
+    snoozed_until = models.DateTimeField(null=True, blank=True)
     
     # Email notification
     email_sent = models.BooleanField(default=False)
@@ -623,3 +633,49 @@ class WaterConsumptionAlert(models.Model):
         if user:
             self.acknowledged_by = user
         self.save()
+
+    def resolve(self, user=None):
+        """Mark alert as resolved."""
+        self.is_resolved = True
+        self.resolved_at = timezone.now()
+        if user:
+            self.resolved_by = user
+        if not self.is_acknowledged:
+            self.is_acknowledged = True
+            self.acknowledged_at = timezone.now()
+            if user:
+                self.acknowledged_by = user
+        self.save()
+
+    def snooze(self, until):
+        """Snooze alert visibility until a specific timestamp."""
+        self.snoozed_until = until
+        self.save()
+
+
+class WaterConsumptionForecast(models.Model):
+    """Short-horizon water consumption forecast per house."""
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='water_forecasts')
+    farm = models.ForeignKey('farms.Farm', on_delete=models.CASCADE, related_name='water_forecasts')
+    forecast_date = models.DateTimeField(db_index=True)
+    horizon_hours = models.IntegerField(default=24)
+    predicted_consumption = models.FloatField(help_text="Predicted water consumption (L/day)")
+    lower_bound = models.FloatField(null=True, blank=True)
+    upper_bound = models.FloatField(null=True, blank=True)
+    confidence_score = models.FloatField(default=0.6)
+    model_version = models.CharField(max_length=50, default='water_forecast_v1')
+    features = models.JSONField(default=dict)
+    source_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-forecast_date']
+        indexes = [
+            models.Index(fields=['house', '-forecast_date']),
+            models.Index(fields=['farm', '-forecast_date']),
+            models.Index(fields=['horizon_hours', '-forecast_date']),
+        ]
+        unique_together = ['house', 'forecast_date', 'horizon_hours']
+
+    def __str__(self):
+        return f"Water Forecast - House {self.house.house_number} @ {self.forecast_date}"
