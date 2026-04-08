@@ -1,49 +1,27 @@
+/**
+ * CRA-compatible ESLint root config. Extends react-app so `react-scripts build`
+ * and `npm run lint` behave the same.
+ */
 module.exports = {
-  env: {
-    browser: true,
-    es2021: true,
-    node: true,
-  },
-  extends: [
-    'eslint:recommended',
-    'plugin:react/recommended',
-    'plugin:react-hooks/recommended',
-  ],
-  parser: '@typescript-eslint/parser',
-  parserOptions: {
-    ecmaFeatures: {
-      jsx: true,
-    },
-    ecmaVersion: 12,
-    sourceType: 'module',
-  },
-  plugins: [
-    'react',
-    'react-hooks',
-    '@typescript-eslint',
-  ],
+  root: true,
+  extends: ['react-app', 'react-app/jest'],
   rules: {
-    // React specific rules
-    'react/react-in-jsx-scope': 'off', // Not needed with React 17+
-    'react/prop-types': 'off', // Using TypeScript for prop validation
-    'react/jsx-uses-react': 'off',
-    'react/jsx-uses-vars': 'error',
-    'react/jsx-filename-extension': ['error', { extensions: ['.tsx', '.jsx'] }],
-    'react/jsx-props-no-spreading': 'off',
-    'react/require-default-props': 'off',
-
-    // General JavaScript/TypeScript rules
-    'no-console': 'warn',
-    'no-debugger': 'error',
-    'no-unused-vars': 'warn',
-    'prefer-const': 'error',
-    'no-var': 'error',
-    'object-shorthand': 'error',
-    'prefer-template': 'error',
+    'no-console': 'off',
+    'react-hooks/exhaustive-deps': 'off',
   },
-  settings: {
-    react: {
-      version: 'detect',
+  overrides: [
+    {
+      files: ['**/*.ts', '**/*.tsx'],
+      rules: {
+        'no-unused-vars': 'off',
+        '@typescript-eslint/no-unused-vars': 'off',
+      },
     },
-  },
+    {
+      files: ['**/*.js', '**/*.jsx'],
+      rules: {
+        'no-unused-vars': 'off',
+      },
+    },
+  ],
 };

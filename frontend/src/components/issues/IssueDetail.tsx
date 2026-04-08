@@ -458,7 +458,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
           {selectedPhoto && (
             <img
               src={selectedPhoto}
-              alt="Issue photo"
+              alt="Issue attachment"
               style={{ maxWidth: '100%', display: 'block' }}
             />
           )}

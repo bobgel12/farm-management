@@ -8,7 +8,6 @@ import {
   TrendAnalysis,
   CorrelationAnalysis,
   BenchmarkComparison,
-  PaginatedResponse
 } from '../types';
 
 /**
