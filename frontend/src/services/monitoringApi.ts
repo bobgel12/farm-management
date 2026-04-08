@@ -6,6 +6,8 @@ import {
   FarmHousesMonitoringResponse,
   MonitoringDashboardData,
   HouseMonitoringKpis,
+  WaterConsumptionAlert,
+  WaterConsumptionForecast,
 } from '../types/monitoring';
 
 class MonitoringApiService {
@@ -91,6 +93,48 @@ class MonitoringApiService {
   async getFarmMonitoringDashboard(farmId: number): Promise<MonitoringDashboardData> {
     const response = await api.get(`/farms/${farmId}/houses/monitoring/dashboard/`, {
       headers: this.getAuthHeaders()
+    });
+    return response.data;
+  }
+
+  async getWaterAlerts(houseId: number): Promise<{ count: number; results: WaterConsumptionAlert[] }> {
+    const response = await api.get(`/houses/${houseId}/water/alerts/`, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async acknowledgeWaterAlert(alertId: number): Promise<WaterConsumptionAlert> {
+    const response = await api.post(`/houses/water/alerts/${alertId}/acknowledge/`, {}, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async resolveWaterAlert(alertId: number): Promise<WaterConsumptionAlert> {
+    const response = await api.post(`/houses/water/alerts/${alertId}/resolve/`, {}, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async snoozeWaterAlert(alertId: number, hours: number): Promise<WaterConsumptionAlert> {
+    const response = await api.post(`/houses/water/alerts/${alertId}/snooze/`, { hours }, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async listWaterForecasts(houseId: number): Promise<{ count: number; results: WaterConsumptionForecast[] }> {
+    const response = await api.get(`/houses/${houseId}/water/forecasts/`, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async generateWaterForecasts(houseId: number): Promise<{ status: string; generated: number; results: WaterConsumptionForecast[] }> {
+    const response = await api.post(`/houses/${houseId}/water/forecasts/generate/`, {}, {
+      headers: this.getAuthHeaders(),
     });
     return response.data;
   }

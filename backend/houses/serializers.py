@@ -1,6 +1,19 @@
 from rest_framework import serializers
-from .models import House, HouseMonitoringSnapshot, HouseAlarm, Device, DeviceStatus, ControlSettings, TemperatureCurve, HouseConfiguration, Sensor
+from .models import (
+    House,
+    HouseMonitoringSnapshot,
+    HouseAlarm,
+    Device,
+    DeviceStatus,
+    ControlSettings,
+    TemperatureCurve,
+    HouseConfiguration,
+    Sensor,
+    WaterConsumptionAlert,
+    WaterConsumptionForecast,
+)
 from farms.serializers import FarmListSerializer
+from .services.monitoring_contract import normalized_snapshot_contract
 
 
 class HouseSerializer(serializers.ModelSerializer):
@@ -73,6 +86,7 @@ class HouseMonitoringSummarySerializer(serializers.ModelSerializer):
     """Lightweight summary serializer for monitoring snapshots"""
     has_alarms = serializers.ReadOnlyField()
     is_connected = serializers.ReadOnlyField()
+    source_timestamp = serializers.SerializerMethodField()
     
     class Meta:
         model = HouseMonitoringSnapshot
@@ -82,9 +96,12 @@ class HouseMonitoringSummarySerializer(serializers.ModelSerializer):
             'ventilation_level', 'growth_day', 'bird_count', 'livability',
             'water_consumption', 'feed_consumption', 'airflow_cfm',
             'airflow_percentage', 'connection_status', 'alarm_status',
-            'has_alarms', 'is_connected'
+            'has_alarms', 'is_connected', 'source_timestamp'
         ]
         read_only_fields = ['id', 'timestamp']
+
+    def get_source_timestamp(self, obj):
+        return normalized_snapshot_contract(obj).get('source_timestamp')
 
 
 class HouseMonitoringSnapshotSerializer(serializers.ModelSerializer):
@@ -94,6 +111,7 @@ class HouseMonitoringSnapshotSerializer(serializers.ModelSerializer):
     house_number = serializers.IntegerField(source='house.house_number', read_only=True)
     farm_name = serializers.CharField(source='house.farm.name', read_only=True)
     alarms = HouseAlarmSerializer(many=True, read_only=True, source='alarms.filter(is_active=True)')
+    normalized_contract = serializers.SerializerMethodField()
     
     class Meta:
         model = HouseMonitoringSnapshot
@@ -104,9 +122,12 @@ class HouseMonitoringSnapshotSerializer(serializers.ModelSerializer):
             'growth_day', 'bird_count', 'livability', 'water_consumption',
             'feed_consumption', 'airflow_cfm', 'airflow_percentage',
             'connection_status', 'alarm_status', 'has_alarms', 'is_connected',
-            'sensor_data', 'raw_data', 'alarms'
+            'sensor_data', 'raw_data', 'alarms', 'normalized_contract'
         ]
         read_only_fields = ['id', 'timestamp', 'alarms']
+
+    def get_normalized_contract(self, obj):
+        return normalized_snapshot_contract(obj)
 
 
 class HouseMonitoringStatsSerializer(serializers.Serializer):
@@ -253,3 +274,41 @@ class HouseComparisonSerializer(serializers.Serializer):
     wind_speed = serializers.FloatField(allow_null=True)
     wind_direction = serializers.FloatField(allow_null=True)
     wind_chill_temperature = serializers.FloatField(allow_null=True)
+
+
+class WaterConsumptionAlertSerializer(serializers.ModelSerializer):
+    house_number = serializers.IntegerField(source='house.house_number', read_only=True)
+    farm_name = serializers.CharField(source='farm.name', read_only=True)
+    acknowledged_by_username = serializers.CharField(source='acknowledged_by.username', read_only=True)
+    resolved_by_username = serializers.CharField(source='resolved_by.username', read_only=True)
+
+    class Meta:
+        model = WaterConsumptionAlert
+        fields = [
+            'id', 'house', 'house_number', 'farm', 'farm_name', 'alert_date', 'growth_day',
+            'current_consumption', 'baseline_consumption', 'expected_consumption', 'increase_percentage',
+            'severity', 'anomaly_direction', 'anomaly_reason', 'message', 'detection_method',
+            'is_acknowledged', 'acknowledged_at', 'acknowledged_by', 'acknowledged_by_username',
+            'is_resolved', 'resolved_at', 'resolved_by', 'resolved_by_username',
+            'snoozed_until', 'email_sent', 'email_sent_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'farm', 'house_number', 'farm_name', 'acknowledged_at', 'acknowledged_by',
+            'acknowledged_by_username', 'resolved_at', 'resolved_by', 'resolved_by_username',
+            'email_sent', 'email_sent_at', 'created_at', 'updated_at',
+        ]
+
+
+class WaterConsumptionForecastSerializer(serializers.ModelSerializer):
+    house_number = serializers.IntegerField(source='house.house_number', read_only=True)
+    farm_name = serializers.CharField(source='farm.name', read_only=True)
+
+    class Meta:
+        model = WaterConsumptionForecast
+        fields = [
+            'id', 'house', 'house_number', 'farm', 'farm_name',
+            'forecast_date', 'horizon_hours', 'predicted_consumption', 'lower_bound',
+            'upper_bound', 'confidence_score', 'model_version', 'features',
+            'source_date', 'created_at',
+        ]
+        read_only_fields = ['id', 'farm', 'house_number', 'farm_name', 'created_at']

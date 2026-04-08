@@ -6,19 +6,34 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Max, Min
 from django.utils import timezone
 from datetime import timedelta, datetime
-from .models import House, HouseMonitoringSnapshot, HouseAlarm, Device, DeviceStatus, ControlSettings, TemperatureCurve, HouseConfiguration, Sensor
+from .models import (
+    House,
+    HouseMonitoringSnapshot,
+    HouseAlarm,
+    Device,
+    DeviceStatus,
+    ControlSettings,
+    TemperatureCurve,
+    HouseConfiguration,
+    Sensor,
+    WaterConsumptionAlert,
+    WaterConsumptionForecast,
+)
 from .serializers import (
     HouseSerializer, HouseListSerializer,
     HouseMonitoringSnapshotSerializer, HouseMonitoringSummarySerializer,
     HouseMonitoringStatsSerializer, HouseAlarmSerializer,
     HouseComparisonSerializer, DeviceSerializer, DeviceStatusSerializer,
     ControlSettingsSerializer, TemperatureCurveSerializer,
-    HouseConfigurationSerializer, SensorSerializer
+    HouseConfigurationSerializer, SensorSerializer,
+    WaterConsumptionAlertSerializer, WaterConsumptionForecastSerializer,
 )
 from farms.models import Farm
 from tasks.task_scheduler import TaskScheduler
 from tasks.serializers import TaskSerializer
 from collections import defaultdict
+from .services.water_forecast_service import WaterForecastService
+from .services.monitoring_contract import MonitoringUnits
 
 
 class HouseListCreateView(generics.ListCreateAPIView):
@@ -248,6 +263,13 @@ def house_monitoring_history(request, house_id):
         'count': len(serializer.data),
         'start_date': start_date.isoformat(),
         'end_date': end_date.isoformat(),
+        'contract': {
+            'timestamp_fields': {
+                'source': 'source_timestamp',
+                'ingested': 'timestamp',
+            },
+            'units': MonitoringUnits().__dict__,
+        },
         'results': serializer.data
     })
 
@@ -980,6 +1002,78 @@ def house_sensors(request, house_id):
             serializer.save(house=house)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_water_forecast(request, house_id):
+    """Generate short-horizon water forecasts (24/48/72h) for a house."""
+    house = get_object_or_404(House, id=house_id)
+    service = WaterForecastService()
+    forecasts = service.generate_forecasts(house)
+    serializer = WaterConsumptionForecastSerializer(forecasts, many=True)
+    return Response({
+        'status': 'success',
+        'house_id': house.id,
+        'generated': len(serializer.data),
+        'results': serializer.data,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_water_forecasts(request, house_id):
+    """List persisted water forecasts for a house."""
+    house = get_object_or_404(House, id=house_id)
+    qs = WaterConsumptionForecast.objects.filter(house=house).order_by('-forecast_date')[:20]
+    serializer = WaterConsumptionForecastSerializer(qs, many=True)
+    return Response({'count': len(serializer.data), 'results': serializer.data})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_water_alerts(request, house_id):
+    """List water alerts with optional lifecycle filters."""
+    house = get_object_or_404(House, id=house_id)
+    include_resolved = request.query_params.get('include_resolved', 'false').lower() == 'true'
+    include_snoozed = request.query_params.get('include_snoozed', 'true').lower() == 'true'
+    qs = WaterConsumptionAlert.objects.filter(house=house).order_by('-created_at')
+    if not include_resolved:
+        qs = qs.filter(is_resolved=False)
+    if not include_snoozed:
+        now = timezone.now()
+        qs = qs.filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now))
+    serializer = WaterConsumptionAlertSerializer(qs[:100], many=True)
+    return Response({'count': len(serializer.data), 'results': serializer.data})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def acknowledge_water_alert(request, alert_id):
+    """Acknowledge a water alert."""
+    alert = get_object_or_404(WaterConsumptionAlert, id=alert_id)
+    alert.acknowledge(user=request.user)
+    return Response(WaterConsumptionAlertSerializer(alert).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def resolve_water_alert(request, alert_id):
+    """Resolve a water alert."""
+    alert = get_object_or_404(WaterConsumptionAlert, id=alert_id)
+    alert.resolve(user=request.user)
+    return Response(WaterConsumptionAlertSerializer(alert).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def snooze_water_alert(request, alert_id):
+    """Snooze a water alert by N hours (default 6)."""
+    alert = get_object_or_404(WaterConsumptionAlert, id=alert_id)
+    hours = int(request.data.get('hours', 6))
+    until = timezone.now() + timedelta(hours=max(hours, 1))
+    alert.snooze(until)
+    return Response(WaterConsumptionAlertSerializer(alert).data)
 
 
 @api_view(['POST'])

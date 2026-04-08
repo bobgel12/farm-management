@@ -38,6 +38,12 @@ urlpatterns = [
     path('houses/<int:house_id>/sensors/', views.house_sensors, name='house-sensors'),
     
     # Water consumption monitoring
+    path('houses/<int:house_id>/water/alerts/', views.list_water_alerts, name='list-water-alerts'),
+    path('houses/water/alerts/<int:alert_id>/acknowledge/', views.acknowledge_water_alert, name='ack-water-alert'),
+    path('houses/water/alerts/<int:alert_id>/resolve/', views.resolve_water_alert, name='resolve-water-alert'),
+    path('houses/water/alerts/<int:alert_id>/snooze/', views.snooze_water_alert, name='snooze-water-alert'),
+    path('houses/<int:house_id>/water/forecasts/', views.list_water_forecasts, name='list-water-forecasts'),
+    path('houses/<int:house_id>/water/forecasts/generate/', views.generate_water_forecast, name='generate-water-forecasts'),
     path('houses/<int:house_id>/water/detect-anomalies/', views.trigger_water_anomaly_detection, name='trigger-water-anomaly-detection'),
     path('houses/water/detect-anomalies/', views.trigger_water_anomaly_detection, name='trigger-water-anomaly-detection-all'),
     path('houses/water/detection-status/<str:task_id>/', views.check_water_anomaly_detection_status, name='check-water-anomaly-detection-status'),

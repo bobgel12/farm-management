@@ -45,6 +45,7 @@ class MonitoringService:
         parsed_data = {
             'house_number': house_number,
             'timestamp': timezone.now(),
+            'source_timestamp': command_data.get('timestamp') or command_data.get('source_timestamp'),
             'raw_data': command_data,
             'sensor_data': {},
             'general': {},
@@ -301,7 +302,10 @@ class MonitoringService:
                 airflow_percentage=general.get('airflow_percentage'),
                 connection_status=int(status.get('connection_status', 0)) if status.get('connection_status') is not None else None,
                 alarm_status=status.get('alarm_status', 'normal'),
-                raw_data=command_data,
+                raw_data={
+                    **(command_data if isinstance(command_data, dict) else {}),
+                    'source_timestamp': parsed_data.get('source_timestamp') or timezone.now().isoformat(),
+                },
                 sensor_data=parsed_data.get('sensor_data', {})
             )
             

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -23,8 +23,10 @@ import {
   Info,
   CheckCircle,
   Close,
+  Schedule,
 } from '@mui/icons-material';
-import { HouseAlarm } from '../../types/monitoring';
+import { HouseAlarm, WaterConsumptionAlert } from '../../types/monitoring';
+import monitoringApiService from '../../services/monitoringApi';
 
 interface HouseAlertsPanelProps {
   houseId: number;
@@ -32,6 +34,35 @@ interface HouseAlertsPanelProps {
 }
 
 const HouseAlertsPanel: React.FC<HouseAlertsPanelProps> = ({ houseId, alarms }) => {
+  const [waterAlerts, setWaterAlerts] = useState<WaterConsumptionAlert[]>([]);
+
+  const loadWaterAlerts = async () => {
+    try {
+      const response = await monitoringApiService.getWaterAlerts(houseId);
+      setWaterAlerts(response.results || []);
+    } catch (error) {
+      // Keep UI resilient; water alerts are additive.
+    }
+  };
+
+  useEffect(() => {
+    loadWaterAlerts();
+  }, [houseId]);
+
+  const handleAcknowledgeWaterAlert = async (id: number) => {
+    await monitoringApiService.acknowledgeWaterAlert(id);
+    await loadWaterAlerts();
+  };
+
+  const handleResolveWaterAlert = async (id: number) => {
+    await monitoringApiService.resolveWaterAlert(id);
+    await loadWaterAlerts();
+  };
+
+  const handleSnoozeWaterAlert = async (id: number, hours: number) => {
+    await monitoringApiService.snoozeWaterAlert(id, hours);
+    await loadWaterAlerts();
+  };
   const [filter, setFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
 
@@ -181,6 +212,48 @@ const HouseAlertsPanel: React.FC<HouseAlertsPanelProps> = ({ houseId, alarms }) 
               </ListItem>
             ))}
           </List>
+        )}
+
+        {waterAlerts.length > 0 && (
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Water Alert Workflow ({waterAlerts.filter((a) => !a.is_resolved).length} open)
+            </Typography>
+            <List>
+              {waterAlerts.map((alert) => (
+                <ListItem key={`water-${alert.id}`}>
+                  <ListItemIcon>
+                    {alert.is_resolved ? <CheckCircle color="success" /> : <Warning color="warning" />}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={`${alert.severity.toUpperCase()} ${alert.anomaly_direction} water anomaly`}
+                    secondary={`${new Date(alert.alert_date).toLocaleDateString()} - ${alert.current_consumption.toFixed(2)} L/day`}
+                  />
+                  {!alert.is_acknowledged && (
+                    <Tooltip title="Acknowledge">
+                      <IconButton onClick={() => handleAcknowledgeWaterAlert(alert.id)}>
+                        <CheckCircle />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {!alert.is_resolved && (
+                    <Tooltip title="Snooze 6h">
+                      <IconButton onClick={() => handleSnoozeWaterAlert(alert.id, 6)}>
+                        <Schedule />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {!alert.is_resolved && (
+                    <Tooltip title="Resolve">
+                      <IconButton onClick={() => handleResolveWaterAlert(alert.id)}>
+                        <Close />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          </Box>
         )}
       </CardContent>
     </Card>
