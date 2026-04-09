@@ -114,3 +114,27 @@ export function unregister(): void {
   }
 }
 
+/**
+ * Manually clear service worker/cache state and reload with a cache-busting token.
+ * Useful for installed PWAs when users need to force-fetch the latest bundle.
+ */
+export async function hardRefreshApp(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    }
+  } catch (error) {
+    console.error('Hard refresh cleanup failed:', error);
+  } finally {
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('hard_refresh', Date.now().toString());
+    window.location.replace(currentUrl.toString());
+  }
+}
+
