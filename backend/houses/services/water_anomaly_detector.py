@@ -63,7 +63,12 @@ class WaterAnomalyDetector:
         self.house = house
         self.farm = house.farm
     
-    def detect_anomalies(self, days_to_check: int = 1) -> List[Dict]:
+    def detect_anomalies(
+        self,
+        days_to_check: int = 1,
+        diagnostics: Optional[List[Dict]] = None,
+        correlation_id: Optional[str] = None,
+    ) -> List[Dict]:
         """
         Detect water consumption anomalies for the house
         
@@ -79,8 +84,18 @@ class WaterAnomalyDetector:
             - severity: Alert severity level
             - message: Alert message
         """
+        diagnostics = diagnostics if diagnostics is not None else []
         if not self.farm or not self.farm.is_integrated:
-            logger.warning(f"House {self.house.house_number} is not connected to a Rotem-integrated farm")
+            diagnostics.append({"reason": "farm_not_integrated"})
+            logger.warning(
+                f"House {self.house.house_number} is not connected to a Rotem-integrated farm",
+                extra={
+                    "correlation_id": correlation_id,
+                    "house_id": self.house.id,
+                    "farm_id": self.house.farm_id,
+                    "suppression_reason": "farm_not_integrated",
+                },
+            )
             return []
         
         anomalies = []
@@ -94,9 +109,21 @@ class WaterAnomalyDetector:
             )
             
             # Login to Rotem
-            logger.info(f"Logging in to Rotem for farm {self.farm.rotem_farm_id}...")
+            logger.info(
+                f"Logging in to Rotem for farm {self.farm.rotem_farm_id}...",
+                extra={"correlation_id": correlation_id, "house_id": self.house.id, "farm_id": self.house.farm_id},
+            )
             if not scraper.login():
-                logger.error(f"Failed to log in to Rotem for farm {self.farm.rotem_farm_id}")
+                diagnostics.append({"reason": "rotem_login_failed"})
+                logger.error(
+                    f"Failed to log in to Rotem for farm {self.farm.rotem_farm_id}",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "house_id": self.house.id,
+                        "farm_id": self.house.farm_id,
+                        "suppression_reason": "rotem_login_failed",
+                    },
+                )
                 return []
             
             # Get water history (last 30 days for baseline calculation)
@@ -111,15 +138,33 @@ class WaterAnomalyDetector:
             )
             
             if not raw_water_data or not raw_water_data.get('isSucceed'):
-                logger.warning(f"No water history data available for house {self.house.house_number}")
+                diagnostics.append({"reason": "no_water_history"})
+                logger.warning(
+                    f"No water history data available for house {self.house.house_number}",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "house_id": self.house.id,
+                        "farm_id": self.house.farm_id,
+                        "suppression_reason": "no_water_history",
+                    },
+                )
                 return []
             
             # Parse water history from Rotem API response
             water_history = self._parse_water_history(raw_water_data)
             
             if len(water_history) < self.MIN_HISTORICAL_DAYS:
-                logger.info(f"Insufficient historical data for house {self.house.house_number} "
-                          f"({len(water_history)} days, need {self.MIN_HISTORICAL_DAYS})")
+                diagnostics.append({"reason": "insufficient_history", "days_found": len(water_history)})
+                logger.info(
+                    f"Insufficient historical data for house {self.house.house_number} "
+                    f"({len(water_history)} days, need {self.MIN_HISTORICAL_DAYS})",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "house_id": self.house.id,
+                        "farm_id": self.house.farm_id,
+                        "suppression_reason": "insufficient_history",
+                    },
+                )
                 return []
             
             # Get current bird count and temperature for age-adjusted baseline calculation
@@ -151,6 +196,7 @@ class WaterAnomalyDetector:
                     house=self.house,
                     alert_date=alert_date
                 ).exists():
+                    diagnostics.append({"reason": "duplicate_alert_same_day", "alert_date": str(alert_date)})
                     continue
                 
                 # Calculate age-adjusted expected consumption
@@ -239,10 +285,21 @@ class WaterAnomalyDetector:
                     logger.info(f"Anomaly detected for House {self.house.house_number} on {alert_date} (Day {growth_day}): "
                               f"{current_consumption:.2f}L/day vs expected {expected_consumption:.2f}L/day "
                               f"({increase_percentage:.1f}% above baseline)")
+                else:
+                    diagnostics.append(
+                        {
+                            "reason": reason_code or "no_anomaly",
+                            "alert_date": str(alert_date),
+                            "growth_day": growth_day,
+                        }
+                    )
         
         except Exception as e:
             logger.error(f"Error detecting water consumption anomalies for house {self.house.house_number}: {str(e)}", exc_info=True)
+            diagnostics.append({"reason": "detector_exception", "error": str(e)})
         
+        if not anomalies and not diagnostics:
+            diagnostics.append({"reason": "no_anomaly"})
         return anomalies
     
     def _parse_water_history(self, raw_water_data: Dict) -> List[Dict]:

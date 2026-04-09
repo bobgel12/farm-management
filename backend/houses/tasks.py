@@ -11,11 +11,12 @@ from houses.services.anomaly_orchestrator import AnomalyOrchestrator
 from houses.services.water_forecast_service import WaterForecastService
 from farms.models import Farm
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
 
-def monitor_water_consumption_impl(house_id=None, farm_id=None):
+def monitor_water_consumption_impl(house_id=None, farm_id=None, run_id=None):
     """
     Internal implementation of water consumption monitoring
     Can be called directly (synchronously) or via Celery task
@@ -27,7 +28,15 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
     Returns:
         Dict with summary of monitoring results
     """
-    logger.info(f"Starting water consumption monitoring (house_id={house_id}, farm_id={farm_id})")
+    correlation_id = run_id or str(uuid.uuid4())
+    logger.info(
+        "Starting water consumption monitoring",
+        extra={
+            "correlation_id": correlation_id,
+            "house_id": house_id,
+            "farm_id": farm_id,
+        },
+    )
     
     # Get houses to monitor - filter by actual database fields (not the property)
     # is_integrated is a property that checks has_system_integration and integration_status == 'active'
@@ -45,32 +54,73 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
     houses = houses_query.select_related('farm').all()
     
     if not houses.exists():
-        logger.info("No Rotem-integrated houses found to monitor")
+        logger.info(
+            "No Rotem-integrated houses found to monitor",
+            extra={
+                "correlation_id": correlation_id,
+                "house_id": house_id,
+                "farm_id": farm_id,
+                "suppression_reason": "no_target_houses",
+            },
+        )
         return {
             'status': 'success',
             'houses_checked': 0,
             'alerts_created': 0,
-            'emails_sent': 0
+            'emails_sent': 0,
+            'correlation_id': correlation_id,
+            'house_results': [],
         }
     
-    logger.info(f"Monitoring {houses.count()} houses for water consumption anomalies")
+    logger.info(
+        "Monitoring houses for water anomalies",
+        extra={
+            "correlation_id": correlation_id,
+            "houses_count": houses.count(),
+            "house_id": house_id,
+            "farm_id": farm_id,
+        },
+    )
     
     total_alerts = 0
     total_emails = 0
     total_non_water_alarms = 0
     total_forecasts = 0
+    house_results = []
     orchestrator = AnomalyOrchestrator()
     forecast_service = WaterForecastService()
     
     for house in houses:
         try:
+            house_result = {
+                "house_id": house.id,
+                "house_number": house.house_number,
+                "farm_id": house.farm_id,
+                "anomaly_detected": False,
+                "alerts_created": 0,
+                "emails_sent": 0,
+                "suppression_reason": None,
+                "detector_reasons": [],
+                "alerts": [],
+            }
             # Generate short-horizon water forecasts for monitoring UI.
             forecasts = forecast_service.generate_forecasts(house)
             total_forecasts += len(forecasts)
 
             # Detect anomalies
             detector = WaterAnomalyDetector(house)
-            anomalies = detector.detect_anomalies(days_to_check=1)  # Check today's data
+            detector_reasons = []
+            anomalies = detector.detect_anomalies(
+                days_to_check=1,
+                diagnostics=detector_reasons,
+                correlation_id=correlation_id,
+            )  # Check today's data
+            house_result["detector_reasons"] = detector_reasons
+            house_result["anomaly_detected"] = len(anomalies) > 0
+            if not anomalies:
+                house_result["suppression_reason"] = (
+                    detector_reasons[0].get("reason") if detector_reasons else "no_anomaly"
+                )
             
             for anomaly_data in anomalies:
                 # Create alert record
@@ -94,31 +144,120 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
                 
                 if created:
                     total_alerts += 1
+                    house_result["alerts_created"] += 1
                     logger.info(
-                        "Created water consumption alert %s for House %s (%s, reason=%s, deviation=%.1f%%)",
-                        alert.id,
-                        house.house_number,
-                        alert.anomaly_direction,
-                        alert.anomaly_reason,
-                        alert.increase_percentage,
+                        "Created water consumption alert",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "alert_id": alert.id,
+                            "house_id": house.id,
+                            "farm_id": house.farm_id,
+                            "anomaly_direction": alert.anomaly_direction,
+                            "anomaly_reason": alert.anomaly_reason,
+                            "deviation_pct": float(alert.increase_percentage),
+                            "alert_created": True,
+                        },
                     )
                     
                     # Send email alert
-                    email_sent = WaterAlertEmailService.send_alert_email(alert)
+                    email_diag = {}
+                    email_sent = WaterAlertEmailService.send_alert_email(
+                        alert,
+                        diagnostics=email_diag,
+                        correlation_id=correlation_id,
+                    )
                     if email_sent:
                         total_emails += 1
-                        logger.info(f"Sent email alert for water consumption alert {alert.id}")
+                        house_result["emails_sent"] += 1
+                        logger.info(
+                            "Sent water alert email",
+                            extra={
+                                "correlation_id": correlation_id,
+                                "alert_id": alert.id,
+                                "house_id": house.id,
+                                "farm_id": house.farm_id,
+                                "email_sent": True,
+                                "recipient_count": email_diag.get("recipient_count", 0),
+                            },
+                        )
                     else:
-                        logger.warning(f"Failed to send email for water consumption alert {alert.id}")
+                        if not house_result["suppression_reason"]:
+                            house_result["suppression_reason"] = email_diag.get(
+                                "suppression_reason", "email_send_failed"
+                            )
+                        logger.warning(
+                            "Failed to send water alert email",
+                            extra={
+                                "correlation_id": correlation_id,
+                                "alert_id": alert.id,
+                                "house_id": house.id,
+                                "farm_id": house.farm_id,
+                                "email_sent": False,
+                                "recipient_count": email_diag.get("recipient_count", 0),
+                                "suppression_reason": email_diag.get("suppression_reason", "email_send_failed"),
+                            },
+                        )
+                    house_result["alerts"].append(
+                        {
+                            "alert_id": alert.id,
+                            "created": True,
+                            "email_sent": bool(email_sent),
+                            "recipient_count": email_diag.get("recipient_count", 0),
+                            "suppression_reason": email_diag.get("suppression_reason"),
+                        }
+                    )
                 else:
-                    logger.debug(f"Alert already exists for House {house.house_number} on {anomaly_data['alert_date']}")
+                    if not house_result["suppression_reason"]:
+                        house_result["suppression_reason"] = "duplicate_alert_same_day"
+                    logger.info(
+                        "Skipped duplicate water alert",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "house_id": house.id,
+                            "farm_id": house.farm_id,
+                            "alert_date": str(anomaly_data["alert_date"]),
+                            "suppression_reason": "duplicate_alert_same_day",
+                        },
+                    )
+                    house_result["alerts"].append(
+                        {
+                            "alert_id": alert.id,
+                            "created": False,
+                            "email_sent": False,
+                            "recipient_count": 0,
+                            "suppression_reason": "duplicate_alert_same_day",
+                        }
+                    )
 
             # Run multi-domain anomaly checks and persist non-water anomalies as HouseAlarm.
             domain_anomalies = orchestrator.run_for_house(house)
             total_non_water_alarms += orchestrator.persist_non_water_anomalies(house, domain_anomalies)
+            house_results.append(house_result)
         
         except Exception as e:
-            logger.error(f"Error monitoring water consumption for house {house.id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error monitoring water consumption for house {house.id}: {str(e)}",
+                exc_info=True,
+                extra={
+                    "correlation_id": correlation_id,
+                    "house_id": house.id,
+                    "farm_id": house.farm_id,
+                    "suppression_reason": "house_processing_error",
+                },
+            )
+            house_results.append(
+                {
+                    "house_id": house.id,
+                    "house_number": house.house_number,
+                    "farm_id": house.farm_id,
+                    "anomaly_detected": False,
+                    "alerts_created": 0,
+                    "emails_sent": 0,
+                    "suppression_reason": "house_processing_error",
+                    "detector_reasons": [],
+                    "alerts": [],
+                }
+            )
             # Continue with next house even if one fails
             continue
     
@@ -129,6 +268,8 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
         'emails_sent': total_emails,
         'non_water_alarms_created': total_non_water_alarms,
         'forecasts_generated': total_forecasts,
+        'correlation_id': correlation_id,
+        'house_results': house_results,
         'timestamp': timezone.now().isoformat()
     }
     
@@ -137,7 +278,7 @@ def monitor_water_consumption_impl(house_id=None, farm_id=None):
 
 
 @shared_task(bind=True, max_retries=3)
-def monitor_water_consumption(self, house_id=None, farm_id=None):
+def monitor_water_consumption(self, house_id=None, farm_id=None, run_id=None):
     """
     Monitor water consumption for houses and detect anomalies (Celery task)
     
@@ -153,7 +294,7 @@ def monitor_water_consumption(self, house_id=None, farm_id=None):
         Dict with summary of monitoring results
     """
     try:
-        return monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+        return monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id, run_id=run_id)
     except Exception as exc:
         logger.error(f"Water consumption monitoring task failed: {str(exc)}", exc_info=True)
         raise self.retry(exc=exc, countdown=300)  # Retry after 5 minutes

@@ -1095,21 +1095,26 @@ def trigger_water_anomaly_detection(request, house_id=None):
     from celery.result import AsyncResult
     from django.conf import settings
     import logging
+    import uuid
     
     logger = logging.getLogger(__name__)
     
     try:
         farm_id = request.data.get('farm_id')
         run_sync = request.data.get('run_sync', False)  # Allow forcing synchronous execution
+        correlation_id = request.data.get('correlation_id') or str(uuid.uuid4())
         
         # Import the implementation function for synchronous execution
         from houses.tasks import monitor_water_consumption_impl
         
         # Check if we should run synchronously (if CELERY_TASK_ALWAYS_EAGER is set or run_sync is True)
         if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False) or run_sync:
-            logger.info(f"Running water consumption monitoring synchronously (house_id={house_id}, farm_id={farm_id})")
+            logger.info(
+                f"Running water consumption monitoring synchronously (house_id={house_id}, farm_id={farm_id})",
+                extra={"correlation_id": correlation_id, "house_id": house_id, "farm_id": farm_id},
+            )
             # Run synchronously using the implementation function
-            result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+            result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id, run_id=correlation_id)
             
             return Response({
                 'status': 'success',
@@ -1117,13 +1122,15 @@ def trigger_water_anomaly_detection(request, house_id=None):
                 'task_id': None,
                 'house_id': house_id,
                 'farm_id': farm_id,
+                'correlation_id': correlation_id,
                 'result': result,
+                'house_results': result.get('house_results', []),
                 'execution_mode': 'synchronous',
             }, status=status.HTTP_200_OK)
         
         # Try to run asynchronously
         try:
-            task_result = monitor_water_consumption.delay(house_id=house_id, farm_id=farm_id)
+            task_result = monitor_water_consumption.delay(house_id=house_id, farm_id=farm_id, run_id=correlation_id)
             
             # Check if task is actually queued (not stuck in PENDING)
             # Wait a moment to see if it gets picked up
@@ -1142,7 +1149,7 @@ def trigger_water_anomaly_detection(request, house_id=None):
                     if not active_workers:
                         # No active workers, run synchronously as fallback
                         logger.warning("No Celery workers available, running synchronously as fallback")
-                        result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+                        result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id, run_id=correlation_id)
                         
                         return Response({
                             'status': 'success',
@@ -1150,13 +1157,15 @@ def trigger_water_anomaly_detection(request, house_id=None):
                             'task_id': None,
                             'house_id': house_id,
                             'farm_id': farm_id,
+                            'correlation_id': correlation_id,
                             'result': result,
+                            'house_results': result.get('house_results', []),
                             'execution_mode': 'synchronous_fallback',
                             'warning': 'Celery workers are not running. Task executed synchronously.',
                         }, status=status.HTTP_200_OK)
                 except Exception as inspect_error:
                     logger.warning(f"Could not inspect Celery workers: {inspect_error}. Running synchronously as fallback.")
-                    result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+                    result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id, run_id=correlation_id)
                     
                     return Response({
                         'status': 'success',
@@ -1164,7 +1173,9 @@ def trigger_water_anomaly_detection(request, house_id=None):
                         'task_id': None,
                         'house_id': house_id,
                         'farm_id': farm_id,
+                        'correlation_id': correlation_id,
                         'result': result,
+                        'house_results': result.get('house_results', []),
                         'execution_mode': 'synchronous_fallback',
                         'warning': 'Could not verify Celery workers. Task executed synchronously.',
                     }, status=status.HTTP_200_OK)
@@ -1177,13 +1188,14 @@ def trigger_water_anomaly_detection(request, house_id=None):
                 'task_id': task_result.id,
                 'house_id': house_id,
                 'farm_id': farm_id,
+                'correlation_id': correlation_id,
                 'execution_mode': 'asynchronous',
             }, status=status.HTTP_202_ACCEPTED)
         
         except Exception as celery_error:
             # Celery error - fallback to synchronous execution
             logger.warning(f"Celery task submission failed: {celery_error}. Running synchronously as fallback.")
-            result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id)
+            result = monitor_water_consumption_impl(house_id=house_id, farm_id=farm_id, run_id=correlation_id)
             
             return Response({
                 'status': 'success',
@@ -1191,7 +1203,9 @@ def trigger_water_anomaly_detection(request, house_id=None):
                 'task_id': None,
                 'house_id': house_id,
                 'farm_id': farm_id,
+                'correlation_id': correlation_id,
                 'result': result,
+                'house_results': result.get('house_results', []),
                 'execution_mode': 'synchronous_fallback',
                 'warning': f'Celery unavailable: {str(celery_error)}. Task executed synchronously.',
             }, status=status.HTTP_200_OK)

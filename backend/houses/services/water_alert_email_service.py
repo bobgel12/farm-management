@@ -3,7 +3,7 @@ Email service for water consumption alerts
 """
 import logging
 import os
-from typing import List
+from typing import List, Optional, Tuple, Dict, Any
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from organizations.models import OrganizationUser
@@ -18,7 +18,11 @@ class WaterAlertEmailService:
     """Service to send email alerts for water consumption anomalies"""
     
     @staticmethod
-    def send_alert_email(alert: WaterConsumptionAlert) -> bool:
+    def send_alert_email(
+        alert: WaterConsumptionAlert,
+        diagnostics: Optional[Dict[str, Any]] = None,
+        correlation_id: Optional[str] = None,
+    ) -> bool:
         """
         Send email alert for water consumption anomaly
         
@@ -29,11 +33,25 @@ class WaterAlertEmailService:
             True if email sent successfully, False otherwise
         """
         try:
+            diagnostics = diagnostics if diagnostics is not None else {}
             # Get recipients (organization admins, managers, and owners)
-            recipients = WaterAlertEmailService._get_alert_recipients(alert.house)
+            recipients, recipient_diag = WaterAlertEmailService._get_alert_recipients(alert.house)
+            diagnostics.update(recipient_diag)
+            diagnostics["recipient_count"] = len(recipients)
             
             if not recipients:
-                logger.warning(f"No recipients found for water alert {alert.id}")
+                diagnostics["suppression_reason"] = "no_recipients"
+                logger.warning(
+                    f"No recipients found for water alert {alert.id}",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "house_id": alert.house_id,
+                        "farm_id": alert.farm_id,
+                        "alert_id": alert.id,
+                        "suppression_reason": "no_recipients",
+                        "recipient_sources": recipient_diag,
+                    },
+                )
                 return False
             
             # Generate email content
@@ -55,16 +73,41 @@ class WaterAlertEmailService:
                 alert.email_sent_at = timezone.now()
                 alert.email_recipients = recipients
                 alert.save()
-                logger.info(f"Water consumption alert email sent successfully for alert {alert.id} to {len(recipients)} recipients")
+                logger.info(
+                    f"Water consumption alert email sent successfully for alert {alert.id} to {len(recipients)} recipients",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "house_id": alert.house_id,
+                        "farm_id": alert.farm_id,
+                        "alert_id": alert.id,
+                        "email_sent": True,
+                        "recipient_count": len(recipients),
+                    },
+                )
+            else:
+                diagnostics["suppression_reason"] = "email_provider_failure"
+                logger.warning(
+                    f"Water alert provider send failed for alert {alert.id}",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "house_id": alert.house_id,
+                        "farm_id": alert.farm_id,
+                        "alert_id": alert.id,
+                        "suppression_reason": "email_provider_failure",
+                        "recipient_count": len(recipients),
+                    },
+                )
             
             return success
         
         except Exception as e:
+            if diagnostics is not None and not diagnostics.get("suppression_reason"):
+                diagnostics["suppression_reason"] = "email_exception"
             logger.error(f"Error sending water consumption alert email for alert {alert.id}: {str(e)}", exc_info=True)
             return False
     
     @staticmethod
-    def _get_alert_recipients(house: House) -> List[str]:
+    def _get_alert_recipients(house: House) -> Tuple[List[str], Dict[str, Any]]:
         """
         Get list of email addresses to receive water consumption alerts
         
@@ -74,6 +117,11 @@ class WaterAlertEmailService:
         - Farm contact email
         """
         recipients = []
+        diag = {
+            "organization_recipients": 0,
+            "worker_recipients": 0,
+            "contact_email_included": False,
+        }
         
         try:
             # Get organization from farm
@@ -91,6 +139,7 @@ class WaterAlertEmailService:
                     if org_user.role in ['owner', 'admin', 'manager']:
                         if org_user.user and org_user.user.email:
                             recipients.append(org_user.user.email)
+                            diag["organization_recipients"] += 1
             
             # Get farm workers who receive daily tasks
             if house.farm:
@@ -104,20 +153,26 @@ class WaterAlertEmailService:
                 for worker in farm_workers:
                     if worker.email and worker.email not in recipients:
                         recipients.append(worker.email)
+                        diag["worker_recipients"] += 1
                 
                 # Also include farm contact email if available
                 if house.farm.contact_email and house.farm.contact_email not in recipients:
                     recipients.append(house.farm.contact_email)
+                    diag["contact_email_included"] = True
             
             # Remove duplicates
             recipients = list(set(recipients))
             
-            logger.info(f"Found {len(recipients)} recipients for water alert: {recipients}")
+            logger.info(
+                f"Found {len(recipients)} recipients for water alert: {recipients}",
+                extra={"house_id": house.id, "farm_id": house.farm_id, "recipient_sources": diag},
+            )
         
         except Exception as e:
             logger.error(f"Error getting alert recipients: {str(e)}", exc_info=True)
+            diag["error"] = str(e)
         
-        return recipients
+        return recipients, diag
     
     @staticmethod
     def _build_comparison_section(avg_water_7d, farm_avg_water, alert):
