@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -29,6 +29,7 @@ import dayjs from 'dayjs';
 const FlockForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
   const { houses, farms, fetchFarms, fetchHouses, loading: farmsLoading } = useFarm();
   const {
     breeds = [],
@@ -44,14 +45,16 @@ const FlockForm: React.FC = () => {
   const [selectedFarmId, setSelectedFarmId] = useState<number | undefined>(undefined);
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
 
+  const defaultStart = dayjs().format('YYYY-MM-DD');
   const [formData, setFormData] = useState<Partial<Flock>>({
     house: undefined,
     breed: undefined,
     batch_number: '',
-    arrival_date: dayjs().format('YYYY-MM-DD'),
+    start_date: defaultStart,
+    arrival_date: defaultStart,
     expected_harvest_date: dayjs().add(40, 'days').format('YYYY-MM-DD'),
-    initial_chicken_count: 5000,
-    current_chicken_count: 5000,
+    initial_chicken_count: undefined as unknown as number,
+    current_chicken_count: undefined as unknown as number,
     supplier: '',
     notes: '',
   });
@@ -81,6 +84,22 @@ const FlockForm: React.FC = () => {
       console.log('Active farms:', farms.filter(f => f.is_active));
     }
   }, [farms, id]);
+
+  // Deep link: /flocks/new?house_id=…
+  useEffect(() => {
+    if (id !== 'new') return;
+    const hid = searchParams.get('house_id');
+    if (!hid) return;
+    const houseIdNum = parseInt(hid, 10);
+    if (Number.isNaN(houseIdNum)) return;
+
+    const h = houses.find((x) => x.id === houseIdNum);
+    const farmId = h?.farm_id;
+    if (farmId) {
+      setSelectedFarmId(farmId);
+    }
+    setFormData((prev) => ({ ...prev, house: houseIdNum }));
+  }, [id, searchParams, houses]);
 
   // Fetch houses when farm is selected
   useEffect(() => {
@@ -129,10 +148,12 @@ const FlockForm: React.FC = () => {
       if (house) {
         setSelectedFarmId(house.farm_id);
       }
+      const start = currentFlock.start_date || currentFlock.arrival_date;
       setFormData({
         house: currentFlock.house,
         breed: currentFlock.breed,
         batch_number: currentFlock.batch_number,
+        start_date: start,
         arrival_date: currentFlock.arrival_date,
         expected_harvest_date: currentFlock.expected_harvest_date,
         initial_chicken_count: currentFlock.initial_chicken_count,
@@ -206,10 +227,11 @@ const FlockForm: React.FC = () => {
           // Prefill form with Rotem data
           setFormData((prev) => ({
             ...prev,
+            start_date: arrivalDate,
             arrival_date: arrivalDate,
             expected_harvest_date: expectedHarvestDate,
-            initial_chicken_count: rotemData.bird_count || prev.initial_chicken_count || 0,
-            current_chicken_count: rotemData.bird_count || prev.current_chicken_count || 0,
+            initial_chicken_count: rotemData.bird_count || prev.initial_chicken_count,
+            current_chicken_count: rotemData.bird_count || prev.current_chicken_count,
             notes: `Synced from Rotem system (Age: ${rotemData.growth_day} days)${prev.notes ? `\n${prev.notes}` : ''}`,
           }));
           
@@ -234,7 +256,16 @@ const FlockForm: React.FC = () => {
   }, [formData.house]);
 
   const handleChange = (field: keyof Flock, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'start_date') {
+        next.arrival_date = value;
+      }
+      if (field === 'arrival_date') {
+        next.start_date = value;
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -251,7 +282,14 @@ const FlockForm: React.FC = () => {
       }
 
       if (!formData.batch_number) {
-        setSubmitError('Batch number is required');
+        setSubmitError('Flock / batch number is required');
+        setSubmitting(false);
+        return;
+      }
+
+      const startVal = formData.start_date || formData.arrival_date;
+      if (!startVal) {
+        setSubmitError('Start date is required');
         setSubmitting(false);
         return;
       }
@@ -259,10 +297,19 @@ const FlockForm: React.FC = () => {
       // Prepare data for API - convert breed to breed_id for backend
       const submitData: any = {
         ...formData,
+        arrival_date: startVal,
+        start_date: startVal,
         breed_id: formData.breed || null,
       };
       // Remove breed field as backend expects breed_id
       delete submitData.breed;
+
+      if (submitData.initial_chicken_count === undefined || submitData.initial_chicken_count === '') {
+        delete submitData.initial_chicken_count;
+      }
+      if (submitData.current_chicken_count === undefined || submitData.current_chicken_count === '') {
+        delete submitData.current_chicken_count;
+      }
 
       if (id && id !== 'new' && currentFlock) {
         await updateFlock(currentFlock.id, submitData);
@@ -403,11 +450,12 @@ const FlockForm: React.FC = () => {
                 <TextField
                   fullWidth
                   required
-                  label="Arrival Date"
+                  label="Start date"
                   type="date"
-                  value={formData.arrival_date}
-                  onChange={(e) => handleChange('arrival_date', e.target.value)}
+                  value={formData.start_date || formData.arrival_date || ''}
+                  onChange={(e) => handleChange('start_date', e.target.value)}
                   InputLabelProps={{ shrink: true }}
+                  helperText="Flock start / placement date (sent as start date and arrival date)"
                 />
               </Grid>
 
@@ -434,12 +482,18 @@ const FlockForm: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  required
                   label="Initial Chicken Count"
                   type="number"
-                  value={formData.initial_chicken_count || ''}
-                  onChange={(e) => handleChange('initial_chicken_count', parseInt(e.target.value) || 0)}
+                  value={formData.initial_chicken_count ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleChange(
+                      'initial_chicken_count',
+                      v === '' ? (undefined as unknown as number) : parseInt(v, 10)
+                    );
+                  }}
                   inputProps={{ min: 0 }}
+                  helperText="Optional — defaults to house capacity or 1000"
                 />
               </Grid>
 
@@ -448,10 +502,16 @@ const FlockForm: React.FC = () => {
                   fullWidth
                   label="Current Chicken Count"
                   type="number"
-                  value={formData.current_chicken_count || ''}
-                  onChange={(e) => handleChange('current_chicken_count', parseInt(e.target.value) || null)}
+                  value={formData.current_chicken_count ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleChange(
+                      'current_chicken_count',
+                      v === '' ? (undefined as unknown as number) : parseInt(v, 10)
+                    );
+                  }}
                   inputProps={{ min: 0 }}
-                  helperText="Leave empty to use initial count"
+                  helperText="Optional — defaults to initial count"
                 />
               </Grid>
 

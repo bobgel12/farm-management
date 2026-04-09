@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from rest_framework import serializers
 from django.db.models import Sum
 from .models import Farm, Worker, Program, ProgramTask, Breed, Flock, FlockPerformance, FlockComparison, MortalityRecord
@@ -242,7 +244,48 @@ class FlockSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'created_by'
         ]
         read_only_fields = ['id', 'flock_code', 'created_at', 'updated_at', 'created_by']
-    
+        extra_kwargs = {
+            'arrival_date': {'required': False, 'allow_null': True},
+            'initial_chicken_count': {'required': False, 'allow_null': True},
+            'current_chicken_count': {'required': False, 'allow_null': True},
+            'start_date': {'required': False, 'allow_null': True},
+        }
+
+    def validate(self, data):
+        """Support minimal create: batch_number + start_date (or arrival_date) with inferred defaults."""
+        if self.instance is None:
+            arrival = data.get('arrival_date')
+            start = data.get('start_date')
+            if arrival is None and start is not None:
+                data['arrival_date'] = start
+            elif arrival is not None and start is None:
+                data['start_date'] = arrival
+            elif arrival is None and start is None:
+                raise serializers.ValidationError(
+                    {'arrival_date': 'Arrival date or start date is required.'}
+                )
+
+            house = data.get('house')
+            if data.get('initial_chicken_count') in (None, ''):
+                cap = getattr(house, 'capacity', None) if house else None
+                data['initial_chicken_count'] = cap if cap else 1000
+
+            if data.get('current_chicken_count') in (None, ''):
+                data['current_chicken_count'] = data['initial_chicken_count']
+
+            if not data.get('expected_harvest_date') and data.get('arrival_date'):
+                data['expected_harvest_date'] = data['arrival_date'] + timedelta(days=40)
+
+            if not data.get('status') or data.get('status') == '':
+                data['status'] = 'growing'
+        else:
+            if 'start_date' in data and 'arrival_date' not in data:
+                data['arrival_date'] = data['start_date']
+            elif 'arrival_date' in data and 'start_date' not in data:
+                data['start_date'] = data['arrival_date']
+
+        return data
+
     def create(self, validated_data):
         """Create flock and set created_by"""
         breed_id = validated_data.pop('breed_id', None)

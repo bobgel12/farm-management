@@ -90,6 +90,18 @@ export const flocksApi = {
   },
 
   /**
+   * Upsert active flock from Rotem-derived house fields (batch dates, age, bird count).
+   */
+  async syncFlockFromRotem(houseId: number): Promise<{
+    flock: Flock;
+    created: boolean;
+    message: string;
+  }> {
+    const response = await api.post(`/houses/${houseId}/flocks/sync-from-rotem/`);
+    return response.data;
+  },
+
+  /**
    * Update a flock
    */
   async updateFlock(id: number, data: Partial<Flock>): Promise<Flock> {

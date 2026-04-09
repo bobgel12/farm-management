@@ -29,6 +29,8 @@ from .serializers import (
     WaterConsumptionAlertSerializer, WaterConsumptionForecastSerializer,
 )
 from farms.models import Farm
+from farms.serializers import FlockSerializer
+from farms.services.rotem_flock_sync import upsert_active_flock_from_rotem
 from tasks.task_scheduler import TaskScheduler
 from tasks.serializers import TaskSerializer
 from collections import defaultdict
@@ -1268,3 +1270,26 @@ def check_water_anomaly_detection_status(request, task_id):
             'status': 'error',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sync_flock_from_rotem(request, house_id):
+    """
+    Upsert the active flock for this house from Rotem-derived house fields
+    (batch_start_date / chicken_in_date, age, monitoring bird count).
+    """
+    house = get_object_or_404(House, pk=house_id)
+    try:
+        flock, created = upsert_active_flock_from_rotem(house, request.user)
+    except ValueError as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = FlockSerializer(flock, context={'request': request})
+    return Response(
+        {
+            'flock': serializer.data,
+            'created': created,
+            'message': 'Flock synced from Rotem integration.',
+        },
+        status=status.HTTP_200_OK,
+    )

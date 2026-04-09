@@ -22,6 +22,11 @@ urlpatterns = [
     
     # Detailed house information
     path('houses/<int:house_id>/details/', views.house_details, name='house-details'),
+    path(
+        'houses/<int:house_id>/flocks/sync-from-rotem/',
+        views.sync_flock_from_rotem,
+        name='house-flocks-sync-from-rotem',
+    ),
     
     # Device endpoints
     path('houses/<int:house_id>/devices/', views.house_devices, name='house-devices'),

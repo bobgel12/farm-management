@@ -32,6 +32,7 @@ interface FlockContextType {
   fetchPerformanceRecords: (flockId?: number) => Promise<void>;
   fetchComparisons: (organizationId?: string) => Promise<void>;
   createFlock: (data: Partial<Flock>) => Promise<Flock>;
+  syncFlockFromRotem: (houseId: number) => Promise<{ flock: Flock; created: boolean; message: string }>;
   updateFlock: (id: number, data: Partial<Flock>) => Promise<Flock>;
   deleteFlock: (id: number) => Promise<void>;
   addPerformanceRecord: (flockId: number, data: Partial<FlockPerformance>) => Promise<FlockPerformance>;
@@ -214,6 +215,22 @@ export const FlockProvider: React.FC<FlockProviderProps> = ({ children }) => {
     }
   }, [fetchFlocks]);
 
+  const syncFlockFromRotem = useCallback(async (houseId: number) => {
+    try {
+      setError(null);
+      const result = await flocksApi.syncFlockFromRotem(houseId);
+      await fetchFlocks();
+      return result;
+    } catch (err: any) {
+      const errorMsg =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        'Failed to sync flock from Rotem';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      throw err;
+    }
+  }, [fetchFlocks]);
+
   const updateFlock = useCallback(async (id: number, data: Partial<Flock>): Promise<Flock> => {
     try {
       setLoading(true);
@@ -389,6 +406,7 @@ export const FlockProvider: React.FC<FlockProviderProps> = ({ children }) => {
     fetchPerformanceRecords,
     fetchComparisons,
     createFlock,
+    syncFlockFromRotem,
     updateFlock,
     deleteFlock,
     addPerformanceRecord,
