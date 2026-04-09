@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from django.utils import timezone
 
 from houses.models import HouseMonitoringSnapshot
 from .anomaly_base import BaseAnomalyDetector
+from .heater_runtime_metrics import (
+    baseline_from_prior_windows,
+    compute_heater_runtime_hours,
+    filter_snapshots_in_window,
+    severity_for_ratio,
+    window_boundaries,
+)
 from .water_anomaly_detector import WaterAnomalyDetector
 
 
@@ -59,44 +66,84 @@ class FeedDomainDetector(BaseAnomalyDetector):
 
 
 class HeaterDomainDetector(BaseAnomalyDetector):
+    """
+    Runtime spike vs prior 7x24h rolling windows (same heater-on semantics as KPI runtime).
+    """
+
     domain = "heater"
+    WINDOW_HOURS = 24
+    MIN_SNAPSHOTS_PER_WINDOW = 4
+    MIN_RUNTIME_HOURS = 2.0
+    SPIKE_RATIO_THRESHOLD = 1.5
+    MIN_BASELINE_SAMPLES = 3
 
     def detect(self) -> List[Dict]:
-        recent = list(
+        now = timezone.now()
+        lookback_hours = 8 * self.WINDOW_HOURS
+        all_snaps = list(
             HouseMonitoringSnapshot.objects.filter(
                 house=self.house,
-                timestamp__gte=timezone.now() - timedelta(hours=6),
+                timestamp__gte=now - timedelta(hours=lookback_hours),
+                timestamp__lte=now,
             ).order_by("timestamp")
         )
-        if len(recent) < 4:
+        if len(all_snaps) < self.MIN_SNAPSHOTS_PER_WINDOW:
             return []
 
-        heater_on_count = 0
-        missing_target_while_heater = 0
-        for snap in recent:
-            outputs = (snap.sensor_data or {}).get("digital_outputs", {})
-            heater_on = any(
-                isinstance(v, dict) and v.get("is_on") is True
-                for k, v in outputs.items()
-                if "heater" in k
+        boundaries = window_boundaries(now, window_hours=self.WINDOW_HOURS, num_baseline_windows=7)
+        runtimes: List[Optional[float]] = []
+        for k, (start, end) in enumerate(boundaries):
+            current_window = k == 0
+            snaps = filter_snapshots_in_window(
+                all_snaps, start, end, current_window=current_window
             )
-            if heater_on:
-                heater_on_count += 1
-                if snap.average_temperature is not None and snap.target_temperature is not None:
-                    if float(snap.average_temperature) + 1.5 < float(snap.target_temperature):
-                        missing_target_while_heater += 1
+            if len(snaps) < self.MIN_SNAPSHOTS_PER_WINDOW:
+                runtimes.append(None)
+                continue
+            window_end = now if current_window else end
+            rt = compute_heater_runtime_hours(snaps, window_end)
+            runtimes.append(rt)
 
-        if heater_on_count >= 3 and missing_target_while_heater >= 3:
-            return [{
+        current_rt = runtimes[0] if runtimes else None
+        if current_rt is None:
+            return []
+
+        baseline = baseline_from_prior_windows(
+            runtimes,
+            min_baseline_samples=self.MIN_BASELINE_SAMPLES,
+        )
+        if baseline is None or baseline <= 0:
+            return []
+
+        if current_rt < self.MIN_RUNTIME_HOURS:
+            return []
+
+        ratio = current_rt / baseline
+        if ratio < self.SPIKE_RATIO_THRESHOLD:
+            return []
+
+        severity = severity_for_ratio(ratio)
+        message = (
+            f"Heater runtime spike: last {self.WINDOW_HOURS}h heater runtime {current_rt:.2f} h "
+            f"vs baseline {baseline:.2f} h ({ratio:.2f}x). "
+            f"Investigate heating demand, stuck outputs, or sensor/controller issues."
+        )
+        return [
+            {
                 "domain": self.domain,
-                "severity": "high",
-                "message": "Heater inefficiency anomaly: heater active but temperature remains below target.",
+                "severity": severity,
+                "message": message,
+                "parameter_name": "heater_runtime_spike",
+                "parameter_value": round(ratio, 4),
+                "threshold_value": round(baseline, 4),
                 "payload": {
-                    "heater_on_samples": heater_on_count,
-                    "target_miss_samples": missing_target_while_heater,
+                    "current_runtime_hours": current_rt,
+                    "baseline_runtime_hours": baseline,
+                    "ratio": ratio,
+                    "window_hours": self.WINDOW_HOURS,
                 },
-            }]
-        return []
+            }
+        ]
 
 
 class VentilationDomainDetector(BaseAnomalyDetector):
