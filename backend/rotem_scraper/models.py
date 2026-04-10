@@ -252,3 +252,53 @@ class RotemDailySummary(models.Model):
     
     def __str__(self):
         return f"{self.controller.controller_name} - {self.date} (Data Points: {self.total_data_points})"
+
+
+class HouseHeaterRuntimeCache(models.Model):
+    """Cached per-day heater runtime history fetched from Rotem CommandID 43."""
+
+    house = models.ForeignKey(
+        "houses.House",
+        on_delete=models.CASCADE,
+        related_name="heater_runtime_cache",
+    )
+    growth_day = models.IntegerField(help_text="House growth day from Rotem history record")
+    record_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Derived from house batch/chicken start date where available",
+    )
+    is_summary_row = models.BooleanField(
+        default=False,
+        help_text="True when record represents summary row (growth_day = -1)",
+    )
+    total_runtime_minutes = models.IntegerField(default=0)
+    total_computation_method = models.CharField(
+        max_length=32,
+        default="provided_total",
+        help_text="provided_total or sum_devices",
+    )
+    per_device_json = models.JSONField(default=dict, help_text="Per heater device runtime map")
+    source_timestamp = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Source timestamp from Rotem payload if present",
+    )
+    last_synced_at = models.DateTimeField(auto_now=True)
+    raw_record_json = models.JSONField(default=dict, help_text="Raw Rotem row for traceability")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ["house", "growth_day"]
+        indexes = [
+            models.Index(fields=["house", "growth_day"]),
+            models.Index(fields=["house", "record_date"]),
+            models.Index(fields=["last_synced_at"]),
+        ]
+        ordering = ["growth_day"]
+        verbose_name = "House Heater Runtime Cache"
+        verbose_name_plural = "House Heater Runtime Cache"
+
+    def __str__(self):
+        return f"House {self.house_id} day {self.growth_day} ({self.total_runtime_minutes} min)"

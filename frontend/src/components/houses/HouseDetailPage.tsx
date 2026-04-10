@@ -49,6 +49,30 @@ interface HouseDetails {
   monitoring: any;
   alarms: any[];
   stats: any;
+  heater_history?: {
+    summary?: {
+      total_minutes: number;
+      total_hours: number;
+      days_count: number;
+      device_count: number;
+    };
+    daily?: Array<{
+      growth_day: number;
+      date: string | null;
+      total_minutes: number;
+      total_hours: number;
+      total_computation_method: string;
+      per_device: Record<string, { minutes: number; hours: number; raw_value?: string | null }>;
+      last_synced_at: string | null;
+    }>;
+    latest?: any;
+    freshness?: {
+      last_synced_at: string | null;
+      stale: boolean;
+      sync_status: string;
+      stale_after_minutes: number;
+    };
+  };
   tasks?: {
     all: any[];
     today: any[];
@@ -343,6 +367,7 @@ const HouseDetailPage: React.FC = () => {
           monitoring={houseDetails.monitoring}
           alarms={houseDetails.alarms}
           stats={houseDetails.stats}
+          heaterHistory={houseDetails.heater_history}
           onRefresh={loadHouseDetails}
         />
       </TabPanel>
