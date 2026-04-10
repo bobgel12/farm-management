@@ -1,10 +1,23 @@
 from celery import shared_task
 from django.utils import timezone
+from datetime import timedelta
 from .services.scraper_service import DjangoRotemScraperService
 from .services.ml_service import MLAnalysisService
+from .models import HouseHeaterRuntimeCache
+from houses.models import House
+from .scraper import RotemScraper
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _derive_record_date(house: House, growth_day: int):
+    if growth_day < 0:
+        return None
+    base_date = house.batch_start_date or house.chicken_in_date
+    if not base_date:
+        return None
+    return base_date + timedelta(days=growth_day)
 
 
 @shared_task(bind=True, max_retries=3)
@@ -179,3 +192,74 @@ def collect_monitoring_data(self, farm_id=None):
     except Exception as exc:
         logger.error(f"Monitoring collection task failed: {str(exc)}")
         raise self.retry(exc=exc, countdown=300)  # Retry after 5 minutes
+
+
+@shared_task(bind=True, max_retries=2)
+def refresh_house_heater_history(self, house_id: int):
+    """Refresh cached house heater runtime history from Rotem CommandID 43."""
+    try:
+        house = House.objects.select_related("farm").get(id=house_id)
+        farm = house.farm
+        if not farm or not farm.rotem_username or not farm.rotem_password:
+            return {
+                "status": "skipped",
+                "reason": "missing_rotem_credentials",
+                "house_id": house_id,
+            }
+
+        scraper = RotemScraper(farm.rotem_username, farm.rotem_password)
+        if not scraper.login():
+            return {
+                "status": "error",
+                "reason": "login_failed",
+                "house_id": house_id,
+                "error": scraper.last_error_message,
+            }
+
+        parsed = scraper.get_heater_history(house_number=house.house_number)
+        if not parsed:
+            return {
+                "status": "error",
+                "reason": "empty_response",
+                "house_id": house_id,
+            }
+
+        source_timestamp = parsed.get("source_timestamp")
+        upserted = 0
+        all_records = list(parsed.get("records", []))
+        summary_row = parsed.get("summary_row")
+        if summary_row:
+            all_records.append(summary_row)
+
+        for record in all_records:
+            growth_day = int(record.get("growth_day", -1))
+            obj, _ = HouseHeaterRuntimeCache.objects.update_or_create(
+                house=house,
+                growth_day=growth_day,
+                defaults={
+                    "record_date": _derive_record_date(house, growth_day),
+                    "is_summary_row": bool(record.get("is_summary_row")),
+                    "total_runtime_minutes": int(record.get("total_runtime_minutes") or 0),
+                    "total_computation_method": record.get("total_computation_method") or "sum_devices",
+                    "per_device_json": record.get("per_device") or {},
+                    "source_timestamp": source_timestamp,
+                    "raw_record_json": record.get("raw_record") or {},
+                },
+            )
+            upserted += 1 if obj else 0
+
+        return {
+            "status": "success",
+            "house_id": house_id,
+            "records_upserted": upserted,
+            "summary_present": bool(summary_row),
+        }
+    except House.DoesNotExist:
+        return {
+            "status": "error",
+            "reason": "house_not_found",
+            "house_id": house_id,
+        }
+    except Exception as exc:
+        logger.error("refresh_house_heater_history failed: %s", exc, exc_info=True)
+        raise self.retry(exc=exc, countdown=30)

@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 import argparse
 from urllib.parse import urljoin
 import shlex
+import re
 
 
 class RotemScraper:
@@ -631,6 +632,123 @@ class RotemScraper:
         
         print(f"❌ No water history data found from Rotem API")
         return None
+
+    def _parse_duration_to_minutes(self, value: Any) -> Optional[int]:
+        """Parse duration-like values to integer minutes."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return int(round(float(value)))
+
+        raw = str(value).strip()
+        if not raw or raw in {"- - -", "---", "N/A", "null"}:
+            return None
+
+        # Handle 12,5 style decimal values.
+        raw_norm = raw.replace(",", ".")
+        if re.fullmatch(r"-?\d+(\.\d+)?", raw_norm):
+            return int(round(float(raw_norm)))
+
+        parts = raw.split(":")
+        if len(parts) == 2 and all(p.isdigit() for p in parts):
+            hours, minutes = int(parts[0]), int(parts[1])
+            return max((hours * 60) + minutes, 0)
+        if len(parts) == 3 and all(p.isdigit() for p in parts):
+            hours, minutes, seconds = int(parts[0]), int(parts[1]), int(parts[2])
+            return max((hours * 60) + minutes + int(round(seconds / 60.0)), 0)
+        return None
+
+    def parse_heater_history_records(self, command_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize CommandID 43 heater runtime data from responseObj.dsData.Data.
+        """
+        normalized = {
+            "records": [],
+            "summary_row": None,
+            "source_timestamp": None,
+        }
+        if not isinstance(command_data, dict):
+            return normalized
+
+        response_obj = command_data.get("reponseObj") or command_data.get("responseObj") or {}
+        ds_data = response_obj.get("dsData") if isinstance(response_obj, dict) else {}
+        rows = ds_data.get("Data") if isinstance(ds_data, dict) else None
+        if not isinstance(rows, list):
+            return normalized
+
+        source_timestamp = command_data.get("source_timestamp") or command_data.get("timestamp")
+        normalized["source_timestamp"] = source_timestamp
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            growth_day_raw = (
+                row.get("HistoryRecord_Heaters_GrowthDay")
+                or row.get("HistoryRecord_GrowthDay")
+                or row.get("GrowthDay")
+            )
+            try:
+                growth_day = int(growth_day_raw)
+            except (TypeError, ValueError):
+                continue
+
+            per_device = {}
+            for key, val in row.items():
+                if "HistoryRecord_Heaters_HeaterDevice_" not in str(key):
+                    continue
+                device_suffix = str(key).split("HistoryRecord_Heaters_HeaterDevice_")[-1]
+                device_key = f"device_{device_suffix}" if device_suffix else "device_unknown"
+                minutes = self._parse_duration_to_minutes(val) or 0
+                per_device[device_key] = {
+                    "minutes": minutes,
+                    "hours": round(minutes / 60.0, 2),
+                    "raw_value": val,
+                }
+
+            total_minutes = None
+            total_keys = [
+                "HistoryRecord_Heaters_Total",
+                "HistoryRecord_Heaters_TotalRuntime",
+                "HistoryRecord_Heaters_Runtime",
+                "HistoryRecord_Heaters_TotalMinutes",
+            ]
+            for total_key in total_keys:
+                if total_key in row:
+                    total_minutes = self._parse_duration_to_minutes(row.get(total_key))
+                    if total_minutes is not None:
+                        break
+
+            computation_method = "provided_total"
+            if total_minutes is None:
+                total_minutes = sum(item["minutes"] for item in per_device.values())
+                computation_method = "sum_devices"
+
+            record = {
+                "growth_day": growth_day,
+                "is_summary_row": growth_day == -1,
+                "total_runtime_minutes": int(total_minutes or 0),
+                "total_runtime_hours": round((total_minutes or 0) / 60.0, 2),
+                "total_computation_method": computation_method,
+                "per_device": per_device,
+                "raw_record": row,
+            }
+            if record["is_summary_row"]:
+                normalized["summary_row"] = record
+            else:
+                normalized["records"].append(record)
+
+        normalized["records"].sort(key=lambda item: item["growth_day"])
+        return normalized
+
+    def get_heater_history(self, house_number: int) -> Optional[Dict[str, Any]]:
+        """Fetch and normalize historical heater runtime (CommandID 43)."""
+        print(f"🔥 Fetching Heater History for House {house_number}...")
+        command_data = self.get_command_data(house_number, command_id="43")
+        if not command_data:
+            return None
+        normalized = self.parse_heater_history_records(command_data)
+        normalized["raw_response"] = command_data
+        return normalized
 
 
 def main():

@@ -9,6 +9,13 @@ import {
   IconButton,
   Tooltip,
   LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import {
   Refresh,
@@ -31,6 +38,26 @@ interface HouseOverviewTabProps {
   monitoring: any;
   alarms: any[];
   stats: any;
+  heaterHistory?: {
+    summary?: {
+      total_minutes: number;
+      total_hours: number;
+      days_count: number;
+      device_count: number;
+    };
+    latest?: {
+      growth_day: number;
+      date: string | null;
+      total_minutes: number;
+      total_hours: number;
+      per_device: Record<string, { minutes: number; hours: number }>;
+    } | null;
+    freshness?: {
+      last_synced_at: string | null;
+      stale: boolean;
+      sync_status: string;
+    };
+  };
   onRefresh: () => void;
 }
 
@@ -39,6 +66,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
   monitoring,
   alarms,
   stats,
+  heaterHistory,
   onRefresh,
 }) => {
   const [kpis, setKpis] = useState<HouseMonitoringKpis | null>(null);
@@ -149,6 +177,62 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
               <Typography variant="caption" color="text.secondary">
                 Estimated from status snapshots
               </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="h6">Heater History (Command 43)</Typography>
+                <Chip
+                  size="small"
+                  color={heaterHistory?.freshness?.stale ? 'warning' : 'success'}
+                  label={heaterHistory?.freshness?.sync_status || 'not_synced'}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Total: {heaterHistory?.summary?.total_hours ?? 0} h ({heaterHistory?.summary?.days_count ?? 0} days, {heaterHistory?.summary?.device_count ?? 0} devices)
+              </Typography>
+
+              {heaterHistory?.latest ? (
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Latest Day</TableCell>
+                        <TableCell>Total Hours</TableCell>
+                        <TableCell>Per Device</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>
+                          Day {heaterHistory.latest.growth_day}
+                          {heaterHistory.latest.date ? ` (${heaterHistory.latest.date})` : ''}
+                        </TableCell>
+                        <TableCell>{heaterHistory.latest.total_hours} h</TableCell>
+                        <TableCell>
+                          {Object.entries(heaterHistory.latest.per_device || {}).map(([device, value]) => (
+                            <Chip
+                              key={device}
+                              size="small"
+                              variant="outlined"
+                              sx={{ mr: 0.5, mb: 0.5 }}
+                              label={`${device.replace('_', ' ')}: ${value.hours} h`}
+                            />
+                          ))}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Heater runtime history is syncing.
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
