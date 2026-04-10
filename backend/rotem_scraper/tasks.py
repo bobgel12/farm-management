@@ -194,9 +194,11 @@ def collect_monitoring_data(self, farm_id=None):
         raise self.retry(exc=exc, countdown=300)  # Retry after 5 minutes
 
 
-@shared_task(bind=True, max_retries=2)
-def refresh_house_heater_history(self, house_id: int):
-    """Refresh cached house heater runtime history from Rotem CommandID 43."""
+def sync_refresh_house_heater_history(house_id: int) -> dict:
+    """
+    Fetch CommandID 43 heater history from Rotem and upsert cache.
+    Safe to call synchronously from an API view (user-initiated load).
+    """
     try:
         house = House.objects.select_related("farm").get(id=house_id)
         farm = house.farm
@@ -233,20 +235,21 @@ def refresh_house_heater_history(self, house_id: int):
 
         for record in all_records:
             growth_day = int(record.get("growth_day", -1))
-            obj, _ = HouseHeaterRuntimeCache.objects.update_or_create(
+            _, _ = HouseHeaterRuntimeCache.objects.update_or_create(
                 house=house,
                 growth_day=growth_day,
                 defaults={
                     "record_date": _derive_record_date(house, growth_day),
                     "is_summary_row": bool(record.get("is_summary_row")),
                     "total_runtime_minutes": int(record.get("total_runtime_minutes") or 0),
-                    "total_computation_method": record.get("total_computation_method") or "sum_devices",
+                    "total_computation_method": record.get("total_computation_method")
+                    or "sum_devices",
                     "per_device_json": record.get("per_device") or {},
                     "source_timestamp": source_timestamp,
                     "raw_record_json": record.get("raw_record") or {},
                 },
             )
-            upserted += 1 if obj else 0
+            upserted += 1
 
         return {
             "status": "success",
@@ -260,6 +263,13 @@ def refresh_house_heater_history(self, house_id: int):
             "reason": "house_not_found",
             "house_id": house_id,
         }
+
+
+@shared_task(bind=True, max_retries=2)
+def refresh_house_heater_history(self, house_id: int):
+    """Celery wrapper for background refresh (optional; on-demand uses sync_refresh)."""
+    try:
+        return sync_refresh_house_heater_history(house_id)
     except Exception as exc:
         logger.error("refresh_house_heater_history failed: %s", exc, exc_info=True)
         raise self.retry(exc=exc, countdown=30)
