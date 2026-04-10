@@ -12,7 +12,7 @@ from houses.models import House
 from rotem_scraper.models import HouseHeaterRuntimeCache
 
 
-class HouseDetailsHeaterHistoryTests(TestCase):
+class HouseHeaterHistoryApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         user_model = get_user_model()
@@ -45,8 +45,14 @@ class HouseDetailsHeaterHistoryTests(TestCase):
             is_integrated=True,
         )
 
-    @patch("houses.views.refresh_house_heater_history.delay")
-    def test_house_details_returns_cached_heater_history(self, mock_delay):
+    def test_house_details_does_not_include_heater_history(self):
+        response = self.client.get(
+            reverse("house-details", kwargs={"house_id": self.house.id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("heater_history", response.json())
+
+    def test_get_heater_history_returns_cache(self):
         HouseHeaterRuntimeCache.objects.create(
             house=self.house,
             growth_day=10,
@@ -59,20 +65,31 @@ class HouseDetailsHeaterHistoryTests(TestCase):
             last_synced_at=timezone.now()
         )
 
-        response = self.client.get(reverse("house-details", kwargs={"house_id": self.house.id}))
+        response = self.client.get(
+            reverse("house-heater-history", kwargs={"house_id": self.house.id})
+        )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertIn("heater_history", payload)
         self.assertEqual(payload["heater_history"]["summary"]["total_minutes"], 180)
         self.assertEqual(payload["heater_history"]["daily"][0]["growth_day"], 10)
-        self.assertIn(payload["heater_history"]["freshness"]["sync_status"], ["fresh", "refreshing"])
-        mock_delay.assert_not_called()
 
-    @patch("houses.views.refresh_house_heater_history.delay")
-    def test_house_details_triggers_refresh_when_cache_missing(self, mock_delay):
-        response = self.client.get(reverse("house-details", kwargs={"house_id": self.house.id}))
+    @patch("houses.views.sync_refresh_house_heater_history")
+    def test_post_refresh_returns_payload(self, mock_sync):
+        mock_sync.return_value = {"status": "success", "house_id": self.house.id}
+        HouseHeaterRuntimeCache.objects.create(
+            house=self.house,
+            growth_day=1,
+            record_date=date.today(),
+            total_runtime_minutes=60,
+            per_device_json={"device_1": {"minutes": 60}},
+            raw_record_json={},
+        )
+
+        response = self.client.post(
+            reverse(
+                "house-heater-history-refresh", kwargs={"house_id": self.house.id}
+            )
+        )
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["heater_history"]["daily"], [])
-        self.assertEqual(payload["heater_history"]["freshness"]["sync_status"], "refreshing")
-        mock_delay.assert_called_once_with(self.house.id)
+        self.assertIn("heater_history", response.json())
+        mock_sync.assert_called_once_with(self.house.id)

@@ -16,6 +16,9 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Button,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   Refresh,
@@ -38,26 +41,6 @@ interface HouseOverviewTabProps {
   monitoring: any;
   alarms: any[];
   stats: any;
-  heaterHistory?: {
-    summary?: {
-      total_minutes: number;
-      total_hours: number;
-      days_count: number;
-      device_count: number;
-    };
-    latest?: {
-      growth_day: number;
-      date: string | null;
-      total_minutes: number;
-      total_hours: number;
-      per_device: Record<string, { minutes: number; hours: number }>;
-    } | null;
-    freshness?: {
-      last_synced_at: string | null;
-      stale: boolean;
-      sync_status: string;
-    };
-  };
   onRefresh: () => void;
 }
 
@@ -66,11 +49,14 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
   monitoring,
   alarms,
   stats,
-  heaterHistory,
   onRefresh,
 }) => {
   const [kpis, setKpis] = useState<HouseMonitoringKpis | null>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
+  const [heaterHistory, setHeaterHistory] = useState<any>(null);
+  const [heaterRotemLoading, setHeaterRotemLoading] = useState(false);
+  const [heaterCacheLoading, setHeaterCacheLoading] = useState(false);
+  const [heaterError, setHeaterError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadKpis = async () => {
@@ -88,6 +74,39 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
     };
     loadKpis();
   }, [house?.id, monitoring?.timestamp]);
+
+  const loadHeaterHistoryCached = async () => {
+    if (!house?.id) return;
+    try {
+      setHeaterCacheLoading(true);
+      setHeaterError(null);
+      const data = await monitoringApi.getHouseHeaterHistory(house.id);
+      setHeaterHistory(data.heater_history);
+    } catch (error) {
+      console.error('Failed to load cached heater history:', error);
+      setHeaterError('Could not load saved heater history.');
+    } finally {
+      setHeaterCacheLoading(false);
+    }
+  };
+
+  const fetchHeaterHistoryFromRotem = async () => {
+    if (!house?.id) return;
+    try {
+      setHeaterRotemLoading(true);
+      setHeaterError(null);
+      const data = await monitoringApi.refreshHouseHeaterHistory(house.id);
+      setHeaterHistory(data.heater_history);
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.error ||
+        error?.response?.data?.detail ||
+        'Failed to fetch heater history from Rotem.';
+      setHeaterError(typeof msg === 'string' ? msg : 'Failed to fetch heater history from Rotem.');
+    } finally {
+      setHeaterRotemLoading(false);
+    }
+  };
 
   const getTrendColor = (deltaPct: number | null | undefined): 'success' | 'warning' | 'error' | 'default' => {
     if (deltaPct === null || deltaPct === undefined) return 'default';
@@ -184,16 +203,49 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+              <Box display="flex" flexWrap="wrap" justifyContent="space-between" alignItems="center" gap={1} mb={1}>
                 <Typography variant="h6">Heater History (Command 43)</Typography>
-                <Chip
-                  size="small"
-                  color={heaterHistory?.freshness?.stale ? 'warning' : 'success'}
-                  label={heaterHistory?.freshness?.sync_status || 'not_synced'}
-                />
+                <Box display="flex" flexWrap="wrap" gap={1} alignItems="center">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={loadHeaterHistoryCached}
+                    disabled={heaterCacheLoading || heaterRotemLoading}
+                    startIcon={heaterCacheLoading ? <CircularProgress size={16} /> : undefined}
+                  >
+                    Load saved
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={fetchHeaterHistoryFromRotem}
+                    disabled={heaterRotemLoading}
+                    startIcon={heaterRotemLoading ? <CircularProgress size={16} color="inherit" /> : undefined}
+                  >
+                    Fetch from Rotem
+                  </Button>
+                  {heaterHistory?.freshness?.sync_status ? (
+                    <Chip
+                      size="small"
+                      color={heaterHistory?.freshness?.stale ? 'warning' : 'success'}
+                      label={heaterHistory.freshness.sync_status}
+                    />
+                  ) : null}
+                </Box>
               </Box>
+              <Typography variant="body2" color="text.secondary" mb={1}>
+                Not loaded with the page. Use the buttons above so the house overview stays fast.
+              </Typography>
+              {heaterError && (
+                <Alert severity="error" sx={{ mb: 1 }} onClose={() => setHeaterError(null)}>
+                  {heaterError}
+                </Alert>
+              )}
+              {heaterRotemLoading && <LinearProgress sx={{ mb: 1 }} />}
               <Typography variant="body2" color="text.secondary" mb={2}>
-                Total: {heaterHistory?.summary?.total_hours ?? 0} h ({heaterHistory?.summary?.days_count ?? 0} days, {heaterHistory?.summary?.device_count ?? 0} devices)
+                Total: {heaterHistory?.summary?.total_hours ?? '—'} h (
+                {heaterHistory?.summary?.days_count ?? 0} days, {heaterHistory?.summary?.device_count ?? 0}{' '}
+                devices)
               </Typography>
 
               {heaterHistory?.latest ? (
@@ -214,7 +266,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                         </TableCell>
                         <TableCell>{heaterHistory.latest.total_hours} h</TableCell>
                         <TableCell>
-                          {Object.entries(heaterHistory.latest.per_device || {}).map(([device, value]) => (
+                          {Object.entries(heaterHistory.latest.per_device || {}).map(([device, value]: [string, any]) => (
                             <Chip
                               key={device}
                               size="small"
@@ -230,7 +282,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                 </TableContainer>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  Heater runtime history is syncing.
+                  Click &quot;Load saved&quot; or &quot;Fetch from Rotem&quot; to show heater runtime by day.
                 </Typography>
               )}
             </CardContent>

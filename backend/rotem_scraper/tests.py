@@ -7,7 +7,7 @@ from farms.models import Farm
 from houses.models import House
 from rotem_scraper.models import HouseHeaterRuntimeCache
 from rotem_scraper.scraper import RotemScraper
-from rotem_scraper.tasks import refresh_house_heater_history
+from rotem_scraper.tasks import sync_refresh_house_heater_history
 
 
 class Command43ParserTests(TestCase):
@@ -86,6 +86,6 @@ class HeaterHistoryRefreshTaskTests(TestCase):
                 }
             ],
         }
-        result = refresh_house_heater_history(house_id=self.house.id)
+        result = sync_refresh_house_heater_history(self.house.id)
         self.assertEqual(result["status"], "success")
         self.assertEqual(HouseHeaterRuntimeCache.objects.filter(house=self.house).count(), 2)

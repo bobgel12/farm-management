@@ -138,6 +138,31 @@ class MonitoringApiService {
     });
     return response.data;
   }
+
+  /**
+   * Cached CommandID 43 heater history only (fast; no Rotem call).
+   */
+  async getHouseHeaterHistory(houseId: number): Promise<{ heater_history: Record<string, unknown> }> {
+    const response = await api.get(`/houses/${houseId}/heater-history/`, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  /**
+   * Fetch CommandID 43 from Rotem and return updated heater history.
+   */
+  async refreshHouseHeaterHistory(houseId: number): Promise<{
+    heater_history: Record<string, unknown>;
+    refresh_result?: Record<string, unknown>;
+  }> {
+    const response = await api.post(
+      `/houses/${houseId}/heater-history/refresh/`,
+      {},
+      { headers: this.getAuthHeaders() }
+    );
+    return response.data;
+  }
 }
 
 const monitoringApiService = new MonitoringApiService();

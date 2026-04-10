@@ -36,8 +36,8 @@ from tasks.serializers import TaskSerializer
 from collections import defaultdict
 from .services.water_forecast_service import WaterForecastService
 from .services.monitoring_contract import MonitoringUnits
-from rotem_scraper.models import HouseHeaterRuntimeCache
-from rotem_scraper.tasks import refresh_house_heater_history
+from .services.heater_history_payload import build_heater_history_payload
+from rotem_scraper.tasks import sync_refresh_house_heater_history
 
 
 class HouseListCreateView(generics.ListCreateAPIView):
@@ -586,101 +586,12 @@ def house_details(request, house_id):
         else:
             upcoming_tasks.append(task)
     
-    heater_cache_rows = list(
-        HouseHeaterRuntimeCache.objects.filter(house=house).order_by("growth_day")
-    )
-    now = timezone.now()
-    cache_last_synced_at = max(
-        (row.last_synced_at for row in heater_cache_rows),
-        default=None,
-    )
-    cache_stale_after_minutes = 30
-    is_stale = True
-    if cache_last_synced_at:
-        is_stale = (now - cache_last_synced_at).total_seconds() > (cache_stale_after_minutes * 60)
-
-    sync_status = "fresh"
-    if not heater_cache_rows:
-        sync_status = "missing"
-    elif is_stale:
-        sync_status = "stale"
-
-    # Fire-and-forget refresh when cache is missing/stale.
-    if sync_status in {"missing", "stale"}:
-        try:
-            refresh_house_heater_history.delay(house.id)
-            sync_status = "refreshing"
-        except Exception:
-            # Keep response non-blocking even if broker is unavailable.
-            pass
-
-    summary_row = next((row for row in heater_cache_rows if row.is_summary_row), None)
-    daily_rows = [row for row in heater_cache_rows if not row.is_summary_row]
-
-    def _format_per_device(per_device_json):
-        if not isinstance(per_device_json, dict):
-            return {}
-        out = {}
-        for key, value in per_device_json.items():
-            if isinstance(value, dict):
-                minutes = int(value.get("minutes") or 0)
-                out[key] = {
-                    "minutes": minutes,
-                    "hours": round(minutes / 60.0, 2),
-                    "raw_value": value.get("raw_value"),
-                }
-            else:
-                minutes = int(value or 0)
-                out[key] = {
-                    "minutes": minutes,
-                    "hours": round(minutes / 60.0, 2),
-                    "raw_value": None,
-                }
-        return out
-
-    daily_payload = []
-    for row in daily_rows:
-        daily_payload.append({
-            "growth_day": row.growth_day,
-            "date": row.record_date.isoformat() if row.record_date else None,
-            "total_minutes": row.total_runtime_minutes,
-            "total_hours": round(row.total_runtime_minutes / 60.0, 2),
-            "total_computation_method": row.total_computation_method,
-            "per_device": _format_per_device(row.per_device_json),
-            "last_synced_at": row.last_synced_at.isoformat() if row.last_synced_at else None,
-        })
-
-    summary_minutes = sum(item["total_minutes"] for item in daily_payload)
-    device_keys = set()
-    for item in daily_payload:
-        device_keys.update(item["per_device"].keys())
-
-    heater_history = {
-        "summary": {
-            "total_minutes": summary_minutes,
-            "total_hours": round(summary_minutes / 60.0, 2),
-            "days_count": len(daily_payload),
-            "device_count": len(device_keys),
-            "summary_row_minutes": summary_row.total_runtime_minutes if summary_row else None,
-            "summary_row_hours": round(summary_row.total_runtime_minutes / 60.0, 2) if summary_row else None,
-        },
-        "daily": daily_payload,
-        "latest": daily_payload[-1] if daily_payload else None,
-        "freshness": {
-            "last_synced_at": cache_last_synced_at.isoformat() if cache_last_synced_at else None,
-            "stale": is_stale if heater_cache_rows else True,
-            "sync_status": sync_status,
-            "stale_after_minutes": cache_stale_after_minutes,
-        },
-    }
-
-    # Build comprehensive response
+    # Build comprehensive response (heater CommandID 43 history: load via dedicated endpoints on demand)
     details = {
         'house': HouseSerializer(house).data,
         'monitoring': HouseMonitoringSnapshotSerializer(snapshot).data if snapshot else None,
         'alarms': HouseAlarmSerializer(active_alarms, many=True).data,
         'stats': house.get_stats(days=7) if snapshot else None,
-        'heater_history': heater_history,
         'tasks': {
             'all': TaskSerializer(tasks, many=True).data,
             'today': TaskSerializer(today_tasks, many=True).data,
@@ -694,6 +605,36 @@ def house_details(request, house_id):
     }
     
     return Response(details)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_heater_history(request, house_id):
+    """Cached CommandID 43 heater history only (fast; no Rotem call)."""
+    house = get_object_or_404(House, id=house_id)
+    return Response({"heater_history": build_heater_history_payload(house)})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def house_heater_history_refresh(request, house_id):
+    """Fetch CommandID 43 from Rotem, update cache, return serialized heater history."""
+    house = get_object_or_404(House, id=house_id)
+    result = sync_refresh_house_heater_history(house.id)
+    if result.get("status") == "success":
+        return Response(
+            {
+                "heater_history": build_heater_history_payload(house),
+                "refresh_result": result,
+            }
+        )
+    status_code = status.HTTP_400_BAD_REQUEST
+    if result.get("reason") in ("login_failed", "empty_response"):
+        status_code = status.HTTP_502_BAD_GATEWAY
+    return Response(
+        {"error": result.get("reason", "refresh_failed"), "refresh_result": result},
+        status=status_code,
+    )
 
 
 @api_view(['GET'])

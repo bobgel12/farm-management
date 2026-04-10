@@ -23,6 +23,16 @@ urlpatterns = [
     # Detailed house information
     path('houses/<int:house_id>/details/', views.house_details, name='house-details'),
     path(
+        'houses/<int:house_id>/heater-history/',
+        views.house_heater_history,
+        name='house-heater-history',
+    ),
+    path(
+        'houses/<int:house_id>/heater-history/refresh/',
+        views.house_heater_history_refresh,
+        name='house-heater-history-refresh',
+    ),
+    path(
         'houses/<int:house_id>/flocks/sync-from-rotem/',
         views.sync_flock_from_rotem,
         name='house-flocks-sync-from-rotem',
