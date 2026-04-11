@@ -70,14 +70,18 @@ class MonitoringApiService {
   /**
    * Get derived operational KPIs for house overview.
    * @param options.dodReferenceDate ISO date (YYYY-MM-DD) to compare that day vs the prior day for water/feed DOD.
+   * @param options.cacheBust Unique value per logical request so browsers/proxies cannot serve a stale GET.
    */
   async getHouseMonitoringKpis(
     houseId: number,
-    options?: { dodReferenceDate?: string | null }
+    options?: { dodReferenceDate?: string | null; cacheBust?: string | number }
   ): Promise<HouseMonitoringKpis> {
     const params: Record<string, string> = {};
     if (options?.dodReferenceDate) {
       params.dod_reference_date = options.dodReferenceDate;
+    }
+    if (options?.cacheBust != null) {
+      params._ = String(options.cacheBust);
     }
     const response = await api.get(`/houses/${houseId}/monitoring/kpis/`, {
       headers: this.getAuthHeaders(),
@@ -150,10 +154,17 @@ class MonitoringApiService {
 
   /**
    * Cached CommandID 43 heater history only (fast; no Rotem call).
+   * @param cacheBust Optional unique value so repeated GETs are not served from HTTP cache.
    */
-  async getHouseHeaterHistory(houseId: number): Promise<{ heater_history: Record<string, unknown> }> {
+  async getHouseHeaterHistory(
+    houseId: number,
+    cacheBust?: string | number
+  ): Promise<{ heater_history: Record<string, unknown> }> {
+    const params =
+      cacheBust != null ? { _: String(cacheBust) } : undefined;
     const response = await api.get(`/houses/${houseId}/heater-history/`, {
       headers: this.getAuthHeaders(),
+      ...(params ? { params } : {}),
     });
     return response.data;
   }
