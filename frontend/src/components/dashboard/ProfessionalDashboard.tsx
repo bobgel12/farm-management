@@ -40,39 +40,92 @@ interface StatCardProps {
     isPositive: boolean;
   };
   subtitle?: string;
+  /** When set, the main metrics (value, title, subtitle) navigate here; icon/trend stay static. */
+  navigateTo?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, trend, subtitle }) => (
-  <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
-    <CardContent>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Avatar sx={{ bgcolor: `${color}.main`, width: 48, height: 48 }}>
-          {icon}
-        </Avatar>
-        {trend && (
-          <Chip
-            icon={<TrendingUpIcon />}
-            label={`${trend.isPositive ? '+' : ''}${trend.value}%`}
-            color={trend.isPositive ? 'success' : 'error'}
-            size="small"
-            variant="outlined"
-          />
-        )}
-      </Box>
-      <Typography variant="h4" fontWeight={700} color="text.primary" gutterBottom>
-        {value}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>
-        {title}
-      </Typography>
-      {subtitle && (
-        <Typography variant="caption" color="text.secondary">
-          {subtitle}
-        </Typography>
-      )}
-    </CardContent>
-  </Card>
-);
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, trend, subtitle, navigateTo }) => {
+  const navigate = useNavigate();
+  const clickable = Boolean(navigateTo);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!clickable || !navigateTo) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      navigate(navigateTo);
+    }
+  };
+
+  return (
+    <Card
+      sx={{
+        height: '100%',
+        position: 'relative',
+        overflow: 'visible',
+        ...(clickable && {
+          '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+        }),
+      }}
+    >
+      <CardContent>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <Avatar sx={{ bgcolor: `${color}.main`, width: 48, height: 48 }}>{icon}</Avatar>
+          {trend && (
+            <Chip
+              icon={<TrendingUpIcon />}
+              label={`${trend.isPositive ? '+' : ''}${trend.value}%`}
+              color={trend.isPositive ? 'success' : 'error'}
+              size="small"
+              variant="outlined"
+            />
+          )}
+        </Box>
+        <Box
+          role={clickable ? 'button' : undefined}
+          tabIndex={clickable ? 0 : undefined}
+          onClick={clickable && navigateTo ? () => navigate(navigateTo) : undefined}
+          onKeyDown={handleKeyDown}
+          sx={
+            clickable
+              ? {
+                  cursor: 'pointer',
+                  borderRadius: 1,
+                  mx: -0.5,
+                  px: 0.5,
+                  py: 0.25,
+                  transition: 'background-color 0.15s ease',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                }
+              : undefined
+          }
+        >
+          <Typography variant="h4" fontWeight={700} color="text.primary" gutterBottom>
+            {value}
+          </Typography>
+          <Typography
+            variant="body2"
+            color={clickable ? 'primary' : 'text.secondary'}
+            gutterBottom
+            sx={clickable ? { textDecoration: 'underline', textDecorationColor: 'transparent', '&:hover': { textDecorationColor: 'currentColor' } } : undefined}
+          >
+            {title}
+          </Typography>
+          {subtitle && (
+            <Typography
+              variant="caption"
+              color={clickable ? 'primary.main' : 'text.secondary'}
+              sx={clickable ? { display: 'block', opacity: 0.9 } : undefined}
+            >
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface TaskProgressProps {
   title: string;
@@ -185,6 +238,7 @@ const ProfessionalDashboard: React.FC = () => {
             color="primary"
             subtitle={`${activeFarms} active`}
             trend={{ value: 12, isPositive: true }}
+            navigateTo="/farms"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -195,6 +249,7 @@ const ProfessionalDashboard: React.FC = () => {
             color="secondary"
             subtitle={`${totalHouses} total`}
             trend={{ value: 8, isPositive: true }}
+            navigateTo="/farms"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -205,6 +260,7 @@ const ProfessionalDashboard: React.FC = () => {
             color="success"
             subtitle={`${totalWorkers} total`}
             trend={{ value: 5, isPositive: true }}
+            navigateTo="/workers"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -214,6 +270,7 @@ const ProfessionalDashboard: React.FC = () => {
             icon={<ProgramIcon />}
             color="warning"
             subtitle={`${totalPrograms} total`}
+            navigateTo="/programs"
           />
         </Grid>
       </Grid>
