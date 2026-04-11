@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -62,6 +62,25 @@ function todayIsoLocal(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Target water guideline: flock day age × 80 (same unit as daily water totals from snapshots). */
+const TARGET_WATER_PER_DAY_AGE = 80;
+
+function houseDayAge(house: HouseComparison): number | null {
+  const v = house.age_days ?? house.current_day;
+  if (v == null || Number.isNaN(Number(v))) return null;
+  return Number(v);
+}
+
+function formatOpsWaterL(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return '—';
+  return `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })} L`;
+}
+
+function formatOpsFeedLb(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return '—';
+  return `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })} lb`;
+}
+
 interface HouseComparison {
   house_id: number;
   house_number: number;
@@ -120,8 +139,35 @@ const ComparisonDashboard: React.FC = () => {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [dodRefDate, setDodRefDate] = useState(todayIsoLocal);
+
+  /** Hydrate / sync DOD from ?dod= (shareable links, browser history). */
+  useEffect(() => {
+    const u = searchParams.get('dod');
+    if (u && /^\d{4}-\d{2}-\d{2}$/.test(u)) {
+      setDodRefDate((prev) => (u !== prev ? u : prev));
+    }
+  }, [searchParams]);
+
+  const handleDodRefDateChange = useCallback(
+    (value: string) => {
+      const v = value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : todayIsoLocal();
+      setDodRefDate(v);
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.set('dod', v);
+          return n;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
   const [opsKpis, setOpsKpis] = useState<Record<number, HouseMonitoringKpis | null>>({});
+  const [opsHeaterRefDayHours, setOpsHeaterRefDayHours] = useState<Record<number, number | null>>({});
   const [opsLoading, setOpsLoading] = useState(false);
+  /** Ignore stale async results when DOD date or house list changes quickly. */
+  const opsFetchGenRef = useRef(0);
 
   const viewFromUrl = searchParams.get('view');
   const activeTab = useMemo(() => {
@@ -149,28 +195,50 @@ const ComparisonDashboard: React.FC = () => {
   useEffect(() => {
     if (activeTab !== 3 || houses.length === 0) {
       setOpsLoading(false);
+      setOpsHeaterRefDayHours({});
+      setOpsKpis({});
       return;
     }
-    let cancelled = false;
+    const fetchGen = ++opsFetchGenRef.current;
+    setOpsKpis({});
+    setOpsHeaterRefDayHours({});
     setOpsLoading(true);
+    const cacheBust = `${dodRefDate}-${fetchGen}-${Date.now()}`;
+    let cancelled = false;
     (async () => {
-      const next: Record<number, HouseMonitoringKpis | null> = {};
+      const nextKpi: Record<number, HouseMonitoringKpis | null> = {};
+      const nextHeat: Record<number, number | null> = {};
       await Promise.all(
         houses.map(async (h) => {
           try {
-            const k = await monitoringApi.getHouseMonitoringKpis(h.house_id, {
-              dodReferenceDate: dodRefDate,
-            });
-            next[h.house_id] = k;
+            const [k, heaterRes] = await Promise.all([
+              monitoringApi.getHouseMonitoringKpis(h.house_id, {
+                dodReferenceDate: dodRefDate,
+                cacheBust,
+              }),
+              monitoringApi.getHouseHeaterHistory(h.house_id, cacheBust).catch(() => null),
+            ]);
+            nextKpi[h.house_id] = k;
+            if (heaterRes?.heater_history) {
+              const daily = (heaterRes.heater_history as { daily?: Array<{ date?: string | null; total_hours?: number }> })
+                .daily;
+              const row = daily?.find((r) => r.date === dodRefDate);
+              nextHeat[h.house_id] = row?.total_hours ?? null;
+            } else {
+              nextHeat[h.house_id] = null;
+            }
           } catch {
-            next[h.house_id] = null;
+            nextKpi[h.house_id] = null;
+            nextHeat[h.house_id] = null;
           }
         })
       );
-      if (!cancelled) {
-        setOpsKpis(next);
-        setOpsLoading(false);
+      if (cancelled || fetchGen !== opsFetchGenRef.current) {
+        return;
       }
+      setOpsKpis(nextKpi);
+      setOpsHeaterRefDayHours(nextHeat);
+      setOpsLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -453,12 +521,14 @@ const ComparisonDashboard: React.FC = () => {
             type="date"
             size="small"
             value={dodRefDate}
-            onChange={(e) => setDodRefDate(e.target.value)}
+            onChange={(e) => handleDodRefDateChange(e.target.value)}
             InputLabelProps={{ shrink: true }}
             sx={{ minWidth: 200 }}
           />
           <Typography variant="body2" color="text.secondary">
-            Same calendar day vs prior day for all houses (water, feed). Heater shows trailing 24h from KPIs.
+            Water and feed columns use max snapshot value for the reference and prior calendar days. Target H₂O = flock
+            day × {TARGET_WATER_PER_DAY_AGE}. Heater uses total hours for the reference day from cached Rotem history
+            when available; otherwise a 24h estimate from snapshots (marked *).
           </Typography>
           {opsLoading && <CircularProgress size={22} />}
         </Box>
@@ -510,9 +580,38 @@ const ComparisonDashboard: React.FC = () => {
 
                 {activeTab === 3 && (
                   <>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>Water Δ%</TableCell>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>Feed Δ%</TableCell>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>Heater 24h</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 88 }}>
+                      <Tooltip title={`Target water = flock day age × ${TARGET_WATER_PER_DAY_AGE}`}>
+                        <span>Target H₂O</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 86 }}>
+                      <Tooltip title="Water (reference calendar day), L">
+                        <span>Water ref</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 86 }}>
+                      <Tooltip title="Water (prior calendar day), L">
+                        <span>Water prior</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 80 }}>Water Δ%</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 86 }}>
+                      <Tooltip title="Feed (reference calendar day), lb">
+                        <span>Feed ref</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 86 }}>
+                      <Tooltip title="Feed (prior calendar day), lb">
+                        <span>Feed prior</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 80 }}>Feed Δ%</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 96 }}>
+                      <Tooltip title="Total heater runtime for reference day (Rotem cache), else 24h est. *">
+                        <span>Heater (h)</span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell sx={{ ...headerCellStyle, minWidth: 80 }}>DOD data</TableCell>
                   </>
                 )}
@@ -590,7 +689,7 @@ const ComparisonDashboard: React.FC = () => {
             <TableBody>
               {houses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={20} align="center">
+                  <TableCell colSpan={28} align="center">
                     <Typography variant="body2" color="text.secondary" py={4}>
                       No houses found
                     </Typography>
@@ -653,10 +752,42 @@ const ComparisonDashboard: React.FC = () => {
                       const k = opsKpis[house.house_id];
                       const w = k?.water_day_over_day?.delta_pct;
                       const f = k?.feed_day_over_day?.delta_pct;
-                      const hh = k?.heater_runtime?.hours_24h;
+                      const wCur = k?.water_day_over_day?.current;
+                      const wPrev = k?.water_day_over_day?.previous;
+                      const fCur = k?.feed_day_over_day?.current;
+                      const fPrev = k?.feed_day_over_day?.previous;
+                      const hh24 = k?.heater_runtime?.hours_24h;
+                      const refDayHeater = opsHeaterRefDayHours[house.house_id];
                       const dodOk = k?.data_quality?.enough_for_dod_delta;
+                      const age = houseDayAge(house);
+                      const targetH2o = age != null ? age * TARGET_WATER_PER_DAY_AGE : null;
+                      const heaterDisplay =
+                        refDayHeater != null && !Number.isNaN(refDayHeater)
+                          ? { text: `${refDayHeater.toFixed(1)} h`, title: 'Total heater runtime for reference day (Rotem cache)' }
+                          : hh24 != null
+                            ? { text: `${hh24.toFixed(1)} h*`, title: '24h trailing estimate from snapshots (no ref. day in heater cache)' }
+                            : { text: '—', title: '' };
                       return (
                         <>
+                          <TableCell sx={cellStyle}>
+                            {opsLoading ? (
+                              <Typography variant="caption">…</Typography>
+                            ) : (
+                              <Typography variant="body2" fontWeight="medium">
+                                {targetH2o != null ? Math.round(targetH2o).toLocaleString() : '—'}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            <Typography variant="body2" color="info.main">
+                              {opsLoading ? '…' : formatOpsWaterL(wCur)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            <Typography variant="body2" color="text.secondary">
+                              {opsLoading ? '…' : formatOpsWaterL(wPrev)}
+                            </Typography>
+                          </TableCell>
                           <TableCell sx={cellStyle}>
                             {opsLoading ? (
                               <Typography variant="caption">…</Typography>
@@ -670,6 +801,16 @@ const ComparisonDashboard: React.FC = () => {
                                 }
                               />
                             )}
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            <Typography variant="body2" color="warning.main">
+                              {opsLoading ? '…' : formatOpsFeedLb(fCur)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            <Typography variant="body2" color="text.secondary">
+                              {opsLoading ? '…' : formatOpsFeedLb(fPrev)}
+                            </Typography>
                           </TableCell>
                           <TableCell sx={cellStyle}>
                             {opsLoading ? (
@@ -686,9 +827,9 @@ const ComparisonDashboard: React.FC = () => {
                             )}
                           </TableCell>
                           <TableCell sx={cellStyle}>
-                            <Typography variant="body2">
-                              {!opsLoading && k ? (hh != null ? `${hh.toFixed(1)} h` : '—') : opsLoading ? '…' : '—'}
-                            </Typography>
+                            <Tooltip title={heaterDisplay.title}>
+                              <Typography variant="body2">{opsLoading ? '…' : heaterDisplay.text}</Typography>
+                            </Tooltip>
                           </TableCell>
                           <TableCell sx={cellStyle}>
                             {!opsLoading && k ? (
