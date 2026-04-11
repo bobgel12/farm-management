@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -19,6 +19,10 @@ import {
   Button,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Refresh,
@@ -35,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import monitoringApi from '../../services/monitoringApi';
 import { HouseMonitoringKpis } from '../../types/monitoring';
+import HouseMonitoringCharts from './HouseMonitoringCharts';
 
 /** Command 43 heater history daily row (API `heater_history.daily`). */
 interface HeaterHistoryDailyRow {
@@ -61,6 +66,11 @@ interface HouseOverviewTabProps {
   alarms: any[];
   stats: any;
   onRefresh: () => void;
+  /** Day-over-day reference date (YYYY-MM-DD), controlled from URL / storage */
+  dodReferenceDate: string | null;
+  onDodReferenceDateChange: (date: string | null) => void;
+  /** Navigate to Water History tab; optional calendar day to highlight */
+  onNavigateToWaterHistory?: (focusDate?: string | null) => void;
 }
 
 const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
@@ -69,6 +79,9 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
   alarms,
   stats,
   onRefresh,
+  dodReferenceDate,
+  onDodReferenceDateChange,
+  onNavigateToWaterHistory,
 }) => {
   const [kpis, setKpis] = useState<HouseMonitoringKpis | null>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
@@ -76,11 +89,14 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
   const [heaterRotemLoading, setHeaterRotemLoading] = useState(false);
   const [heaterCacheLoading, setHeaterCacheLoading] = useState(false);
   const [heaterError, setHeaterError] = useState<string | null>(null);
-  const [dodReferenceDate, setDodReferenceDate] = useState<string | null>(null);
   const [selectedHeaterGrowthDay, setSelectedHeaterGrowthDay] = useState<number | null>(null);
+  const [heaterDetailOpen, setHeaterDetailOpen] = useState(false);
+  const [trendOpen, setTrendOpen] = useState(false);
+  const [trendMetric, setTrendMetric] = useState<'water' | 'feed'>('water');
+  const dodRef = useRef(dodReferenceDate);
+  dodRef.current = dodReferenceDate;
 
   useEffect(() => {
-    setDodReferenceDate(null);
     setSelectedHeaterGrowthDay(null);
     setHeaterHistory(null);
     setHeaterError(null);
@@ -105,18 +121,41 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
     loadKpis();
   }, [house?.id, monitoring?.timestamp, dodReferenceDate]);
 
-  const applyHeaterHistoryPayload = (hist: Record<string, unknown>) => {
-    setHeaterHistory(hist);
-    const daily = hist?.daily as HeaterHistoryDailyRow[] | undefined;
-    if (daily && daily.length > 0) {
-      const last = daily[daily.length - 1];
-      setSelectedHeaterGrowthDay(last.growth_day);
-      setDodReferenceDate(typeof last.date === 'string' ? last.date : null);
-    } else {
-      setSelectedHeaterGrowthDay(null);
-      setDodReferenceDate(null);
-    }
-  };
+  const applyHeaterHistoryPayload = useCallback(
+    (hist: Record<string, unknown>, alignDod: string | null | undefined) => {
+      setHeaterHistory(hist);
+      const daily = hist?.daily as HeaterHistoryDailyRow[] | undefined;
+      if (daily && daily.length > 0) {
+        const match =
+          alignDod != null && alignDod !== ''
+            ? daily.find((r) => r.date === alignDod)
+            : undefined;
+        const pick = match || daily[daily.length - 1];
+        setSelectedHeaterGrowthDay(pick.growth_day);
+      } else {
+        setSelectedHeaterGrowthDay(null);
+      }
+    },
+    []
+  );
+
+  /** Auto-load cached heater history when house changes (cheap path; Rotem fetch stays manual). */
+  useEffect(() => {
+    if (!house?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await monitoringApi.getHouseHeaterHistory(house.id);
+        if (cancelled) return;
+        applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>, dodRef.current);
+      } catch {
+        /* ignore — user can load manually */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [house?.id, applyHeaterHistoryPayload]);
 
   const loadHeaterHistoryCached = async () => {
     if (!house?.id) return;
@@ -124,7 +163,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
       setHeaterCacheLoading(true);
       setHeaterError(null);
       const data = await monitoringApi.getHouseHeaterHistory(house.id);
-      applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>);
+      applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>, dodRef.current);
     } catch (error) {
       console.error('Failed to load cached heater history:', error);
       setHeaterError('Could not load saved heater history.');
@@ -139,7 +178,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
       setHeaterRotemLoading(true);
       setHeaterError(null);
       const data = await monitoringApi.refreshHouseHeaterHistory(house.id);
-      applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>);
+      applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>, dodRef.current);
     } catch (error: any) {
       const msg =
         error?.response?.data?.error ||
@@ -217,6 +256,13 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
     selectedHeaterGrowthDay != null
       ? heaterDaily.find((r) => r.growth_day === selectedHeaterGrowthDay)
       : undefined;
+
+  useEffect(() => {
+    const daily = heaterHistory?.daily as HeaterHistoryDailyRow[] | undefined;
+    if (!daily?.length || dodReferenceDate == null || dodReferenceDate === '') return;
+    const row = daily.find((r) => r.date === dodReferenceDate);
+    if (row) setSelectedHeaterGrowthDay(row.growth_day);
+  }, [dodReferenceDate, heaterHistory]);
 
   if (!monitoring) {
     return (
@@ -307,8 +353,8 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" mb={1}>
-                Not loaded with the page. Use the buttons above so the house overview stays fast. Select a row to
-                align water/feed day-over-day with that calendar day (when a date is present).
+                Cached history loads automatically when you open Overview; use &quot;Fetch from Rotem&quot; for the
+                latest from the controller. Select a row to align water/feed day-over-day with that calendar day.
               </Typography>
               {heaterError && (
                 <Alert severity="error" sx={{ mb: 1 }} onClose={() => setHeaterError(null)}>
@@ -360,7 +406,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                               selected={selectedHeaterGrowthDay === row.growth_day}
                               onClick={() => {
                                 setSelectedHeaterGrowthDay(row.growth_day);
-                                setDodReferenceDate(row.date ?? null);
+                                onDodReferenceDateChange(row.date ?? null);
                               }}
                               sx={{
                                 cursor: 'pointer',
@@ -393,11 +439,16 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                         borderColor: 'divider',
                       }}
                     >
-                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        Selected — Day {selectedHeaterRow.growth_day}
-                        {selectedHeaterRow.date ? ` · ${selectedHeaterRow.date}` : ''} — per device
-                      </Typography>
-                      <Box display="flex" flexWrap="wrap" gap={0.5}>
+                      <Box display="flex" flexWrap="wrap" alignItems="center" justifyContent="space-between" gap={1}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Selected — Day {selectedHeaterRow.growth_day}
+                          {selectedHeaterRow.date ? ` · ${selectedHeaterRow.date}` : ''} — per device
+                        </Typography>
+                        <Button size="small" variant="outlined" onClick={() => setHeaterDetailOpen(true)}>
+                          Open day details
+                        </Button>
+                      </Box>
+                      <Box display="flex" flexWrap="wrap" gap={0.5} mt={1}>
                         {Object.entries(selectedHeaterRow.per_device || {}).map(([device, value]) => (
                           <Chip
                             key={device}
@@ -420,18 +471,45 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card>
+          <Card
+            variant="outlined"
+            sx={{
+              cursor: onNavigateToWaterHistory ? 'pointer' : 'default',
+              transition: 'box-shadow 0.2s',
+              '&:hover': onNavigateToWaterHistory ? { boxShadow: 2 } : {},
+            }}
+            onClick={() => {
+              if (onNavigateToWaterHistory) {
+                onNavigateToWaterHistory(kpis?.day_over_day_context?.reference_date ?? null);
+              }
+            }}
+          >
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+              <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
                 <Box display="flex" alignItems="center" gap={1}>
                   <TrendingUp color="info" />
                   <Typography variant="subtitle2">Water Day-over-Day</Typography>
                 </Box>
-                <Chip
-                  size="small"
-                  color={getTrendColor(kpis?.water_day_over_day?.delta_pct)}
-                  label={formatDelta(kpis?.water_day_over_day?.delta, kpis?.water_day_over_day?.delta_pct, 'L')}
-                />
+                <Box display="flex" flexDirection="column" alignItems="flex-end" gap={0.5}>
+                  <Chip
+                    size="small"
+                    color={getTrendColor(kpis?.water_day_over_day?.delta_pct)}
+                    label={formatDelta(kpis?.water_day_over_day?.delta, kpis?.water_day_over_day?.delta_pct, 'L')}
+                  />
+                  <Tooltip title="Short-term trend (snapshots)">
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTrendMetric('water');
+                        setTrendOpen(true);
+                      }}
+                    >
+                      View trend
+                    </Button>
+                  </Tooltip>
+                </Box>
               </Box>
               <Typography variant="caption" color="text.secondary" component="div">
                 {formatDodCaption(
@@ -440,14 +518,26 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                   'L'
                 )}
               </Typography>
+              {onNavigateToWaterHistory && (
+                <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
+                  Click card to open Water History
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card>
+          <Card
+            variant="outlined"
+            sx={{ cursor: 'pointer', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 2 } }}
+            onClick={() => {
+              setTrendMetric('feed');
+              setTrendOpen(true);
+            }}
+          >
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+              <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
                 <Box display="flex" alignItems="center" gap={1}>
                   <TrendingFlat color="secondary" />
                   <Typography variant="subtitle2">Feed Day-over-Day</Typography>
@@ -464,6 +554,9 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                   kpis?.feed_day_over_day?.previous,
                   'lb'
                 )}
+              </Typography>
+              <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
+                Click card for consumption trend
               </Typography>
             </CardContent>
           </Card>
@@ -751,6 +844,46 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
           </Card>
         </Grid>
       </Grid>
+
+      <Dialog open={heaterDetailOpen} onClose={() => setHeaterDetailOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Heater runtime — Day {selectedHeaterRow?.growth_day ?? '—'}
+          {selectedHeaterRow?.date ? ` · ${selectedHeaterRow.date}` : ''}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Per-device hours for the selected day
+          </Typography>
+          <Box display="flex" flexWrap="wrap" gap={0.5}>
+            {selectedHeaterRow &&
+              Object.entries(selectedHeaterRow.per_device || {}).map(([device, value]) => (
+                <Chip
+                  key={device}
+                  size="medium"
+                  variant="outlined"
+                  label={`${device.replace(/_/g, ' ')}: ${value.hours} h`}
+                />
+              ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHeaterDetailOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={trendOpen} onClose={() => setTrendOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {trendMetric === 'water' ? 'Water' : 'Feed'} — recent snapshots
+        </DialogTitle>
+        <DialogContent>
+          {house?.id ? (
+            <HouseMonitoringCharts houseId={house.id} highlightMetric={trendMetric} />
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTrendOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

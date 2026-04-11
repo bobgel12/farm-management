@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -28,6 +28,7 @@ import {
   Link,
   Tabs,
   Tab,
+  TextField,
 } from '@mui/material';
 import {
   Refresh,
@@ -44,9 +45,22 @@ import {
   Water,
   Air,
   Restaurant,
+  LocalFireDepartment,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { useFarm } from '../../contexts/FarmContext';
+import monitoringApi from '../../services/monitoringApi';
+import { HouseMonitoringKpis } from '../../types/monitoring';
+
+const COMPARISON_VIEW_KEYS = ['consumption', 'climate', 'environment', 'operations'] as const;
+
+function todayIsoLocal(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 interface HouseComparison {
   house_id: number;
@@ -95,6 +109,7 @@ type SortDirection = 'asc' | 'desc';
 const ComparisonDashboard: React.FC = () => {
   const { farmId } = useParams<{ farmId?: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { farms } = useFarm();
   const [houses, setHouses] = useState<HouseComparison[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,9 +119,63 @@ const ComparisonDashboard: React.FC = () => {
   const [farmFilter, setFarmFilter] = useState<number | 'all'>(farmId ? parseInt(farmId) : 'all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
-  const [activeTab, setActiveTab] = useState(0);
+  const [dodRefDate, setDodRefDate] = useState(todayIsoLocal);
+  const [opsKpis, setOpsKpis] = useState<Record<number, HouseMonitoringKpis | null>>({});
+  const [opsLoading, setOpsLoading] = useState(false);
+
+  const viewFromUrl = searchParams.get('view');
+  const activeTab = useMemo(() => {
+    const idx = viewFromUrl ? COMPARISON_VIEW_KEYS.indexOf(viewFromUrl as (typeof COMPARISON_VIEW_KEYS)[number]) : -1;
+    return idx >= 0 ? idx : 0;
+  }, [viewFromUrl]);
+
+  const setViewTab = useCallback(
+    (index: number) => {
+      const key = COMPARISON_VIEW_KEYS[index] ?? 'consumption';
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.set('view', key);
+          return n;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const currentFarm = farmId ? farms.find(f => f.id === parseInt(farmId)) : null;
+
+  useEffect(() => {
+    if (activeTab !== 3 || houses.length === 0) {
+      setOpsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setOpsLoading(true);
+    (async () => {
+      const next: Record<number, HouseMonitoringKpis | null> = {};
+      await Promise.all(
+        houses.map(async (h) => {
+          try {
+            const k = await monitoringApi.getHouseMonitoringKpis(h.house_id, {
+              dodReferenceDate: dodRefDate,
+            });
+            next[h.house_id] = k;
+          } catch {
+            next[h.house_id] = null;
+          }
+        })
+      );
+      if (!cancelled) {
+        setOpsKpis(next);
+        setOpsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, houses, dodRefDate]);
 
   const loadComparisonData = async () => {
     try {
@@ -258,11 +327,22 @@ const ComparisonDashboard: React.FC = () => {
   };
 
   const handleHouseClick = (house: HouseComparison) => {
+    const qs = new URLSearchParams();
+    qs.set('tab', 'overview');
+    qs.set('dod', dodRefDate);
     if (farmId) {
-      navigate(`/farms/${farmId}/houses/${house.house_id}`);
+      navigate(`/farms/${farmId}/houses/${house.house_id}?${qs.toString()}`);
     } else {
-      navigate(`/farms/${house.farm_id}/houses/${house.house_id}`);
+      navigate(`/farms/${house.farm_id}/houses/${house.house_id}?${qs.toString()}`);
     }
+  };
+
+  const opsDeltaChipColor = (deltaPct: number | null | undefined): 'success' | 'warning' | 'error' | 'default' => {
+    if (deltaPct === null || deltaPct === undefined) return 'default';
+    const abs = Math.abs(deltaPct);
+    if (abs <= 10) return 'success';
+    if (abs <= 25) return 'warning';
+    return 'error';
   };
 
   if (loading && houses.length === 0) {
@@ -359,11 +439,30 @@ const ComparisonDashboard: React.FC = () => {
       )}
 
       {/* View Tabs */}
-      <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)} sx={{ mb: 2 }}>
+      <Tabs value={activeTab} onChange={(_, val) => setViewTab(val)} sx={{ mb: 2 }}>
         <Tab icon={<Water />} label="Consumption" iconPosition="start" />
         <Tab icon={<Thermostat />} label="Climate" iconPosition="start" />
         <Tab icon={<Air />} label="Environment" iconPosition="start" />
+        <Tab icon={<LocalFireDepartment />} label="Day-over-day" iconPosition="start" />
       </Tabs>
+
+      {activeTab === 3 && (
+        <Box display="flex" flexWrap="wrap" alignItems="center" gap={2} sx={{ mb: 2 }}>
+          <TextField
+            label="DOD reference date"
+            type="date"
+            size="small"
+            value={dodRefDate}
+            onChange={(e) => setDodRefDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 200 }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            Same calendar day vs prior day for all houses (water, feed). Heater shows trailing 24h from KPIs.
+          </Typography>
+          {opsLoading && <CircularProgress size={22} />}
+        </Box>
+      )}
 
       {/* Table */}
       <Card>
@@ -406,6 +505,15 @@ const ComparisonDashboard: React.FC = () => {
                         🌾 Feed
                       </Box>
                     </TableCell>
+                  </>
+                )}
+
+                {activeTab === 3 && (
+                  <>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>Water Δ%</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>Feed Δ%</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>Heater 24h</TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 80 }}>DOD data</TableCell>
                   </>
                 )}
 
@@ -482,7 +590,7 @@ const ComparisonDashboard: React.FC = () => {
             <TableBody>
               {houses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={15} align="center">
+                  <TableCell colSpan={20} align="center">
                     <Typography variant="body2" color="text.secondary" py={4}>
                       No houses found
                     </Typography>
@@ -540,6 +648,63 @@ const ComparisonDashboard: React.FC = () => {
                         </TableCell>
                       </>
                     )}
+
+                    {activeTab === 3 && (() => {
+                      const k = opsKpis[house.house_id];
+                      const w = k?.water_day_over_day?.delta_pct;
+                      const f = k?.feed_day_over_day?.delta_pct;
+                      const hh = k?.heater_runtime?.hours_24h;
+                      const dodOk = k?.data_quality?.enough_for_dod_delta;
+                      return (
+                        <>
+                          <TableCell sx={cellStyle}>
+                            {opsLoading ? (
+                              <Typography variant="caption">…</Typography>
+                            ) : (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color={opsDeltaChipColor(w)}
+                                label={
+                                  w != null && !Number.isNaN(w) ? `${w >= 0 ? '+' : ''}${w.toFixed(1)}%` : '—'
+                                }
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            {opsLoading ? (
+                              <Typography variant="caption">…</Typography>
+                            ) : (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color={opsDeltaChipColor(f)}
+                                label={
+                                  f != null && !Number.isNaN(f) ? `${f >= 0 ? '+' : ''}${f.toFixed(1)}%` : '—'
+                                }
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            <Typography variant="body2">
+                              {!opsLoading && k ? (hh != null ? `${hh.toFixed(1)} h` : '—') : opsLoading ? '…' : '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={cellStyle}>
+                            {!opsLoading && k ? (
+                              <Chip
+                                size="small"
+                                label={dodOk ? 'OK' : 'Thin'}
+                                color={dodOk ? 'success' : 'warning'}
+                                variant="outlined"
+                              />
+                            ) : (
+                              <Typography variant="caption">…</Typography>
+                            )}
+                          </TableCell>
+                        </>
+                      );
+                    })()}
 
                     <TableCell sx={cellStyle}>
                       <Chip 
@@ -639,6 +804,12 @@ const ComparisonDashboard: React.FC = () => {
       </Card>
 
       {/* Summary Cards */}
+      {activeTab === 3 ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Row click opens that house on Overview with the same DOD reference date in the URL. Use the date picker
+          above to compare all houses for the same calendar day.
+        </Typography>
+      ) : (
       <Box display="flex" gap={2} mt={2} flexWrap="wrap">
         <Card sx={{ flex: 1, minWidth: 200 }}>
           <CardContent>
@@ -685,6 +856,7 @@ const ComparisonDashboard: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
+      )}
     </Box>
   );
 };

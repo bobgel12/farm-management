@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
-  Card,
-  CardContent,
-  Grid,
   Chip,
   CircularProgress,
   Alert,
   Tabs,
   Tab,
-  Paper,
   IconButton,
-  Tooltip,
   Breadcrumbs,
   Link,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -43,6 +43,12 @@ import HouseMortalityTab from './HouseMortalityTab';
 import HouseIssuesTab from './HouseIssuesTab';
 import HouseWaterHistoryTab from './HouseWaterHistoryTab';
 import { QuickIssueButton } from '../issues';
+import {
+  tabKeyToIndex,
+  indexToTabKey,
+  overviewStorageKey,
+  lastHouseStorageKey,
+} from '../../utils/houseDetailUrl';
 
 interface HouseDetails {
   house: any;
@@ -86,11 +92,80 @@ function TabPanel(props: TabPanelProps) {
 const HouseDetailPage: React.FC = () => {
   const { houseId, farmId } = useParams<{ houseId: string; farmId?: string }>();
   const navigate = useNavigate();
-  const { farms } = useFarm();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { farms, houses: farmContextHouses, fetchHouses } = useFarm();
   const [houseDetails, setHouseDetails] = useState<HouseDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState(0);
+
+  const farmIdNum = farmId ? parseInt(farmId, 10) : null;
+  const tabKeyRaw = searchParams.get('tab') ?? 'overview';
+  const focusDateParam = searchParams.get('focusDate');
+
+  useEffect(() => {
+    if (farmIdNum) {
+      fetchHouses(farmIdNum);
+    }
+  }, [farmIdNum, fetchHouses]);
+
+  const farmHousesSorted = useMemo(() => {
+    if (!farmIdNum) return [];
+    return farmContextHouses
+      .filter((h) => h.farm_id === farmIdNum)
+      .sort((a, b) => a.house_number - b.house_number);
+  }, [farmContextHouses, farmIdNum]);
+
+  const dodParam = searchParams.get('dod');
+  const effectiveDod = useMemo(() => {
+    if (dodParam) return dodParam;
+    if (!farmIdNum) return null;
+    try {
+      const raw = sessionStorage.getItem(overviewStorageKey(farmIdNum));
+      if (!raw) return null;
+      const o = JSON.parse(raw) as { dod?: string };
+      return o.dod ?? null;
+    } catch {
+      return null;
+    }
+  }, [dodParam, farmIdNum, houseId]);
+
+  const setDodPersisted = useCallback(
+    (d: string | null) => {
+      if (farmIdNum) {
+        try {
+          sessionStorage.setItem(overviewStorageKey(farmIdNum), JSON.stringify({ dod: d }));
+        } catch {
+          /* ignore */
+        }
+      }
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          if (d) n.set('dod', d);
+          else n.delete('dod');
+          return n;
+        },
+        { replace: true }
+      );
+    },
+    [farmIdNum, setSearchParams]
+  );
+
+  const navigateToWaterHistoryTab = useCallback(
+    (focusDate?: string | null) => {
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.set('tab', 'water-history');
+          if (focusDate) n.set('focusDate', focusDate);
+          else n.delete('focusDate');
+          return n;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   // Get farm info
   const currentFarm = farmId ? farms.find(f => f.id === parseInt(farmId)) : null;
@@ -129,11 +204,28 @@ const HouseDetailPage: React.FC = () => {
     });
   }
 
+  const normalizedTabKey =
+    tabKeyRaw === 'water-history' && !isFarmIntegrated ? 'overview' : tabKeyRaw;
+  const activeTab = useMemo(
+    () => tabKeyToIndex(normalizedTabKey, Boolean(isFarmIntegrated)),
+    [normalizedTabKey, isFarmIntegrated]
+  );
+
   useEffect(() => {
     if (houseId) {
       loadHouseDetails();
     }
   }, [houseId]);
+
+  useEffect(() => {
+    if (farmIdNum && houseId) {
+      try {
+        sessionStorage.setItem(lastHouseStorageKey(farmIdNum), houseId);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [farmIdNum, houseId]);
 
   const loadHouseDetails = async () => {
     try {
@@ -149,8 +241,22 @@ const HouseDetailPage: React.FC = () => {
     }
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    const key = indexToTabKey(newValue, Boolean(isFarmIntegrated));
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        n.set('tab', key);
+        return n;
+      },
+      { replace: true }
+    );
+  };
+
+  const handleHouseSwitcherChange = (event: SelectChangeEvent<number>) => {
+    const nextId = event.target.value as number;
+    if (!farmId || String(nextId) === houseId) return;
+    navigate(`/farms/${farmId}/houses/${nextId}?${searchParams.toString()}`);
   };
 
   if (loading) {
@@ -247,6 +353,23 @@ const HouseDetailPage: React.FC = () => {
                   : 'default'
               }
             />
+            {farmId && farmHousesSorted.length > 1 && (
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel id="house-switch-label">House</InputLabel>
+                <Select
+                  labelId="house-switch-label"
+                  label="House"
+                  value={parseInt(houseId!, 10)}
+                  onChange={handleHouseSwitcherChange}
+                >
+                  {farmHousesSorted.map((h) => (
+                    <MenuItem key={h.id} value={h.id}>
+                      House {h.house_number}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
           <Box display="flex" gap={1}>
             {(farmId || houseFarmId) && (
@@ -344,6 +467,9 @@ const HouseDetailPage: React.FC = () => {
           alarms={houseDetails.alarms}
           stats={houseDetails.stats}
           onRefresh={loadHouseDetails}
+          dodReferenceDate={effectiveDod}
+          onDodReferenceDateChange={setDodPersisted}
+          onNavigateToWaterHistory={isFarmIntegrated ? navigateToWaterHistoryTab : undefined}
         />
       </TabPanel>
       <TabPanel value={activeTab} index={1}>
@@ -379,7 +505,11 @@ const HouseDetailPage: React.FC = () => {
       </TabPanel>
       {isFarmIntegrated && (
         <TabPanel value={activeTab} index={8}>
-          <HouseWaterHistoryTab houseId={houseId!} house={house} />
+          <HouseWaterHistoryTab
+            houseId={houseId!}
+            house={house}
+            focusDate={focusDateParam}
+          />
         </TabPanel>
       )}
 
