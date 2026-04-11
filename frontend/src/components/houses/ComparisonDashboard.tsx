@@ -360,8 +360,8 @@ const ComparisonDashboard: React.FC = () => {
 
       {/* View Tabs */}
       <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)} sx={{ mb: 2 }}>
-        <Tab icon={<Thermostat />} label="Climate" iconPosition="start" />
         <Tab icon={<Water />} label="Consumption" iconPosition="start" />
+        <Tab icon={<Thermostat />} label="Climate" iconPosition="start" />
         <Tab icon={<Air />} label="Environment" iconPosition="start" />
       </Tabs>
 
@@ -386,11 +386,56 @@ const ComparisonDashboard: React.FC = () => {
                     Day
                   </Box>
                 </TableCell>
+
+                {/* Consumption: Water & Feed before Status / Time */}
+                {activeTab === 0 && (
+                  <>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 100 }}>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <IconButton size="small" onClick={() => handleSort('water_consumption')}>
+                          <SortIcon field="water_consumption" />
+                        </IconButton>
+                        💧 Water
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 100 }}>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <IconButton size="small" onClick={() => handleSort('feed_consumption')}>
+                          <SortIcon field="feed_consumption" />
+                        </IconButton>
+                        🌾 Feed
+                      </Box>
+                    </TableCell>
+                  </>
+                )}
+
                 <TableCell sx={{ ...headerCellStyle, minWidth: 70 }}>Status</TableCell>
                 <TableCell sx={{ ...headerCellStyle, minWidth: 60 }}>Time</TableCell>
 
-                {/* Climate Tab */}
+                {/* Consumption: Birds & Livability after Status / Time */}
                 {activeTab === 0 && (
+                  <>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 100 }}>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <IconButton size="small" onClick={() => handleSort('bird_count')}>
+                          <SortIcon field="bird_count" />
+                        </IconButton>
+                        🐔 Birds
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <IconButton size="small" onClick={() => handleSort('livability')}>
+                          <SortIcon field="livability" />
+                        </IconButton>
+                        Livability
+                      </Box>
+                    </TableCell>
+                  </>
+                )}
+
+                {/* Climate Tab (index 1) */}
+                {activeTab === 1 && (
                   <>
                     <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>
                       <Box display="flex" alignItems="center" gap={0.5}>
@@ -416,44 +461,6 @@ const ComparisonDashboard: React.FC = () => {
                           <SortIcon field="static_pressure" />
                         </IconButton>
                         Pressure
-                      </Box>
-                    </TableCell>
-                  </>
-                )}
-
-                {/* Consumption Tab */}
-                {activeTab === 1 && (
-                  <>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 100 }}>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <IconButton size="small" onClick={() => handleSort('water_consumption')}>
-                          <SortIcon field="water_consumption" />
-                        </IconButton>
-                        💧 Water
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 100 }}>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <IconButton size="small" onClick={() => handleSort('feed_consumption')}>
-                          <SortIcon field="feed_consumption" />
-                        </IconButton>
-                        🌾 Feed
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 100 }}>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <IconButton size="small" onClick={() => handleSort('bird_count')}>
-                          <SortIcon field="bird_count" />
-                        </IconButton>
-                        🐔 Birds
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ ...headerCellStyle, minWidth: 90 }}>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <IconButton size="small" onClick={() => handleSort('livability')}>
-                          <SortIcon field="livability" />
-                        </IconButton>
-                        Livability
                       </Box>
                     </TableCell>
                   </>
@@ -517,6 +524,23 @@ const ComparisonDashboard: React.FC = () => {
                         variant={house.is_full_house ? 'filled' : 'outlined'}
                       />
                     </TableCell>
+
+                    {/* Consumption: Water & Feed before Status / Time */}
+                    {activeTab === 0 && (
+                      <>
+                        <TableCell sx={cellStyle}>
+                          <Typography variant="body2" fontWeight="medium" color="info.main">
+                            {formatConsumption(house.water_consumption, 'L')}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={cellStyle}>
+                          <Typography variant="body2" fontWeight="medium" color="warning.main">
+                            {formatConsumption(house.feed_consumption, 'lb')}
+                          </Typography>
+                        </TableCell>
+                      </>
+                    )}
+
                     <TableCell sx={cellStyle}>
                       <Chip 
                         label={house.status}
@@ -531,8 +555,26 @@ const ComparisonDashboard: React.FC = () => {
                       </Typography>
                     </TableCell>
 
-                    {/* Climate Tab */}
+                    {/* Consumption: Birds & Livability after Status / Time */}
                     {activeTab === 0 && (
+                      <>
+                        <TableCell sx={cellStyle}>
+                          <Typography variant="body2">
+                            {formatNumber(house.bird_count)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={cellStyle}>
+                          <Typography variant="body2" color={
+                            house.livability && house.livability < 95 ? 'error.main' : 'success.main'
+                          }>
+                            {formatPercent(house.livability)}
+                          </Typography>
+                        </TableCell>
+                      </>
+                    )}
+
+                    {/* Climate Tab (index 1) */}
+                    {activeTab === 1 && (
                       <>
                         <TableCell sx={cellStyle}>
                           <Typography variant="body2" fontWeight="medium" color={
@@ -549,34 +591,6 @@ const ComparisonDashboard: React.FC = () => {
                         <TableCell sx={cellStyle}>{formatTemp(house.outside_temperature)}</TableCell>
                         <TableCell sx={cellStyle}>{formatHumidity(house.inside_humidity)}</TableCell>
                         <TableCell sx={cellStyle}>{formatPressure(house.static_pressure)}</TableCell>
-                      </>
-                    )}
-
-                    {/* Consumption Tab */}
-                    {activeTab === 1 && (
-                      <>
-                        <TableCell sx={cellStyle}>
-                          <Typography variant="body2" fontWeight="medium" color="info.main">
-                            {formatConsumption(house.water_consumption, 'L')}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={cellStyle}>
-                          <Typography variant="body2" fontWeight="medium" color="warning.main">
-                            {formatConsumption(house.feed_consumption, 'lb')}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={cellStyle}>
-                          <Typography variant="body2">
-                            {formatNumber(house.bird_count)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={cellStyle}>
-                          <Typography variant="body2" color={
-                            house.livability && house.livability < 95 ? 'error.main' : 'success.main'
-                          }>
-                            {formatPercent(house.livability)}
-                          </Typography>
-                        </TableCell>
                       </>
                     )}
 
