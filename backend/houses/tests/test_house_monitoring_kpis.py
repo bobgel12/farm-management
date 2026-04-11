@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -116,6 +116,7 @@ class HouseMonitoringKpisApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
 
+        self.assertIsNone(data.get("day_over_day_context"))
         self.assertEqual(data["house_id"], self.house.id)
         self.assertEqual(data["water_day_over_day"]["current"], 150.0)
         self.assertEqual(data["water_day_over_day"]["previous"], 120.0)
@@ -146,3 +147,47 @@ class HouseMonitoringKpisApiTests(TestCase):
         self.assertIsNone(data["water_day_over_day"]["delta"])
         self.assertIsNone(data["feed_day_over_day"]["delta"])
         self.assertFalse(data["data_quality"]["enough_for_dod_delta"])
+
+    def test_dod_reference_date_outside_rolling_7d_window(self):
+        """Historical calendar days must resolve via timestamp__date, not only snapshots_7d."""
+        now = timezone.now()
+        ref_date = (now.date() - timedelta(days=10))
+        prev_date = ref_date - timedelta(days=1)
+
+        self._create_snapshot(
+            timestamp=timezone.make_aware(datetime.combine(prev_date, time(8, 0))),
+            water=100,
+            feed=200,
+            heater_on=False,
+            fan_on=False,
+        )
+        self._create_snapshot(
+            timestamp=timezone.make_aware(datetime.combine(ref_date, time(12, 0))),
+            water=155,
+            feed=290,
+            heater_on=False,
+            fan_on=False,
+        )
+
+        url = reverse("house-monitoring-kpis", kwargs={"house_id": self.house.id})
+        response = self.client.get(url, {"dod_reference_date": ref_date.isoformat()})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        self.assertEqual(
+            data["day_over_day_context"],
+            {"reference_date": ref_date.isoformat(), "compare_date": prev_date.isoformat()},
+        )
+        self.assertEqual(data["water_day_over_day"]["current"], 155.0)
+        self.assertEqual(data["water_day_over_day"]["previous"], 100.0)
+        self.assertEqual(data["water_day_over_day"]["delta"], 55.0)
+        self.assertEqual(data["feed_day_over_day"]["current"], 290.0)
+        self.assertEqual(data["feed_day_over_day"]["previous"], 200.0)
+        self.assertEqual(data["feed_day_over_day"]["delta"], 90.0)
+        self.assertTrue(data["data_quality"]["enough_for_dod_delta"])
+
+    def test_invalid_dod_reference_date_returns_400(self):
+        url = reverse("house-monitoring-kpis", kwargs={"house_id": self.house.id})
+        response = self.client.get(url, {"dod_reference_date": "not-a-date"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.json())

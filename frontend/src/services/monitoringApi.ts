@@ -68,11 +68,20 @@ class MonitoringApiService {
   }
 
   /**
-   * Get derived operational KPIs for house overview
+   * Get derived operational KPIs for house overview.
+   * @param options.dodReferenceDate ISO date (YYYY-MM-DD) to compare that day vs the prior day for water/feed DOD.
    */
-  async getHouseMonitoringKpis(houseId: number): Promise<HouseMonitoringKpis> {
+  async getHouseMonitoringKpis(
+    houseId: number,
+    options?: { dodReferenceDate?: string | null }
+  ): Promise<HouseMonitoringKpis> {
+    const params: Record<string, string> = {};
+    if (options?.dodReferenceDate) {
+      params.dod_reference_date = options.dodReferenceDate;
+    }
     const response = await api.get(`/houses/${houseId}/monitoring/kpis/`, {
       headers: this.getAuthHeaders(),
+      ...(Object.keys(params).length > 0 ? { params } : {}),
     });
     return response.data;
   }

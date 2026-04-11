@@ -218,6 +218,11 @@ export interface MonitoringDashboardData {
 export interface HouseMonitoringKpis {
   house_id: number;
   window_hours: number;
+  /** Present when KPIs were requested with dod_reference_date (selected vs prior calendar day). */
+  day_over_day_context?: {
+    reference_date: string;
+    compare_date: string;
+  } | null;
   data_quality: {
     snapshots_24h: number;
     snapshots_7d: number;
