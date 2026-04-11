@@ -1,0 +1,21 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Run core package tests before beta"
+  lane :core_tests do
+    sh("swift run --package-path ios/FarmManagementCore ContractCheck")
+  end
+
+  desc "Build and upload internal TestFlight beta"
+  lane :internal_beta do
+    core_tests
+    build_app(
+      scheme: "FarmManagementApp",
+      export_method: "app-store"
+    )
+    upload_to_testflight(
+      distribute_external: false,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

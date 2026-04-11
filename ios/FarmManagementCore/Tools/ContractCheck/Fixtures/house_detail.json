@@ -1,0 +1,13 @@
+{
+  "id": 99,
+  "house_number": 5,
+  "current_day": 19,
+  "current_age_days": 19,
+  "age_days": 19,
+  "days_remaining": 21,
+  "status": "active",
+  "is_active": true,
+  "is_integrated": false,
+  "batch_start_date": "2026-03-18",
+  "expected_harvest_date": "2026-05-01"
+}

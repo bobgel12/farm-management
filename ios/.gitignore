@@ -1,0 +1,10 @@
+# Xcode / Swift
+DerivedData/
+.derivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# SwiftPM
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+.build/

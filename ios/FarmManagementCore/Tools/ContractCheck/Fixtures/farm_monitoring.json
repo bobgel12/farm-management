@@ -1,0 +1,26 @@
+{
+  "farm_id": 12,
+  "farm_name": "Farm Alpha",
+  "houses_count": 2,
+  "houses": [
+    {
+      "id": 101,
+      "house_number": 1,
+      "timestamp": "2026-04-07T09:00:00Z",
+      "average_temperature": 32.4,
+      "humidity": 61.2,
+      "static_pressure": 0.12,
+      "growth_day": 19,
+      "alarm_status": "normal",
+      "connection_status": 1,
+      "has_alarms": false,
+      "is_connected": true
+    },
+    {
+      "house_id": 102,
+      "house_number": 2,
+      "status": "no_data",
+      "message": "No monitoring data available"
+    }
+  ]
+}
