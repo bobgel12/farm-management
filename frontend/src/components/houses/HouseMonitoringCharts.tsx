@@ -30,17 +30,25 @@ import { HouseMonitoringSummary } from '../../types/monitoring';
 
 interface HouseMonitoringChartsProps {
   houseId: number;
+  /** When set (e.g. from Overview trend dialog), emphasize consumption and use a longer default window. */
+  highlightMetric?: 'water' | 'feed';
 }
 
-const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId }) => {
+const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId, highlightMetric }) => {
   const [history, setHistory] = useState<HouseMonitoringSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<number>(24); // hours
+  const [period, setPeriod] = useState<number>(highlightMetric ? 168 : 24); // hours
 
   useEffect(() => {
     fetchHistory();
   }, [houseId, period]);
+
+  useEffect(() => {
+    if (highlightMetric) {
+      setPeriod(168);
+    }
+  }, [highlightMetric]);
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -101,10 +109,23 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId }
     feed: snapshot.feed_consumption,
   }));
 
+  const emphasisSx = highlightMetric
+    ? { border: 2, borderColor: 'primary.main', borderRadius: 1 }
+    : undefined;
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">Historical Data</Typography>
+        <Box display="flex" alignItems="baseline" gap={1} flexWrap="wrap">
+          <Typography variant="h6" component="span">
+            Historical Data
+          </Typography>
+          {highlightMetric ? (
+            <Typography variant="body2" color="primary" component="span">
+              (highlight: {highlightMetric})
+            </Typography>
+          ) : null}
+        </Box>
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <Select value={period} onChange={handlePeriodChange}>
             <MenuItem value={6}>Last 6 hours</MenuItem>
@@ -118,6 +139,7 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId }
 
       <Grid container spacing={2}>
         {/* Temperature Chart */}
+        {!highlightMetric && (
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -156,8 +178,10 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId }
             </CardContent>
           </Card>
         </Grid>
+        )}
 
         {/* Humidity & Pressure Chart */}
+        {!highlightMetric && (
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -186,8 +210,10 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId }
             </CardContent>
           </Card>
         </Grid>
+        )}
 
         {/* Ventilation Chart */}
+        {!highlightMetric && (
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -213,10 +239,11 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId }
             </CardContent>
           </Card>
         </Grid>
+        )}
 
         {/* Consumption Chart */}
-        <Grid item xs={12} md={6}>
-          <Card>
+        <Grid item xs={12} md={highlightMetric ? 12 : 6}>
+          <Card sx={emphasisSx}>
             <CardContent>
               <Typography variant="subtitle1" gutterBottom>
                 Consumption

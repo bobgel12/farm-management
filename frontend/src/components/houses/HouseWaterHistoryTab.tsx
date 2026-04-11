@@ -41,9 +41,11 @@ interface HouseWaterHistoryTabProps {
     };
     farm_id?: number;
   };
+  /** From house detail URL (?focusDate=YYYY-MM-DD) when navigating from Overview DOD */
+  focusDate?: string | null;
 }
 
-export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ houseId, house }) => {
+export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ houseId, house, focusDate }) => {
   const { farms } = useFarm();
   const [waterHistory, setWaterHistory] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -324,6 +326,11 @@ export const HouseWaterHistoryTab: React.FC<HouseWaterHistoryTabProps> = ({ hous
 
   return (
     <Box>
+      {focusDate ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Opened from Overview with reference date <strong>{focusDate}</strong> (compare with charts below).
+        </Alert>
+      ) : null}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Water Consumption History - House {house.house_number}</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>

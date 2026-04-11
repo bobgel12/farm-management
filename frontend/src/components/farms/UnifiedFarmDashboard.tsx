@@ -66,6 +66,7 @@ import { MonitoringDashboardData } from '../../types/monitoring';
 import IntegrationManagement from './IntegrationManagement';
 import { useProgram } from '../../contexts/ProgramContext';
 import { rotemApi } from '../../services/rotemApi';
+import { lastHouseStorageKey } from '../../utils/houseDetailUrl';
 // Removed logger import - using console instead
 
 interface Farm {
@@ -838,12 +839,64 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         </Alert>
       )}
 
-      {/* Houses Section */}
+      {/* Operations shortcuts */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Operations
+          </Typography>
+          <Box display="flex" flexWrap="wrap" gap={1}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<CompareArrows />}
+              onClick={() => navigate(`/farms/${farm.id}/houses/comparison?view=operations`)}
+            >
+              Compare day-over-day
+            </Button>
+            {farm.houses && farm.houses.length > 0 && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => navigate(`/farms/${farm.id}/houses/${farm.houses[0].id}?tab=overview`)}
+              >
+                First house overview
+              </Button>
+            )}
+            {(() => {
+              try {
+                const id = sessionStorage.getItem(lastHouseStorageKey(farm.id));
+                if (id && farm.houses?.some((h) => String(h.id) === id)) {
+                  return (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => navigate(`/farms/${farm.id}/houses/${id}?tab=overview`)}
+                    >
+                      Last viewed house
+                    </Button>
+                  );
+                }
+              } catch {
+                /* ignore */
+              }
+              return null;
+            })()}
+          </Box>
+        </CardContent>
+      </Card>
+
+      <Accordion defaultExpanded sx={{ mb: 3 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6">Houses ({farm.houses?.length || 0})</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+      {/* Houses Section */}
+      <Card variant="outlined" sx={{ mb: 0 }}>
+        <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">
-              Houses ({farm.houses?.length || 0})
+            <Typography variant="subtitle1" fontWeight={600}>
+              Summary
             </Typography>
             <Box display="flex" gap={1}>
               {farm.houses && farm.houses.length > 1 && (
@@ -966,6 +1019,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
           </Grid>
         </CardContent>
       </Card>
+        </AccordionDetails>
+      </Accordion>
 
       {/* Workers Section */}
       <Card sx={{ mb: 3 }}>
@@ -1019,12 +1074,14 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       {farm.integration_type === 'rotem' && (
         <>
           {/* Real-time Sensor Data */}
-          <Card>
+          <Accordion defaultExpanded sx={{ mb: 3 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6">Real-time Rotem sensor data</Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0, pt: 0 }}>
+          <Card variant="outlined">
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">
-                  Real-time Sensor Data
-                </Typography>
+              <Box display="flex" justifyContent="flex-end" alignItems="center" mb={2}>
                 <Box display="flex" gap={1}>
                   <Button
                     variant="outlined"
@@ -1241,6 +1298,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
               )}
             </CardContent>
           </Card>
+            </AccordionDetails>
+          </Accordion>
 
           {/* Monitoring Dashboard */}
           <Card>
