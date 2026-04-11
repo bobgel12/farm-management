@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Max, Min
 from django.utils import timezone
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
 from .models import (
     House,
     HouseMonitoringSnapshot,
@@ -321,29 +321,59 @@ def house_monitoring_kpis(request, house_id):
         ).order_by('-timestamp')
     )
 
-    # Build day buckets for day-over-day deltas.
-    day_water = defaultdict(list)
-    day_feed = defaultdict(list)
-    for snap in snapshots_7d:
-        day_key = snap.timestamp.date().isoformat()
-        if snap.water_consumption is not None:
-            day_water[day_key].append(float(snap.water_consumption))
-        if snap.feed_consumption is not None:
-            day_feed[day_key].append(float(snap.feed_consumption))
+    dod_param = request.query_params.get('dod_reference_date')
+    day_over_day_context = None
 
-    def daily_value(day_map, day):
-        values = day_map.get(day, [])
-        if not values:
-            return None
-        # Use max as daily total proxy to avoid underestimating during intra-day refreshes.
-        return max(values)
+    def max_metric_on_calendar_day(metric_field: str, d: date):
+        """Max snapshot value for a calendar day (same proxy as daily_value max)."""
+        agg = HouseMonitoringSnapshot.objects.filter(
+            house=house,
+            timestamp__date=d,
+        ).aggregate(m=Max(metric_field))
+        v = agg['m']
+        return float(v) if v is not None else None
 
-    today_key = now.date().isoformat()
-    yesterday_key = (now.date() - timedelta(days=1)).isoformat()
-    water_today = daily_value(day_water, today_key)
-    water_yesterday = daily_value(day_water, yesterday_key)
-    feed_today = daily_value(day_feed, today_key)
-    feed_yesterday = daily_value(day_feed, yesterday_key)
+    if dod_param:
+        try:
+            ref_d = date.fromisoformat(dod_param.strip())
+        except ValueError:
+            return Response(
+                {'detail': 'Invalid dod_reference_date; expected YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        prev_d = ref_d - timedelta(days=1)
+        day_over_day_context = {
+            'reference_date': ref_d.isoformat(),
+            'compare_date': prev_d.isoformat(),
+        }
+        water_today = max_metric_on_calendar_day('water_consumption', ref_d)
+        water_yesterday = max_metric_on_calendar_day('water_consumption', prev_d)
+        feed_today = max_metric_on_calendar_day('feed_consumption', ref_d)
+        feed_yesterday = max_metric_on_calendar_day('feed_consumption', prev_d)
+    else:
+        # Build day buckets for day-over-day deltas (rolling 7d window).
+        day_water = defaultdict(list)
+        day_feed = defaultdict(list)
+        for snap in snapshots_7d:
+            day_key = snap.timestamp.date().isoformat()
+            if snap.water_consumption is not None:
+                day_water[day_key].append(float(snap.water_consumption))
+            if snap.feed_consumption is not None:
+                day_feed[day_key].append(float(snap.feed_consumption))
+
+        def daily_value(day_map, day):
+            values = day_map.get(day, [])
+            if not values:
+                return None
+            # Use max as daily total proxy to avoid underestimating during intra-day refreshes.
+            return max(values)
+
+        today_key = now.date().isoformat()
+        yesterday_key = (now.date() - timedelta(days=1)).isoformat()
+        water_today = daily_value(day_water, today_key)
+        water_yesterday = daily_value(day_water, yesterday_key)
+        feed_today = daily_value(day_feed, today_key)
+        feed_yesterday = daily_value(day_feed, yesterday_key)
 
     def calc_delta(current, previous):
         if current is None or previous is None:
@@ -430,6 +460,7 @@ def house_monitoring_kpis(request, house_id):
     response = {
         'house_id': house.id,
         'window_hours': 24,
+        'day_over_day_context': day_over_day_context,
         'data_quality': {
             'snapshots_24h': len(snapshots_24h),
             'snapshots_7d': len(snapshots_7d),

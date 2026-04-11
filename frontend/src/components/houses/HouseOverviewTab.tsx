@@ -36,6 +36,25 @@ import {
 import monitoringApi from '../../services/monitoringApi';
 import { HouseMonitoringKpis } from '../../types/monitoring';
 
+/** Command 43 heater history daily row (API `heater_history.daily`). */
+interface HeaterHistoryDailyRow {
+  growth_day: number;
+  date: string | null;
+  total_hours: number;
+  per_device: Record<string, { hours: number; minutes?: number; raw_value?: unknown }>;
+}
+
+function formatShortCalendarDate(isoDate: string): string {
+  const parts = isoDate.split('-').map((s) => parseInt(s, 10));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return isoDate;
+  const [y, m, d] = parts;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: y !== new Date().getFullYear() ? 'numeric' : undefined,
+  });
+}
+
 interface HouseOverviewTabProps {
   house: any;
   monitoring: any;
@@ -57,13 +76,24 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
   const [heaterRotemLoading, setHeaterRotemLoading] = useState(false);
   const [heaterCacheLoading, setHeaterCacheLoading] = useState(false);
   const [heaterError, setHeaterError] = useState<string | null>(null);
+  const [dodReferenceDate, setDodReferenceDate] = useState<string | null>(null);
+  const [selectedHeaterGrowthDay, setSelectedHeaterGrowthDay] = useState<number | null>(null);
+
+  useEffect(() => {
+    setDodReferenceDate(null);
+    setSelectedHeaterGrowthDay(null);
+    setHeaterHistory(null);
+    setHeaterError(null);
+  }, [house?.id]);
 
   useEffect(() => {
     const loadKpis = async () => {
       if (!house?.id) return;
       try {
         setKpiLoading(true);
-        const result = await monitoringApi.getHouseMonitoringKpis(house.id);
+        const result = await monitoringApi.getHouseMonitoringKpis(house.id, {
+          dodReferenceDate: dodReferenceDate ?? undefined,
+        });
         setKpis(result);
       } catch (error) {
         console.error('Failed to load house monitoring KPIs:', error);
@@ -73,7 +103,20 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
       }
     };
     loadKpis();
-  }, [house?.id, monitoring?.timestamp]);
+  }, [house?.id, monitoring?.timestamp, dodReferenceDate]);
+
+  const applyHeaterHistoryPayload = (hist: Record<string, unknown>) => {
+    setHeaterHistory(hist);
+    const daily = hist?.daily as HeaterHistoryDailyRow[] | undefined;
+    if (daily && daily.length > 0) {
+      const last = daily[daily.length - 1];
+      setSelectedHeaterGrowthDay(last.growth_day);
+      setDodReferenceDate(typeof last.date === 'string' ? last.date : null);
+    } else {
+      setSelectedHeaterGrowthDay(null);
+      setDodReferenceDate(null);
+    }
+  };
 
   const loadHeaterHistoryCached = async () => {
     if (!house?.id) return;
@@ -81,7 +124,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
       setHeaterCacheLoading(true);
       setHeaterError(null);
       const data = await monitoringApi.getHouseHeaterHistory(house.id);
-      setHeaterHistory(data.heater_history);
+      applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>);
     } catch (error) {
       console.error('Failed to load cached heater history:', error);
       setHeaterError('Could not load saved heater history.');
@@ -96,7 +139,7 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
       setHeaterRotemLoading(true);
       setHeaterError(null);
       const data = await monitoringApi.refreshHouseHeaterHistory(house.id);
-      setHeaterHistory(data.heater_history);
+      applyHeaterHistoryPayload(data.heater_history as Record<string, unknown>);
     } catch (error: any) {
       const msg =
         error?.response?.data?.error ||
@@ -152,6 +195,29 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
     }
   };
 
+  const formatDodCaption = (
+    current: number | null | undefined,
+    previous: number | null | undefined,
+    unit: string
+  ): string => {
+    const ctx = kpis?.day_over_day_context;
+    const curTitle = ctx?.reference_date ? formatShortCalendarDate(ctx.reference_date) : 'Today';
+    const prevTitle = ctx?.compare_date ? formatShortCalendarDate(ctx.compare_date) : 'Yesterday';
+    const fmt = (v: number | null | undefined) =>
+      v != null && !Number.isNaN(v) ? v.toFixed(1) : 'N/A';
+    return `${curTitle}: ${fmt(current)}${unit} | ${prevTitle}: ${fmt(previous)}${unit}`;
+  };
+
+  const heaterDaily: HeaterHistoryDailyRow[] = Array.isArray(
+    (heaterHistory as { daily?: HeaterHistoryDailyRow[] } | null)?.daily
+  )
+    ? ((heaterHistory as { daily: HeaterHistoryDailyRow[] }).daily)
+    : [];
+  const selectedHeaterRow =
+    selectedHeaterGrowthDay != null
+      ? heaterDaily.find((r) => r.growth_day === selectedHeaterGrowthDay)
+      : undefined;
+
   if (!monitoring) {
     return (
       <Box textAlign="center" py={4}>
@@ -201,7 +267,14 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
         </Grid>
 
         <Grid item xs={12}>
-          <Card>
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 2,
+              boxShadow: 1,
+              bgcolor: 'background.paper',
+            }}
+          >
             <CardContent>
               <Box display="flex" flexWrap="wrap" justifyContent="space-between" alignItems="center" gap={1} mb={1}>
                 <Typography variant="h6">Heater History (Command 43)</Typography>
@@ -234,7 +307,8 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" mb={1}>
-                Not loaded with the page. Use the buttons above so the house overview stays fast.
+                Not loaded with the page. Use the buttons above so the house overview stays fast. Select a row to
+                align water/feed day-over-day with that calendar day (when a date is present).
               </Typography>
               {heaterError && (
                 <Alert severity="error" sx={{ mb: 1 }} onClose={() => setHeaterError(null)}>
@@ -248,38 +322,94 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                 devices)
               </Typography>
 
-              {heaterHistory?.latest ? (
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Latest Day</TableCell>
-                        <TableCell>Total Hours</TableCell>
-                        <TableCell>Per Device</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>
-                          Day {heaterHistory.latest.growth_day}
-                          {heaterHistory.latest.date ? ` (${heaterHistory.latest.date})` : ''}
-                        </TableCell>
-                        <TableCell>{heaterHistory.latest.total_hours} h</TableCell>
-                        <TableCell>
-                          {Object.entries(heaterHistory.latest.per_device || {}).map(([device, value]: [string, any]) => (
-                            <Chip
-                              key={device}
-                              size="small"
-                              variant="outlined"
-                              sx={{ mr: 0.5, mb: 0.5 }}
-                              label={`${device.replace('_', ' ')}: ${value.hours} h`}
-                            />
-                          ))}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+              {heaterDaily.length > 0 ? (
+                <>
+                  <TableContainer
+                    component={Paper}
+                    variant="outlined"
+                    sx={{
+                      maxHeight: 320,
+                      borderRadius: 1,
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'action.hover',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                      },
+                    }}
+                  >
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Growth day</TableCell>
+                          <TableCell>Date</TableCell>
+                          <TableCell align="right">Total</TableCell>
+                          <TableCell>Devices (summary)</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {heaterDaily.map((row) => {
+                          const deviceSummary = Object.entries(row.per_device || {})
+                            .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.hours}h`)
+                            .join(', ');
+                          const shortSummary =
+                            deviceSummary.length > 56 ? `${deviceSummary.slice(0, 53)}…` : deviceSummary;
+                          return (
+                            <TableRow
+                              key={row.growth_day}
+                              hover
+                              selected={selectedHeaterGrowthDay === row.growth_day}
+                              onClick={() => {
+                                setSelectedHeaterGrowthDay(row.growth_day);
+                                setDodReferenceDate(row.date ?? null);
+                              }}
+                              sx={{
+                                cursor: 'pointer',
+                                '&.Mui-selected': {
+                                  bgcolor: 'action.selected',
+                                },
+                                '&:last-child td': { borderBottom: 0 },
+                              }}
+                            >
+                              <TableCell>Day {row.growth_day}</TableCell>
+                              <TableCell>{row.date ?? '—'}</TableCell>
+                              <TableCell align="right">{row.total_hours} h</TableCell>
+                              <TableCell>
+                                <Typography variant="body2" color="text.secondary" noWrap title={deviceSummary}>
+                                  {shortSummary || '—'}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {selectedHeaterRow ? (
+                    <Box
+                      mt={2}
+                      pt={2}
+                      sx={{
+                        borderTop: 1,
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Selected — Day {selectedHeaterRow.growth_day}
+                        {selectedHeaterRow.date ? ` · ${selectedHeaterRow.date}` : ''} — per device
+                      </Typography>
+                      <Box display="flex" flexWrap="wrap" gap={0.5}>
+                        {Object.entries(selectedHeaterRow.per_device || {}).map(([device, value]) => (
+                          <Chip
+                            key={device}
+                            size="small"
+                            variant="outlined"
+                            label={`${device.replace(/_/g, ' ')}: ${value.hours} h`}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  ) : null}
+                </>
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   Click &quot;Load saved&quot; or &quot;Fetch from Rotem&quot; to show heater runtime by day.
@@ -303,8 +433,12 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                   label={formatDelta(kpis?.water_day_over_day?.delta, kpis?.water_day_over_day?.delta_pct, 'L')}
                 />
               </Box>
-              <Typography variant="caption" color="text.secondary">
-                Today: {kpis?.water_day_over_day?.current?.toFixed(1) ?? 'N/A'}L | Yesterday: {kpis?.water_day_over_day?.previous?.toFixed(1) ?? 'N/A'}L
+              <Typography variant="caption" color="text.secondary" component="div">
+                {formatDodCaption(
+                  kpis?.water_day_over_day?.current,
+                  kpis?.water_day_over_day?.previous,
+                  'L'
+                )}
               </Typography>
             </CardContent>
           </Card>
@@ -324,8 +458,12 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
                   label={formatDelta(kpis?.feed_day_over_day?.delta, kpis?.feed_day_over_day?.delta_pct, 'lb')}
                 />
               </Box>
-              <Typography variant="caption" color="text.secondary">
-                Today: {kpis?.feed_day_over_day?.current?.toFixed(1) ?? 'N/A'}lb | Yesterday: {kpis?.feed_day_over_day?.previous?.toFixed(1) ?? 'N/A'}lb
+              <Typography variant="caption" color="text.secondary" component="div">
+                {formatDodCaption(
+                  kpis?.feed_day_over_day?.current,
+                  kpis?.feed_day_over_day?.previous,
+                  'lb'
+                )}
               </Typography>
             </CardContent>
           </Card>
