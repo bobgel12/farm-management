@@ -40,6 +40,6 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Start command (uses simple_startup.py which handles migrations and admin user creation)
-CMD ["python", "simple_startup.py"]
+# Start command (web mode only; migrations should run in a one-off deploy step)
+CMD ["python", "simple_startup.py", "web"]
 

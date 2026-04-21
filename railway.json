@@ -4,7 +4,7 @@
     "dockerfilePath": "Dockerfile.railway"
   },
   "deploy": {
-    "startCommand": "python simple_startup.py",
+    "startCommand": "python simple_startup.py web",
     "healthcheckPath": "/api/health/simple/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",

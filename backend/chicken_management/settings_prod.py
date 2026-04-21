@@ -11,22 +11,37 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if os.getenv('ALLOWED
 
 # Database - Railway PostgreSQL Service
 DATABASE_URL = os.getenv('DATABASE_URL')
+DB_CONN_MAX_AGE = int(os.getenv('DB_CONN_MAX_AGE', '0'))
+DB_CONNECT_TIMEOUT = int(os.getenv('DB_CONNECT_TIMEOUT', '15'))
+DB_STATEMENT_TIMEOUT_MS = int(os.getenv('DB_STATEMENT_TIMEOUT_MS', '30000'))
+DB_POOL_MODE = os.getenv('DB_POOL_MODE', 'transaction').lower()
 if DATABASE_URL:
     try:
         import dj_database_url
         DATABASES = {
-            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=DB_CONN_MAX_AGE)
         }
         # Add connection settings for Railway PostgreSQL
-        DATABASES['default']['CONN_MAX_AGE'] = 60
+        DATABASES['default']['CONN_MAX_AGE'] = DB_CONN_MAX_AGE
         DATABASES['default']['CONN_HEALTH_CHECKS'] = True
-        DATABASES['default']['OPTIONS'] = {
-            'connect_timeout': 60,  # Increased timeout for Railway
-            'options': '-c statement_timeout=30000'  # 30 second statement timeout
-        }
+        existing_options = DATABASES['default'].get('OPTIONS', {})
+        existing_options['connect_timeout'] = DB_CONNECT_TIMEOUT
+        existing_options['options'] = f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS}"
+        DATABASES['default']['OPTIONS'] = existing_options
+
+        # Recommended for PgBouncer transaction pooling.
+        if DB_POOL_MODE == 'transaction':
+            DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+
         # Extract database info for logging (without password)
         db_info = DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else 'unknown'
         print(f"✅ Using Railway PostgreSQL database: {db_info}")
+        print(
+            f"✅ DB tuning: CONN_MAX_AGE={DB_CONN_MAX_AGE}, "
+            f"CONNECT_TIMEOUT={DB_CONNECT_TIMEOUT}, "
+            f"STATEMENT_TIMEOUT_MS={DB_STATEMENT_TIMEOUT_MS}, "
+            f"POOL_MODE={DB_POOL_MODE}"
+        )
     except Exception as e:
         print(f"❌ Error parsing DATABASE_URL: {str(e)}")
         # Fallback to SQLite
@@ -247,14 +262,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
 
 # Performance settings
-CONN_MAX_AGE = 60
-
-# Database connection settings for Railway PostgreSQL
-if 'DATABASE_URL' in os.environ:
-    # Additional database settings for production
-    DATABASES['default']['CONN_MAX_AGE'] = 60
-    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
-    # Note: Removed problematic transaction isolation setting
+CONN_MAX_AGE = DB_CONN_MAX_AGE
 
 # Health check endpoint
 HEALTH_CHECK = {
