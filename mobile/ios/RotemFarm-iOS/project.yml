@@ -1,0 +1,66 @@
+name: RotemFarm
+options:
+  bundleIdPrefix: com.rotemfarm
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ENABLE_BITCODE: NO
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: "0.1.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+targets:
+  RotemFarm:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: RotemFarm
+        excludes:
+          - "**/.DS_Store"
+    resources:
+      - path: RotemFarm/Resources/Assets.xcassets
+    info:
+      path: RotemFarm/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: RotemFarm
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        ITSAppUsesNonExemptEncryption: false
+        NSFaceIDUsageDescription: "Confirm identity before applying controller changes."
+        UIUserInterfaceStyle: Automatic
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rotemfarm.ios
+        TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SWIFT_STRICT_CONCURRENCY: minimal
+
+# Run/Debug: point Simulator at Docker-mapped API (see repo docker-compose.yml 8002:8000).
+schemes:
+  RotemFarm:
+    build:
+      targets:
+        RotemFarm: all
+    run:
+      config: Debug
+      environmentVariables:
+        ROTEM_API_BASE_URL: http://localhost:8002

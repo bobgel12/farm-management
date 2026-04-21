@@ -854,6 +854,14 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
             >
               Compare day-over-day
             </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Assessment />}
+              onClick={() => navigate(`/analytics?farm_id=${farm.id}`)}
+            >
+              Farm BI dashboard
+            </Button>
             {farm.houses && farm.houses.length > 0 && (
               <Button
                 variant="outlined"

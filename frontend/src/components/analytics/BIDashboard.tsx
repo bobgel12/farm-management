@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -13,10 +13,10 @@ import {
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  Remove as RemoveIcon,
   Analytics as AnalyticsIcon,
   Add as AddIcon,
 } from '@mui/icons-material';
+import { useSearchParams } from 'react-router-dom';
 import { useAnalytics } from '../../contexts/AnalyticsContext';
 import { useOrganization } from '../../contexts/OrganizationContext';
 import { KPI, Dashboard } from '../../types';
@@ -29,10 +29,14 @@ const BIDashboard: React.FC = () => {
     error,
     fetchDashboards,
     fetchKPIs,
+    createDashboard,
   } = useAnalytics();
   const { currentOrganization } = useOrganization();
+  const [searchParams] = useSearchParams();
 
   const [selectedDashboard, setSelectedDashboard] = useState<Dashboard | null>(null);
+  const farmIdParam = searchParams.get('farm_id');
+  const farmIdFilter = farmIdParam ? Number(farmIdParam) : null;
 
   useEffect(() => {
     if (currentOrganization) {
@@ -40,6 +44,37 @@ const BIDashboard: React.FC = () => {
       fetchKPIs(currentOrganization.id);
     }
   }, [currentOrganization, fetchDashboards, fetchKPIs]);
+
+  const filteredDashboards = useMemo(() => {
+    if (!farmIdFilter || Number.isNaN(farmIdFilter)) return dashboards;
+    return dashboards.filter((dashboard) => {
+      if (dashboard.farm && dashboard.farm === farmIdFilter) return true;
+      const fallbackFarmId = dashboard.default_filters?.farm_id;
+      return Number(fallbackFarmId) === farmIdFilter;
+    });
+  }, [dashboards, farmIdFilter]);
+
+  const handleCreateDashboard = async () => {
+    if (!currentOrganization) return;
+    try {
+      const now = new Date().toISOString().slice(0, 10);
+      const created = await createDashboard({
+        name: `Dashboard ${now}`,
+        description: 'Created from BI dashboard',
+        dashboard_type: farmIdFilter ? 'farm' : 'executive',
+        organization: currentOrganization.id,
+        farm: farmIdFilter || undefined,
+        layout_config: { widgets: [] },
+        default_filters: farmIdFilter ? { farm_id: farmIdFilter } : {},
+        is_public: false,
+        is_active: true,
+      });
+      setSelectedDashboard(created);
+      await fetchDashboards(currentOrganization.id);
+    } catch (err) {
+      console.error('Failed to create dashboard:', err);
+    }
+  };
 
   if (loading && dashboards.length === 0 && kpis.length === 0) {
     return (
@@ -64,7 +99,7 @@ const BIDashboard: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => {/* Navigate to create dashboard */}}
+          onClick={handleCreateDashboard}
           sx={{ borderRadius: 2 }}
         >
           New Dashboard
@@ -88,40 +123,40 @@ const BIDashboard: React.FC = () => {
         </Grid>
       )}
 
-      {/* Dashboard Placeholder */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-            <AnalyticsIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              Executive Dashboard
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
-              Create custom dashboards with KPIs, charts, and analytics
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {/* Navigate to create dashboard */}}
-            >
-              Create Dashboard
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+      {/* Dashboard Empty State */}
+      {filteredDashboards.length === 0 && (
+        <Card>
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+              <AnalyticsIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                Executive Dashboard
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
+                Create custom dashboards with KPIs, charts, and analytics
+              </Typography>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateDashboard}>
+                Create Dashboard
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dashboards List */}
-      {dashboards.length > 0 && (
+      {filteredDashboards.length > 0 && (
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-            Available Dashboards
+            {farmIdFilter ? `Farm ${farmIdFilter} Dashboards` : 'Available Dashboards'}
           </Typography>
           <Grid container spacing={2}>
-            {dashboards.map((dashboard) => (
+            {filteredDashboards.map((dashboard) => (
               <Grid item xs={12} sm={6} md={4} key={dashboard.id}>
                 <Card
                   sx={{
                     cursor: 'pointer',
+                    border: selectedDashboard?.id === dashboard.id ? '2px solid' : undefined,
+                    borderColor: selectedDashboard?.id === dashboard.id ? 'primary.main' : undefined,
                     '&:hover': {
                       boxShadow: 4,
                     },
