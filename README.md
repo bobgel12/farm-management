@@ -96,11 +96,22 @@ make email-test
    - `EMAIL_HOST_PASSWORD` - Gmail App Password
    - `SECRET_KEY` - Django secret key
    - `ADMIN_PASSWORD` - Admin password
+   - `DATABASE_URL` - Railway Postgres URL (prefer pooled URL for web runtime)
+   - `DB_CONN_MAX_AGE` - Set `0` for pooled transaction mode
+   - `DB_CONNECT_TIMEOUT` - Optional, default `15`
+   - `DB_STATEMENT_TIMEOUT_MS` - Optional, default `30000`
+   - `DB_POOL_MODE` - `transaction` (default) or `session`
 
 2. Deploy:
 ```bash
 make deploy-railway
 ```
+
+3. Railway service commands:
+   - **Web start command**: `python simple_startup.py web`
+   - **Migration command (one-off/release)**: `python simple_startup.py migrate`
+
+4. Important: do not run migrations in normal web startup. Keep migrations as a one-off deploy step to avoid DB connection spikes and `too many clients` errors.
 
 ## 🏗️ Architecture
 
@@ -158,6 +169,11 @@ chicken_house_management/
 # Deploy to Railway
 make deploy-railway
 ```
+
+Railway runtime recommendations:
+- Use Gunicorn web runtime (already handled by `simple_startup.py web`)
+- Run migrations separately (`simple_startup.py migrate`)
+- Keep web process count low first (`WEB_CONCURRENCY=1`) and scale carefully
 
 ### Manual Docker
 

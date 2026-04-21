@@ -27,5 +27,5 @@ RUN mkdir -p /app/staticfiles /app/media /app/logs
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Run the application with Gunicorn (production-safe default)
+CMD ["gunicorn", "chicken_management.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]

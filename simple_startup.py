@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """
-Simple startup script for Railway deployment
+Startup script for Railway deployment.
+
+Modes:
+- web (default): start Gunicorn only (no migrations on web boot)
+- migrate: run Django migrations and exit
 """
 
 import os
@@ -8,123 +12,69 @@ import sys
 import django
 from django.core.management import execute_from_command_line
 
-def main():
-    """Main startup function"""
-    print("🐔 Starting Chicken House Management System...")
-    
-    # Set up Django
-    # Use production settings if DATABASE_URL is present (Railway always provides this)
-    # or if RAILWAY_ENVIRONMENT is set
-    if os.getenv('DATABASE_URL') or os.getenv('RAILWAY_ENVIRONMENT'):
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings_prod')
+
+def configure_settings():
+    """Select Django settings based on deployment context."""
+    if os.getenv("DATABASE_URL") or os.getenv("RAILWAY_ENVIRONMENT"):
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "chicken_management.settings_prod")
         print("📋 Using production settings")
     else:
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chicken_management.settings')
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "chicken_management.settings")
         print("📋 Using development settings")
-    
-    django.setup()
-    
-    # Test database connection before running migrations
-    print("🔍 Testing database connection...")
-    try:
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            result = cursor.fetchone()
-            if result:
-                print("✅ Database connection successful")
-            else:
-                print("⚠️  Database connection test returned no result")
-    except Exception as e:
-        print(f"❌ Database connection failed: {str(e)}")
-        print("💥 Database test failed, but continuing with startup...")
-        print("   Please check:")
-        print("   1. PostgreSQL service is linked in Railway")
-        print("   2. DATABASE_URL environment variable is set")
-        print("   3. Database service is running")
-    
-    # Run migrations
-    print("🔄 Running migrations...")
-    try:
-        execute_from_command_line(['manage.py', 'migrate'])
-        print("✅ Migrations completed successfully")
-    except Exception as e:
-        print(f"❌ Migrations failed: {str(e)}")
-        print("   This may be due to database connection issues.")
-        print("   The application will continue, but database operations may fail.")
-    
-    # Create admin user if it doesn't exist
-    try:
-        from django.contrib.auth.models import User
-        
-        admin_username = os.getenv('ADMIN_USERNAME', 'admin')
-        admin_email = os.getenv('ADMIN_EMAIL', 'admin@chickenmanagement.com')
-        admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
-        
-        if not User.objects.filter(username=admin_username).exists():
-            User.objects.create_superuser(
-                username=admin_username,
-                email=admin_email,
-                password=admin_password
-            )
-            print(f"✅ Admin user '{admin_username}' created")
-        else:
-            print(f"✅ Admin user '{admin_username}' already exists")
-    except Exception as e:
-        print(f"❌ Admin user creation failed: {str(e)}")
-    
-    # Ensure default program exists
-    print("Ensuring default program exists...")
-    try:
-        execute_from_command_line(['manage.py', 'ensure_default_program'])
-        print("✅ Default program ensured")
-    except Exception as e:
-        print(f"❌ Default program creation failed: {str(e)}")
-        # Continue anyway - this is not critical for startup
-    
-    # Collect static files
-    print("Collecting static files...")
-    execute_from_command_line(['manage.py', 'collectstatic', '--noinput'])
-    
-    # Check email configuration
-    print("📧 Email Configuration:")
-    print(f"  Host: {os.getenv('EMAIL_HOST', 'Not set')}")
-    print(f"  Port: {os.getenv('EMAIL_PORT', 'Not set')}")
-    print(f"  User: {os.getenv('EMAIL_HOST_USER', 'Not set')}")
-    print(f"  TLS: {os.getenv('EMAIL_USE_TLS', 'Not set')}")
-    print(f"  From: {os.getenv('DEFAULT_FROM_EMAIL', 'Not set')}")
-    
-    if not os.getenv('EMAIL_HOST_USER') or not os.getenv('EMAIL_HOST_PASSWORD'):
-        print("⚠️  Email credentials not configured. Daily emails will not work.")
-        print("   Please set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in Railway dashboard.")
-    else:
-        # Test SMTP connectivity (non-blocking, informational only)
-        print("🔍 Testing SMTP connectivity...")
-        try:
-            import socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)  # Reduced timeout
-            result = sock.connect_ex(('smtp.gmail.com', 587))
-            sock.close()
-            
-            if result == 0:
-                print("✅ SMTP server is reachable")
-            else:
-                # Error code 11 (EAGAIN) or other codes are common in Railway
-                # This doesn't mean email won't work, just that the test failed
-                print(f"⚠️  SMTP connectivity test returned code {result}")
-                print("   This is common in Railway and doesn't prevent email from working.")
-                print("   Email will be tested when actually sending.")
-        except Exception as e:
-            print(f"⚠️  SMTP connectivity test failed: {str(e)}")
-            print("   This is informational only. Email will work if credentials are correct.")
-    
-    # Start the server
-    # Railway sets PORT environment variable, default to 8000 if not set
-    port = os.getenv('PORT', '8000')
-    print(f"🚀 Starting Django development server on port {port}...")
-    print(f"🔗 Health check: http://0.0.0.0:{port}/api/health/")
-    execute_from_command_line(['manage.py', 'runserver', f'0.0.0.0:{port}'])
 
-if __name__ == '__main__':
+
+def run_migrations():
+    print("🔄 Running migrations...")
+    execute_from_command_line(["manage.py", "migrate", "--noinput"])
+    print("✅ Migrations completed successfully")
+
+
+def start_gunicorn():
+    port = os.getenv("PORT", "8000")
+    workers = os.getenv("WEB_CONCURRENCY", "1")
+    threads = os.getenv("GUNICORN_THREADS", "2")
+    timeout = os.getenv("GUNICORN_TIMEOUT", "120")
+    app_module = os.getenv("GUNICORN_APP_MODULE", "chicken_management.wsgi:application")
+
+    cmd = [
+        "gunicorn",
+        app_module,
+        "--bind",
+        f"0.0.0.0:{port}",
+        "--workers",
+        workers,
+        "--threads",
+        threads,
+        "--timeout",
+        timeout,
+        "--access-logfile",
+        "-",
+        "--error-logfile",
+        "-",
+    ]
+    print("🚀 Starting Gunicorn web server...")
+    print(f"🌐 Bind: 0.0.0.0:{port}")
+    print(f"👷 Workers: {workers}, Threads: {threads}, Timeout: {timeout}s")
+    print(f"🔗 Health check: http://0.0.0.0:{port}/api/health/")
+    os.execvp(cmd[0], cmd)
+
+
+def main():
+    mode = (sys.argv[1] if len(sys.argv) > 1 else os.getenv("STARTUP_MODE", "web")).lower()
+    print(f"🐔 Startup mode: {mode}")
+
+    configure_settings()
+    django.setup()
+
+    if mode == "migrate":
+        run_migrations()
+        return
+
+    if mode != "web":
+        raise ValueError(f"Unsupported STARTUP_MODE: {mode}")
+
+    start_gunicorn()
+
+
+if __name__ == "__main__":
     main()
