@@ -1,5 +1,7 @@
+from django.db.models import Count, Q
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from django.shortcuts import get_object_or_404
@@ -19,6 +21,29 @@ from .serializers import (
 from .program_change_service import ProgramChangeService
 from integrations.rotem import RotemIntegration
 from integrations.models import IntegrationLog, IntegrationError
+from analytics.services import ensure_farm_dashboard
+
+
+def user_accessible_organization_ids(request):
+    """
+    Organization primary keys the user may access for farm/flock-scoped data.
+
+    Returns:
+        None — staff: do not restrict queryset by organization membership.
+        list — non-staff: UUIDs from active OrganizationUser rows (may be empty).
+    """
+    user = request.user
+    if not user.is_authenticated:
+        return []
+    if user.is_staff:
+        return None
+    from organizations.models import OrganizationUser
+
+    return list(
+        OrganizationUser.objects.filter(user=user, is_active=True).values_list(
+            'organization_id', flat=True
+        )
+    )
 
 
 class FarmViewSet(ModelViewSet):
@@ -44,6 +69,11 @@ class FarmViewSet(ModelViewSet):
             queryset = queryset.filter(organization_id__in=user_organizations)
         
         return queryset.order_by('name')
+
+    def perform_create(self, serializer):
+        farm = serializer.save()
+        if self.request.user.is_authenticated:
+            ensure_farm_dashboard(farm, self.request.user)
     
     def update(self, request, *args, **kwargs):
         """Override update to detect program changes and regenerate tasks"""
@@ -865,8 +895,8 @@ class FarmWithProgramDetailView(generics.RetrieveUpdateDestroyAPIView):
 class BreedViewSet(ModelViewSet):
     queryset = Breed.objects.all()
     serializer_class = BreedSerializer
-    permission_classes = []  # Will be handled by authentication middleware
-    
+    permission_classes = [IsAuthenticated]
+
     def get_serializer_class(self):
         if self.action == 'list':
             return BreedListSerializer
@@ -883,8 +913,8 @@ class BreedViewSet(ModelViewSet):
 class FlockViewSet(ModelViewSet):
     queryset = Flock.objects.all()
     serializer_class = FlockSerializer
-    permission_classes = []  # Will be handled by authentication middleware
-    
+    permission_classes = [IsAuthenticated]
+
     def get_serializer_class(self):
         if self.action == 'list':
             return FlockListSerializer
@@ -923,7 +953,13 @@ class FlockViewSet(ModelViewSet):
         breed_id = self.request.query_params.get('breed_id')
         if breed_id:
             queryset = queryset.filter(breed_id=breed_id)
-        
+
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is not None:
+            if not org_ids:
+                return queryset.none()
+            queryset = queryset.filter(house__farm__organization_id__in=org_ids)
+
         return queryset.order_by('-arrival_date', 'batch_number')
     
     @action(detail=True, methods=['get'])
@@ -999,24 +1035,34 @@ class FlockViewSet(ModelViewSet):
 class FlockPerformanceViewSet(ModelViewSet):
     queryset = FlockPerformance.objects.all()
     serializer_class = FlockPerformanceSerializer
-    permission_classes = []  # Will be handled by authentication middleware
-    
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         """Filter performance records based on flock"""
-        queryset = FlockPerformance.objects.select_related('flock').all()
+        queryset = FlockPerformance.objects.select_related(
+            'flock', 'flock__house', 'flock__house__farm'
+        ).all()
         
         flock_id = self.request.query_params.get('flock_id')
         if flock_id:
             queryset = queryset.filter(flock_id=flock_id)
-        
+
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is not None:
+            if not org_ids:
+                return queryset.none()
+            queryset = queryset.filter(
+                flock__house__farm__organization_id__in=org_ids
+            )
+
         return queryset.order_by('-record_date', '-flock_age_days')
 
 
 class FlockComparisonViewSet(ModelViewSet):
     queryset = FlockComparison.objects.all()
     serializer_class = FlockComparisonSerializer
-    permission_classes = []  # Will be handled by authentication middleware
-    
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         """Filter comparisons based on user"""
         queryset = FlockComparison.objects.prefetch_related('flocks').all()
@@ -1025,10 +1071,23 @@ class FlockComparisonViewSet(ModelViewSet):
         organization_id = self.request.query_params.get('organization_id')
         if organization_id:
             queryset = queryset.filter(flocks__house__farm__organization_id=organization_id).distinct()
-        
-        # Filter by creator
-        if self.request.user.is_authenticated and not self.request.user.is_staff:
-            queryset = queryset.filter(created_by=self.request.user)
+
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is not None:
+            if not org_ids:
+                return queryset.none()
+            queryset = (
+                queryset.annotate(
+                    _flocks_outside_org=Count(
+                        'flocks',
+                        filter=~Q(
+                            flocks__house__farm__organization_id__in=org_ids
+                        ),
+                        distinct=True,
+                    )
+                )
+                .filter(_flocks_outside_org=0, created_by=self.request.user)
+            )
         
         return queryset.order_by('-created_at')
     

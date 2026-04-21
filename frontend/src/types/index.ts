@@ -491,6 +491,8 @@ export interface Dashboard {
   default_filters: Record<string, any>;
   organization?: string; // UUID
   organization_name?: string;
+  farm?: number | null;
+  farm_name?: string;
   is_public: boolean;
   is_active: boolean;
   created_by: number;

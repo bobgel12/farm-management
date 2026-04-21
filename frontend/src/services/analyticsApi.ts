@@ -22,6 +22,7 @@ export const analyticsApi = {
   async getDashboards(params?: {
     organization_id?: string;
     dashboard_type?: string;
+    farm_id?: number;
     is_active?: boolean;
   }): Promise<Dashboard[]> {
     const response = await api.get('/dashboards/', { params });

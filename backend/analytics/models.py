@@ -49,6 +49,14 @@ class Dashboard(models.Model):
         blank=True,
         help_text="Organization this dashboard belongs to"
     )
+    farm = models.ForeignKey(
+        'farms.Farm',
+        on_delete=models.CASCADE,
+        related_name='analytics_dashboards',
+        null=True,
+        blank=True,
+        help_text="Farm this dashboard belongs to"
+    )
     
     # Visibility
     is_public = models.BooleanField(
@@ -73,6 +81,14 @@ class Dashboard(models.Model):
         indexes = [
             models.Index(fields=['dashboard_type', 'is_active']),
             models.Index(fields=['organization', 'is_active']),
+            models.Index(fields=['farm', 'is_active']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'farm', 'dashboard_type'],
+                condition=models.Q(farm__isnull=False, dashboard_type='farm'),
+                name='uniq_farm_dashboard_per_org',
+            ),
         ]
     
     def __str__(self):

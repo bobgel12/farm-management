@@ -7,8 +7,42 @@ from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
 import logging
+from django.contrib.auth.models import User
+from typing import Optional
+
+from .models import Dashboard
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_farm_dashboard(farm, user: User) -> Optional[Dashboard]:
+    """
+    Create or return the farm BI dashboard for a farm.
+    Returns None when farm has no organization.
+    """
+    if farm.organization_id is None:
+        return None
+
+    base_name = f"{farm.name} - BI"
+    dashboard, _ = Dashboard.objects.get_or_create(
+        organization=farm.organization,
+        farm=farm,
+        dashboard_type='farm',
+        defaults={
+            'name': base_name[:200],
+            'description': f"Auto-created farm dashboard for {farm.name}",
+            'layout_config': {'widgets': []},
+            'default_filters': {'farm_id': farm.id},
+            'created_by': user,
+            'is_public': False,
+            'is_active': True,
+        },
+    )
+
+    if 'farm_id' not in (dashboard.default_filters or {}):
+        dashboard.default_filters = {**(dashboard.default_filters or {}), 'farm_id': farm.id}
+        dashboard.save(update_fields=['default_filters', 'updated_at'])
+    return dashboard
 
 
 class KPICalculationService:

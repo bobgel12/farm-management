@@ -5,13 +5,14 @@ from .models import Dashboard, KPI, KPICalculation, AnalyticsQuery, Benchmark
 class DashboardSerializer(serializers.ModelSerializer):
     """Serializer for Dashboard model"""
     organization_name = serializers.CharField(source='organization.name', read_only=True)
+    farm_name = serializers.CharField(source='farm.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
     
     class Meta:
         model = Dashboard
         fields = [
             'id', 'name', 'description', 'dashboard_type', 'layout_config',
-            'default_filters', 'organization', 'organization_name',
+            'default_filters', 'organization', 'organization_name', 'farm', 'farm_name',
             'is_public', 'is_active', 'created_by', 'created_by_name',
             'created_at', 'updated_at'
         ]

@@ -31,6 +31,10 @@ class DashboardViewSet(viewsets.ModelViewSet):
         dashboard_type = self.request.query_params.get('dashboard_type')
         if dashboard_type:
             queryset = queryset.filter(dashboard_type=dashboard_type)
+
+        farm_id = self.request.query_params.get('farm_id')
+        if farm_id:
+            queryset = queryset.filter(farm_id=farm_id)
         
         # Include public dashboards or user's organization dashboards
         if not self.request.user.is_staff:
