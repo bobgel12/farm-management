@@ -16,6 +16,9 @@ import re
 
 
 class RotemScraper:
+    SITE_CONTROLLERS_MAX_RETRIES = 3
+    SITE_CONTROLLERS_INITIAL_BACKOFF_SECONDS = 1.0
+
     def __init__(self, username: str, password: str):
         self.username = username
         self.password = password
@@ -267,40 +270,60 @@ class RotemScraper:
             'authorization': ''
         })
         
-        try:
-            # GetSiteControllersInfo needs specific parameters
-            # Use the gateway code from the login response
-            gateway_code = "tace01000155"  # Default gateway code
-            if hasattr(self, 'gateway_code') and self.gateway_code:
-                gateway_code = self.gateway_code
-                
-            request_data = {
-                "prmSiteControllersInfoParams": {
-                    "GatewayCode": gateway_code
-                }
+        # GetSiteControllersInfo needs specific parameters
+        # Use the gateway code from the login response
+        gateway_code = "tace01000155"  # Default gateway code
+        if hasattr(self, 'gateway_code') and self.gateway_code:
+            gateway_code = self.gateway_code
+
+        request_data = {
+            "prmSiteControllersInfoParams": {
+                "GatewayCode": gateway_code
             }
-            response = self.session.post(url, headers=headers, json=request_data, timeout=30)
-            if response.status_code == 200:
-                try:
-                    result = response.json()
-                except (UnicodeDecodeError, ValueError) as e:
-                    # Try with utf-8-sig encoding for BOM issues
-                    if "BOM" in str(e) or "utf-8-sig" in str(e):
-                        response.encoding = 'utf-8-sig'
+        }
+
+        backoff_seconds = self.SITE_CONTROLLERS_INITIAL_BACKOFF_SECONDS
+        for attempt in range(1, self.SITE_CONTROLLERS_MAX_RETRIES + 1):
+            try:
+                response = self.session.post(url, headers=headers, json=request_data, timeout=30)
+                if response.status_code == 200:
+                    try:
                         result = response.json()
-                    else:
-                        print(f"⚠️ JSON decode error: {e}")
-                        print(f"Response text: {response.text[:200]}...")
-                        return None
-                print(f"✅ Site Controllers Info retrieved successfully")
-                return result
-            else:
+                    except (UnicodeDecodeError, ValueError) as e:
+                        # Try with utf-8-sig encoding for BOM issues
+                        if "BOM" in str(e) or "utf-8-sig" in str(e):
+                            response.encoding = 'utf-8-sig'
+                            result = response.json()
+                        else:
+                            print(f"⚠️ JSON decode error: {e}")
+                            print(f"Response text: {response.text[:200]}...")
+                            return None
+                    print(f"✅ Site Controllers Info retrieved successfully")
+                    return result
+
+                if response.status_code == 503 and attempt < self.SITE_CONTROLLERS_MAX_RETRIES:
+                    print(
+                        f"⚠️ GetSiteControllersInfo returned 503 "
+                        f"(attempt {attempt}/{self.SITE_CONTROLLERS_MAX_RETRIES}), "
+                        f"retrying in {backoff_seconds:.1f}s..."
+                    )
+                    time.sleep(backoff_seconds)
+                    backoff_seconds *= 2
+                    continue
+
                 print(f"❌ Failed to get Site Controllers Info: {response.status_code}")
                 print(f"Response: {response.text[:200]}...")
                 return None
-        except Exception as e:
-            print(f"❌ Error getting Site Controllers Info: {str(e)}")
-            return None
+            except Exception as e:
+                print(f"❌ Error getting Site Controllers Info (attempt {attempt}): {str(e)}")
+                if attempt < self.SITE_CONTROLLERS_MAX_RETRIES:
+                    print(f"🔁 Retrying in {backoff_seconds:.1f}s...")
+                    time.sleep(backoff_seconds)
+                    backoff_seconds *= 2
+                    continue
+                return None
+
+        return None
 
     def get_comparison_display_fields(self) -> Optional[Dict[Any, Any]]:
         """
