@@ -14,6 +14,7 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    allFarmsSection
                     heroCard
                     sensorGrid
                     alertsPeek
@@ -34,8 +35,11 @@ struct DashboardView: View {
                 .padding(.bottom, 24)
             }
             .background(Color.appBackground)
-            .navigationTitle("Greenfield Farm")
+            .navigationTitle(store.currentFarm.name)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    FarmSwitcherMenu()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showTips = true } label: {
                         Image(systemName: "sparkles")
@@ -49,6 +53,64 @@ struct DashboardView: View {
             .task { await store.refreshCoreDataIfNeeded() }
             .refreshable { await store.reloadCoreData() }
         }
+    }
+
+    // MARK: All farms (summary)
+
+    private var allFarmsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("All farms").font(AppFont.title)
+                Spacer()
+                if store.isLoading && store.farmHomeOverviewByFarmId.isEmpty && !store.farms.isEmpty {
+                    ProgressView().scaleEffect(0.8)
+                }
+            }
+            .padding(.horizontal, 2)
+
+            CardSection {
+                if store.farms.isEmpty {
+                    Text("No farms linked to this account.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.farms) { farm in
+                        let overview = store.farmHomeOverviewByFarmId[farm.id]
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(farm.name).font(AppFont.bodyBold)
+                                Text(farmOverviewLine(farm: farm, overview: overview))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                if let ac = overview?.houseRelatedAlertCount, ac > 0 {
+                                    Text("\(ac) house alert\(ac == 1 ? "" : "s")")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(Color.stateWarning)
+                                }
+                            }
+                            Spacer()
+                            if farm.id == store.currentFarmId {
+                                PillBadge(text: "Current", style: .info)
+                            }
+                        }
+                        if farm.id != store.farms.last?.id {
+                            Divider().overlay(Color.appSeparator)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func farmOverviewLine(farm: Farm, overview: FarmHomeOverview?) -> String {
+        let n = max(overview?.houseCount ?? 0, farm.activeHousesFromApi)
+        if let avg = overview?.avgDayAge {
+            return "\(n) houses · avg day \(avg)"
+        }
+        if n > 0 {
+            return "\(n) houses"
+        }
+        return "Loading overview…"
     }
 
     // MARK: Hero flock card
@@ -157,7 +219,7 @@ struct DashboardView: View {
             .padding(.horizontal, 2)
 
             CardSection {
-                ForEach(store.activeAlerts.prefix(2)) { alarm in
+                ForEach(store.activeAlerts.prefix(5)) { alarm in
                     NavigationLink(destination: AlertDetailView(alarm: alarm)) {
                         AlertRow(
                             systemImage: alarm.severity.systemImage,
@@ -167,7 +229,7 @@ struct DashboardView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    if alarm.id != store.activeAlerts.prefix(2).last?.id {
+                    if alarm.id != store.activeAlerts.prefix(5).last?.id {
                         Divider().overlay(Color.appSeparator)
                     }
                 }

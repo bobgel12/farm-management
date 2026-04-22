@@ -109,16 +109,16 @@ struct HouseDetailView: View {
         HStack(spacing: 8) {
             NavigationLink(destination: WaterDetailView(house: house)) {
                 resourceTile(icon: "drop.fill", tint: .stateInfo,
-                             label: "Water", value: "1,240", unit: "L / day")
+                             label: "Water", value: String(format: "%.0f", house.snapshot.waterLphr), unit: "L / hr")
             }.buttonStyle(.plain)
             NavigationLink(destination: FeedDetailView(house: house)) {
                 resourceTile(icon: "shippingbox.fill",
                              tint: Color(red: 166/255, green: 90/255, blue: 40/255),
-                             label: "Feed", value: "2,215", unit: "kg")
+                             label: "Feed", value: "\(house.snapshot.feedCyclesDone)", unit: "/ \(house.snapshot.feedCyclesPlanned) cycles")
             }.buttonStyle(.plain)
             NavigationLink(destination: HeaterDetailView(house: house)) {
                 resourceTile(icon: "flame.fill", tint: .stateWarning,
-                             label: "Heater", value: "1.4", unit: "h today")
+                             label: "Heater", value: "-", unit: "live in detail")
             }.buttonStyle(.plain)
         }
     }
@@ -159,11 +159,11 @@ struct HouseDetailView: View {
                          title: "Heaters", value: "Off")
                 Divider().overlay(Color.appSeparator).padding(.vertical, 10)
                 ValueRow(systemImage: "drop.fill", iconColor: .stateInfo,
-                         title: "Water flow", value: "132 L / hr")
+                         title: "Water flow", value: String(format: "%.0f L / hr", house.snapshot.waterLphr))
                 Divider().overlay(Color.appSeparator).padding(.vertical, 10)
                 ValueRow(systemImage: "shippingbox.fill",
                          iconColor: Color(red: 166/255, green: 90/255, blue: 40/255),
-                         title: "Feed augers", value: "Cycle 3 of 6")
+                         title: "Feed augers", value: "Cycle \(house.snapshot.feedCyclesDone) of \(house.snapshot.feedCyclesPlanned)")
             }
         }
     }

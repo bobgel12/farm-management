@@ -547,9 +547,13 @@ class WorkerListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         farm_id = self.request.query_params.get('farm_id')
+        queryset = Worker.objects.select_related('farm')
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is not None:
+            queryset = queryset.filter(farm__organization_id__in=org_ids)
         if farm_id:
-            return Worker.objects.filter(farm_id=farm_id)
-        return Worker.objects.all()
+            queryset = queryset.filter(farm_id=farm_id)
+        return queryset
 
     def perform_create(self, serializer):
         farm_id = self.request.data.get('farm_id')
@@ -581,6 +585,13 @@ class ProgramListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'GET':
             return ProgramListSerializer
         return ProgramSerializer
+
+    def get_queryset(self):
+        queryset = Program.objects.all()
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is None:
+            return queryset
+        return queryset.filter(Q(farms__organization_id__in=org_ids) | Q(farms__isnull=True)).distinct()
 
 
 class ProgramDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -643,6 +654,67 @@ def program_tasks(request, program_id):
     tasks = ProgramTask.objects.filter(program=program).order_by('day', 'priority', 'title')
     serializer = ProgramTaskSerializer(tasks, many=True)
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+def assign_program(request, program_id):
+    """
+    Assign a program to one or many farms and optionally regenerate house tasks.
+
+    Body:
+    {
+      "farm_ids": [1,2],
+      "house_ids": [10,11],  # optional filter inside farm_ids
+      "regenerate_tasks": true
+    }
+    """
+    program = get_object_or_404(Program, id=program_id)
+    farm_ids = request.data.get('farm_ids') or []
+    house_ids = request.data.get('house_ids') or []
+    regenerate_tasks = bool(request.data.get('regenerate_tasks', True))
+
+    if not farm_ids and not house_ids:
+        return Response(
+            {'error': 'farm_ids or house_ids is required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    org_ids = user_accessible_organization_ids(request)
+    farms_qs = Farm.objects.filter(is_active=True)
+    if org_ids is not None:
+        farms_qs = farms_qs.filter(organization_id__in=org_ids)
+    if farm_ids:
+        farms_qs = farms_qs.filter(id__in=farm_ids)
+
+    from houses.models import House
+
+    houses_qs = House.objects.filter(is_active=True, farm__in=farms_qs)
+    if house_ids:
+        houses_qs = houses_qs.filter(id__in=house_ids)
+
+    updated_farm_ids = []
+    regenerated_house_ids = []
+    with transaction.atomic():
+        for farm in farms_qs:
+            farm.program = program
+            farm.save(update_fields=['program', 'updated_at'])
+            updated_farm_ids.append(farm.id)
+
+        if regenerate_tasks:
+            for house in houses_qs.select_related('farm'):
+                if house.farm_id not in updated_farm_ids:
+                    continue
+                TaskScheduler.generate_tasks_for_house(house)
+                regenerated_house_ids.append(house.id)
+
+    return Response(
+        {
+            'program_id': program.id,
+            'updated_farms': updated_farm_ids,
+            'updated_houses': regenerated_house_ids,
+            'regenerate_tasks': regenerate_tasks,
+        }
+    )
 
 
 @api_view(['GET'])

@@ -59,6 +59,16 @@ struct Farm: Identifiable, Hashable {
     var flockAgeDays: Int
     var worstState: SensorState
     var alertSummary: String   // e.g. "2 alerts" · "1 critical"
+    /// From list API (`active_houses`); used before per-farm house load completes.
+    var activeHousesFromApi: Int
+}
+
+/// Aggregates for home “all farms” list (from monitoring dashboard).
+struct FarmHomeOverview: Hashable, Sendable {
+    var houseCount: Int
+    var avgDayAge: Int?
+    /// Sum of per-house active alarms from dashboard (house-related).
+    var houseRelatedAlertCount: Int
 }
 
 enum HouseType: String, Codable, CaseIterable {
