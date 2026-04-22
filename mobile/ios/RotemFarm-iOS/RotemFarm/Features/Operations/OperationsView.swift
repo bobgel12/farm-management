@@ -25,7 +25,6 @@ struct OperationsView: View {
                     SectionHeader(title: "Houses")
                     ForEach(store.housesForCurrentFarm.sorted(by: { $0.name < $1.name })) { house in
                         NavigationLink(value: house) {
-                            let kpi = store.houseKpi(for: house.id)
                             HouseCardMini(
                                 houseName: house.name,
                                 subtitle: "\(house.birdCount.formatted()) birds",
@@ -33,8 +32,8 @@ struct OperationsView: View {
                                 pillText: house.pillText,
                                 stats: [
                                     ("Day", "\(house.flockDay)"),
-                                    ("Water", Self.formatWaterLive(house, kpi: kpi)),
-                                    ("Heater", Self.formatHeaterForHouse(store, house, kpi))
+                                    ("Water", Self.formatWaterLive(store, house)),
+                                    ("Heater", Self.formatHeaterForHouse(store, house))
                                 ]
                             )
                         }
@@ -73,23 +72,21 @@ struct OperationsView: View {
         }
     }
 
-    /// Same source as House detail: latest snapshot `water_consumption`; KPI day-total only as fallback.
-    private static func formatWaterLive(_ house: House, kpi: APIHouseMonitoringKpis?) -> String {
-        let v = house.snapshot.waterLphr
-        if v > 0 {
-            return String(format: "%.0f L/hr", v)
+    /// Realtime-only water value from Rotem monitoring history.
+    private static func formatWaterLive(_ store: MockDataStore, _ house: House) -> String {
+        if !store.isRealtimeLoadedForHouse(house.id) {
+            return "Loading..."
         }
-        if let dod = kpi?.waterToday, dod > 0 {
-            return String(format: "%.0f L", dod)
-        }
-        return "—"
+        guard let v = store.waterForOperationsList(houseId: house.id) else { return "—" }
+        return String(format: "%.0f L", v)
     }
 
-    private static func formatHeaterForHouse(_ store: MockDataStore, _ house: House, _ kpi: APIHouseMonitoringKpis?) -> String {
-        if let h = store.heaterHoursForOperationsList(houseId: house.id) {
-            return String(format: "%.1f h", h)
+    /// Realtime-only heater value from Rotem heater history.
+    private static func formatHeaterForHouse(_ store: MockDataStore, _ house: House) -> String {
+        if !store.isRealtimeLoadedForHouse(house.id) {
+            return "Loading..."
         }
-        if let h = kpi?.heaterHours24h {
+        if let h = store.heaterHoursForOperationsList(houseId: house.id) {
             return String(format: "%.1f h", h)
         }
         return "—"
