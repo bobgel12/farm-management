@@ -16,7 +16,7 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     allFarmsSection
                     heroCard
-                    sensorGrid
+                    environmentByHouseGrid
                     alertsPeek
                     if let tip = store.tips.first {
                         AICard(
@@ -159,49 +159,65 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: Sensor grid
+    // MARK: Per-house environment
 
-    private var sensorGrid: some View {
+    private var environmentByHouseGrid: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Environment").font(AppFont.title)
+                Text("Environment by house").font(AppFont.title)
                 Spacer()
                 PillBadge(text: "Live", style: .live)
             }
             .padding(.horizontal, 2)
 
-            let snap = store.housesForCurrentFarm.first?.snapshot ?? HouseSnapshot(
-                tempC: 0,
-                humidity: 0,
-                co2Ppm: 0,
-                ammoniaPpm: 0,
-                staticPressurePa: 0,
-                airflowPct: 0,
-                waterLphr: 0,
-                feedCyclesDone: 0,
-                feedCyclesPlanned: 0,
-                tempFill: 0,
-                humidityFill: 0,
-                co2Fill: 0,
-                ammoniaFill: 0,
-                staticFill: 0,
-                airflowFill: 0
-            )
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-                      spacing: 8) {
-                SensorCard(title: "Temp",     value: String(format: "%.1f", snap.tempC),  unit: "°C",
-                           state: .ok, systemImage: "thermometer.medium", fillFraction: snap.tempFill)
-                SensorCard(title: "Humidity", value: String(format: "%.0f", snap.humidity), unit: "%",
-                           state: .warning, systemImage: "drop.fill", fillFraction: snap.humidityFill)
-                SensorCard(title: "CO₂",      value: String(format: "%.1f", snap.co2Ppm), unit: "k ppm",
-                           state: .ok, systemImage: "cloud.fog.fill", fillFraction: snap.co2Fill)
-                SensorCard(title: "NH₃",      value: String(format: "%.0f", snap.ammoniaPpm), unit: "ppm",
-                           state: .ok, systemImage: "wind", fillFraction: snap.ammoniaFill)
-                SensorCard(title: "Airflow",  value: String(format: "%.0f", snap.airflowPct), unit: "%",
-                           state: .ok, systemImage: "fan.fill", fillFraction: snap.airflowFill)
-                SensorCard(title: "Static",   value: String(format: "%.0f", snap.staticPressurePa), unit: "Pa",
-                           state: .critical, systemImage: "gauge.medium", fillFraction: snap.staticFill)
+            if store.housesForCurrentFarm.isEmpty {
+                CardSection {
+                    Text("No live house environment data for this farm yet.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                          spacing: 8) {
+                    ForEach(store.housesForCurrentFarm) { house in
+                        Button {
+                            showHouseDetail = house
+                        } label: {
+                            CardSection {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(alignment: .top) {
+                                        Text(house.name)
+                                            .font(AppFont.bodyBold)
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        PillBadge(
+                                            text: house.pillText,
+                                            style: house.state == .critical ? .critical : (house.state == .warning ? .warning : .ok)
+                                        )
+                                    }
+                                    environmentMetricRow("Temp", String(format: "%.1f °C", house.snapshot.tempC))
+                                    environmentMetricRow("Humidity", String(format: "%.0f %%", house.snapshot.humidity))
+                                    environmentMetricRow("Airflow", String(format: "%.0f %%", house.snapshot.airflowPct))
+                                    environmentMetricRow("Static", String(format: "%.0f Pa", house.snapshot.staticPressurePa))
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
+        }
+    }
+
+    private func environmentMetricRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(AppFont.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Text(value)
+                .font(AppFont.caption)
+                .foregroundStyle(.primary)
         }
     }
 

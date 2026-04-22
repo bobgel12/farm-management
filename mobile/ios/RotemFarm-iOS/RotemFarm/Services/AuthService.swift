@@ -92,6 +92,7 @@ final class AuthService {
         do {
             _ = try await apiClient.login(username: username, password: password)
             status = .signedIn
+            await store?.resetSessionData()
             await store?.reloadCoreData()
         } catch {
             status = .signedOut

@@ -106,10 +106,14 @@ struct HouseDetailView: View {
     // MARK: Resources strip
 
     private var resourcesStrip: some View {
-        HStack(spacing: 8) {
+        let waterRealtime = store.waterForOperationsList(houseId: house.id)
+        let heaterRuntime = store.heaterHoursForOperationsList(houseId: house.id)
+        return HStack(spacing: 8) {
             NavigationLink(destination: WaterDetailView(house: house)) {
                 resourceTile(icon: "drop.fill", tint: .stateInfo,
-                             label: "Water", value: String(format: "%.0f", house.snapshot.waterLphr), unit: "L / hr")
+                             label: "Water",
+                             value: waterRealtime.map { String(format: "%.0f", $0) } ?? "-",
+                             unit: store.isRealtimeLoadedForHouse(house.id) ? "L" : "loading...")
             }.buttonStyle(.plain)
             NavigationLink(destination: FeedDetailView(house: house)) {
                 resourceTile(icon: "shippingbox.fill",
@@ -118,7 +122,9 @@ struct HouseDetailView: View {
             }.buttonStyle(.plain)
             NavigationLink(destination: HeaterDetailView(house: house)) {
                 resourceTile(icon: "flame.fill", tint: .stateWarning,
-                             label: "Heater", value: "-", unit: "live in detail")
+                             label: "Heater",
+                             value: heaterRuntime.map { String(format: "%.1f", $0) } ?? "-",
+                             unit: store.isRealtimeLoadedForHouse(house.id) ? "h today" : "loading...")
             }.buttonStyle(.plain)
         }
     }

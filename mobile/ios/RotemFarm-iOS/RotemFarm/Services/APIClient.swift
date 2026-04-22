@@ -109,6 +109,12 @@ struct APIHouseMonitoringKpis {
     let waterFeedRatioToday: Double?
 }
 
+struct APIRotemWaterHistoryPoint {
+    let date: Date?
+    let growthDay: Int?
+    let consumptionAvg: Double
+}
+
 struct APIFarmHouseMeta {
     let houseID: Int
     let houseNumber: Int
@@ -675,6 +681,36 @@ actor APIClient {
             feedYesterday: feedDod?["previous"] as? Double,
             waterFeedRatioToday: ratio?["today"] as? Double
         )
+    }
+
+    /// Direct RotemNet water history (non-DB): sourced from scraper command stream.
+    func fetchRotemWaterHistory(houseID: Int, days: Int = 5) async throws -> [APIRotemWaterHistoryPoint] {
+        let safeDays = min(max(days, 1), 30)
+        let data = try await request(
+            path: "/api/rotem/daily-summaries/water-history/?house_id=\(houseID)&days=\(safeDays)",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true
+        )
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rows = json["water_history"] as? [[String: Any]]
+        else {
+            throw APIClientError.decoding
+        }
+        return rows.compactMap { row in
+            let consumption = (row["consumption_avg"] as? Double)
+                ?? (row["consumption"] as? Double)
+                ?? (row["water_consumption"] as? Double)
+            guard let consumption else { return nil }
+            let date = (row["date"] as? String).flatMap(parseISODate)
+            let growthDay = row["growth_day"] as? Int
+            return APIRotemWaterHistoryPoint(
+                date: date,
+                growthDay: growthDay,
+                consumptionAvg: consumption
+            )
+        }
     }
 
     func fetchHouseHeaterHistory(houseID: Int) async throws -> [DailyResourcePoint] {

@@ -57,6 +57,12 @@ final class MockDataStore {
     var houseKpisByHouseId: [UUID: APIHouseMonitoringKpis] = [:]
     /// Heater hours shown on Operations: daily total from heater-history for flock day when available, else KPI 24h.
     var houseHeaterHoursForListByHouseId: [UUID: Double] = [:]
+    /// Realtime water values resolved from per-house monitoring history fetch.
+    var houseWaterRealtimeByHouseId: [UUID: Double] = [:]
+    /// Realtime heater values resolved from per-house heater history fetch.
+    var houseHeaterRealtimeByHouseId: [UUID: Double] = [:]
+    /// Tracks houses whose realtime water/heater history has finished loading this cycle.
+    var houseRealtimeLoadedIds: Set<UUID> = []
 
     // MARK: Derived helpers
 
@@ -321,6 +327,13 @@ final class MockDataStore {
             alarms = []
             return
         }
+        isLoading = true
+        // Prevent stale water/heater values during farm reload.
+        houseWaterRealtimeByHouseId = [:]
+        houseHeaterRealtimeByHouseId = [:]
+        houseRealtimeLoadedIds = []
+        houseHeaterHoursForListByHouseId = [:]
+        defer { isLoading = false }
         do {
             log("reloadSelectedFarmData() farmBackendID=\(selectedFarmBackendID)")
             let apiHouses = try await apiClient.fetchHouses(farmID: selectedFarmBackendID)
@@ -384,39 +397,45 @@ final class MockDataStore {
             }
 
             houses = mappedHouses
+            // Phase 2: after house-wide load, fetch per-house realtime water + heater histories.
             var kpiByHouse: [UUID: APIHouseMonitoringKpis] = [:]
-            var heaterListByHouse: [UUID: Double] = [:]
+            var waterRealtimeByHouse: [UUID: Double] = [:]
+            var heaterRealtimeByHouse: [UUID: Double] = [:]
+            var loadedRealtimeHouseIDs: Set<UUID> = []
             let kpiClient = apiClient
-            await withTaskGroup(of: (UUID, APIHouseMonitoringKpis?, Double?).self) { group in
+            await withTaskGroup(of: (UUID, APIHouseMonitoringKpis?, Double?, Double?).self) { group in
                 for h in mappedHouses {
                     guard let bid = h.backendId else { continue }
                     let hid = h.id
-                    let flockDay = h.flockDay
                     group.addTask {
                         let k = try? await kpiClient.fetchHouseMonitoringKpis(houseID: bid)
+                        let rotemWaterHistory = (try? await kpiClient.fetchRotemWaterHistory(
+                            houseID: bid,
+                            days: 5
+                        )) ?? []
+                        let waterRealtime = rotemWaterHistory.last?.consumptionAvg
                         let heaterHistory = (try? await kpiClient.fetchHouseHeaterHistory(houseID: bid)) ?? []
-                        let fromDaily: Double? = {
-                            guard !heaterHistory.isEmpty else { return nil }
-                            if let row = heaterHistory.first(where: { $0.day == flockDay }) {
-                                return row.value
-                            }
-                            return heaterHistory.max(by: { $0.day < $1.day })?.value
-                        }()
-                        let listHeater = fromDaily ?? k?.heaterHours24h
-                        return (hid, k, listHeater)
+                        let heaterRealtime = heaterHistory.sorted(by: { $0.date < $1.date }).last?.value
+                        return (hid, k, waterRealtime, heaterRealtime)
                     }
                 }
-                for await (hid, kpi, listHeater) in group {
+                for await (hid, kpi, waterRealtime, heaterRealtime) in group {
                     if let kpi {
                         kpiByHouse[hid] = kpi
                     }
-                    if let listHeater {
-                        heaterListByHouse[hid] = listHeater
+                    if let waterRealtime {
+                        waterRealtimeByHouse[hid] = waterRealtime
                     }
+                    if let heaterRealtime {
+                        heaterRealtimeByHouse[hid] = heaterRealtime
+                    }
+                    loadedRealtimeHouseIDs.insert(hid)
                 }
             }
             houseKpisByHouseId = kpiByHouse
-            houseHeaterHoursForListByHouseId = heaterListByHouse
+            houseWaterRealtimeByHouseId = waterRealtimeByHouse
+            houseHeaterRealtimeByHouseId = heaterRealtimeByHouse
+            houseRealtimeLoadedIds = loadedRealtimeHouseIDs
             alarms = mappedAlarms.sorted { $0.occurredAt > $1.occurredAt }
             if let idx = farms.firstIndex(where: { $0.id == currentFarmId }) {
                 farms[idx].houseIds = houses.map(\.id)
@@ -570,6 +589,9 @@ final class MockDataStore {
         farmHomeOverviewByFarmId = [:]
         houseKpisByHouseId = [:]
         houseHeaterHoursForListByHouseId = [:]
+        houseWaterRealtimeByHouseId = [:]
+        houseHeaterRealtimeByHouseId = [:]
+        houseRealtimeLoadedIds = []
         farms = []
         houses = []
         flocks = []
@@ -741,7 +763,15 @@ final class MockDataStore {
     }
 
     func heaterHoursForOperationsList(houseId: UUID) -> Double? {
-        houseHeaterHoursForListByHouseId[houseId]
+        houseHeaterRealtimeByHouseId[houseId]
+    }
+
+    func waterForOperationsList(houseId: UUID) -> Double? {
+        houseWaterRealtimeByHouseId[houseId]
+    }
+
+    func isRealtimeLoadedForHouse(_ houseId: UUID) -> Bool {
+        houseRealtimeLoadedIds.contains(houseId)
     }
 
     /// Loads per-farm house counts, average growth day, and house alarm totals for the home screen.

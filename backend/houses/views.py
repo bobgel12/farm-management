@@ -39,6 +39,108 @@ from .services.monitoring_contract import MonitoringUnits
 from .services.heater_history_payload import build_heater_history_payload
 from rotem_scraper.tasks import sync_refresh_house_heater_history
 from farms.views import user_accessible_organization_ids
+from rotem_scraper.scraper import RotemScraper
+
+
+def _house_from_scope_or_404(request, house_id: int) -> House:
+    return get_object_or_404(_scoped_houses_queryset(request), id=house_id)
+
+
+def _house_rotem_scraper_or_error(house: House):
+    farm = house.farm
+    is_rotem_integrated = (
+        farm.integration_type == 'rotem' or
+        (farm.rotem_farm_id and str(farm.rotem_farm_id).strip() != '') or
+        farm.is_integrated
+    )
+    if not is_rotem_integrated:
+        return None, Response(
+            {'detail': 'House farm is not Rotem-integrated.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not farm.rotem_username or not farm.rotem_password:
+        return None, Response(
+            {'detail': 'Farm Rotem credentials are not configured.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    scraper = RotemScraper(username=farm.rotem_username, password=farm.rotem_password)
+    if not scraper.login():
+        return None, Response(
+            {'detail': 'Failed to authenticate with Rotem API.'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    return scraper, None
+
+
+def _safe_float(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_current_numeric(house_data: dict, key: str):
+    section = house_data.get(key, {}) if isinstance(house_data, dict) else {}
+    if not isinstance(section, dict):
+        return None
+    return _safe_float(section.get('CurrentNumericValue'))
+
+
+def _extract_live_house_from_site_controllers(payload: dict, house_number: int):
+    response_obj = payload.get('reponseObj') if isinstance(payload, dict) else None
+    farm_houses = response_obj.get('FarmHouses', []) if isinstance(response_obj, dict) else []
+    target = None
+    for row in farm_houses:
+        if isinstance(row, dict) and int(row.get('HouseNumber', -1)) == int(house_number):
+            target = row
+            break
+    if not target:
+        return None
+
+    data = target.get('Data', {}) if isinstance(target.get('Data'), dict) else {}
+    # Rotem "GetSiteControllersInfo" provides direct daily values in this bundle.
+    average_temperature = _extract_current_numeric(data, 'Temperature')
+    humidity = _extract_current_numeric(data, 'Humidity')
+    static_pressure = _extract_current_numeric(data, 'Pressure')
+    airflow_percentage = _extract_current_numeric(data, 'VentLevel')
+    water_consumption = _extract_current_numeric(data, 'DailyWater')
+    feed_consumption = _extract_current_numeric(data, 'DailyFeed')
+
+    last_update = response_obj.get('LastUpdateDT') if isinstance(response_obj, dict) else None
+    timestamp = timezone.now()
+    if isinstance(last_update, str):
+        try:
+            timestamp = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+        except ValueError:
+            timestamp = timezone.now()
+
+    return {
+        'house_id': int(target.get('HouseNumber', house_number)),
+        'source_timestamp': timestamp.isoformat(),
+        'timestamp': timezone.now().isoformat(),
+        'average_temperature': average_temperature,
+        'humidity': humidity,
+        'static_pressure': static_pressure,
+        'airflow_percentage': airflow_percentage,
+        'water_consumption': water_consumption,
+        'feed_consumption': feed_consumption,
+        'is_connected': int(target.get('ConnectionStatus', 0)) == 1,
+        'alarm_status': 'normal',
+    }
+
+
+def _extract_comparison_item(response_obj: dict, category: str, house_number: int):
+    if not isinstance(response_obj, dict):
+        return None
+    dic = response_obj.get('DicComparisonItems', {})
+    if not isinstance(dic, dict):
+        return None
+    bucket = dic.get(category, {})
+    if not isinstance(bucket, dict):
+        return None
+    return bucket.get(f'House{house_number}')
 
 
 def _scoped_farms_queryset(request):
@@ -244,55 +346,106 @@ def farm_task_summary(request, farm_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_monitoring_latest(request, house_id):
-    """Get latest monitoring snapshot for a house"""
-    house = get_object_or_404(House, id=house_id)
-    snapshot = house.get_latest_snapshot()
-    
-    if not snapshot:
-        return Response({
-            'status': 'no_data',
-            'message': 'No monitoring data available for this house'
-        }, status=status.HTTP_404_NOT_FOUND)
-    
-    serializer = HouseMonitoringSnapshotSerializer(snapshot)
-    return Response(serializer.data)
+    """Get latest live monitoring data for a house from Rotem API (no DB snapshot reads)."""
+    house = _house_from_scope_or_404(request, house_id)
+    scraper, err = _house_rotem_scraper_or_error(house)
+    if err:
+        return err
+
+    site_payload = scraper.get_site_controllers_info()
+    if not site_payload:
+        return Response(
+            {'detail': 'No live data returned from Rotem.'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    live = _extract_live_house_from_site_controllers(site_payload, house.house_number)
+    if not live:
+        return Response(
+            {'detail': 'House live data not found in Rotem response.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(live)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_monitoring_history(request, house_id):
-    """Get historical monitoring snapshots for a house"""
-    house = get_object_or_404(House, id=house_id)
-    
-    # Get query parameters
+    """Get live history from Rotem APIs (water/feed history + latest live sample)."""
+    house = _house_from_scope_or_404(request, house_id)
+    scraper, err = _house_rotem_scraper_or_error(house)
+    if err:
+        return err
+
+    # Keep existing query contract.
     start_date = request.query_params.get('start_date')
     end_date = request.query_params.get('end_date')
     limit = int(request.query_params.get('limit', 100))
-    
-    # Default to last 24 hours if no dates provided
-    if not end_date:
-        end_date = timezone.now()
-    else:
+    end_dt = timezone.now()
+    if end_date:
         try:
-            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
-            end_date = timezone.now()
-    
-    if not start_date:
-        start_date = end_date - timedelta(hours=24)
-    else:
+            end_dt = timezone.now()
+    start_dt = end_dt - timedelta(days=5)
+    if start_date:
         try:
-            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
-            start_date = end_date - timedelta(hours=24)
-    
-    snapshots = house.get_snapshots_for_range(start_date, end_date)[:limit]
-    
-    serializer = HouseMonitoringSummarySerializer(snapshots, many=True)
+            pass
+
+    raw_water = scraper.get_water_history(
+        house_number=house.house_number,
+        start_date=start_dt.date().isoformat(),
+        end_date=end_dt.date().isoformat(),
+    ) or {}
+    response_obj = raw_water.get('reponseObj', raw_water) if isinstance(raw_water, dict) else {}
+    ds_data = response_obj.get('dsData', {}) if isinstance(response_obj, dict) else {}
+    rows = ds_data.get('Data', []) if isinstance(ds_data, dict) else []
+
+    results = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        growth_day = row.get('HistoryRecord_GrowthDay') or row.get('HistoryRecord_Heaters_GrowthDay')
+        date_str = row.get('HistoryRecord_Date')
+        ts = None
+        if isinstance(date_str, str):
+            try:
+                ts = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            except ValueError:
+                ts = None
+        if ts is None and growth_day is not None and house.batch_start_date:
+            try:
+                ts = datetime.combine(house.batch_start_date + timedelta(days=int(growth_day)), datetime.min.time(), tzinfo=timezone.get_current_timezone())
+            except (TypeError, ValueError):
+                ts = timezone.now()
+        if ts is None:
+            ts = timezone.now()
+
+        water = _safe_float(row.get('HistoryRecord_DailyWater') or row.get('DailyWater') or row.get('Water'))
+        feed = _safe_float(row.get('HistoryRecord_DailyFeed') or row.get('DailyFeed') or row.get('Feed'))
+        results.append({
+            'source_timestamp': ts.isoformat(),
+            'timestamp': timezone.now().isoformat(),
+            'average_temperature': None,
+            'humidity': None,
+            'static_pressure': None,
+            'airflow_percentage': None,
+            'water_consumption': water,
+            'feed_consumption': feed,
+        })
+
+    # Add latest live general sample so clients still get realtime environment fields.
+    site_payload = scraper.get_site_controllers_info()
+    live = _extract_live_house_from_site_controllers(site_payload or {}, house.house_number)
+    if live:
+        results.append(live)
+
+    results = sorted(results, key=lambda x: x.get('source_timestamp') or x.get('timestamp'))[-limit:]
     return Response({
-        'count': len(serializer.data),
-        'start_date': start_date.isoformat(),
-        'end_date': end_date.isoformat(),
+        'count': len(results),
+        'start_date': start_dt.isoformat(),
+        'end_date': end_dt.isoformat(),
         'contract': {
             'timestamp_fields': {
                 'source': 'source_timestamp',
@@ -300,7 +453,7 @@ def house_monitoring_history(request, house_id):
             },
             'units': MonitoringUnits().__dict__,
         },
-        'results': serializer.data
+        'results': results
     })
 
 
@@ -328,78 +481,59 @@ def house_monitoring_stats(request, house_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_monitoring_kpis(request, house_id):
-    """Get derived operational KPIs for a house."""
-    house = get_object_or_404(House, id=house_id)
+    """Get derived operational KPIs from live Rotem data (no DB snapshot reads)."""
+    house = _house_from_scope_or_404(request, house_id)
+    scraper, err = _house_rotem_scraper_or_error(house)
+    if err:
+        return err
+
+    # Live water/feed day-over-day from Rotem water history (CommandID 40).
     now = timezone.now()
-    last_24h = now - timedelta(hours=24)
-    last_7d = now - timedelta(days=7)
-
-    snapshots_24h = list(
-        HouseMonitoringSnapshot.objects.filter(
-            house=house,
-            timestamp__gte=last_24h,
-        ).order_by('timestamp')
-    )
-    snapshots_7d = list(
-        HouseMonitoringSnapshot.objects.filter(
-            house=house,
-            timestamp__gte=last_7d,
-        ).order_by('-timestamp')
-    )
-
-    dod_param = request.query_params.get('dod_reference_date')
-    day_over_day_context = None
-
-    def max_metric_on_calendar_day(metric_field: str, d: date):
-        """Max snapshot value for a calendar day (same proxy as daily_value max)."""
-        agg = HouseMonitoringSnapshot.objects.filter(
-            house=house,
-            timestamp__date=d,
-        ).aggregate(m=Max(metric_field))
-        v = agg['m']
-        return float(v) if v is not None else None
-
-    if dod_param:
+    start_date = (now.date() - timedelta(days=7)).isoformat()
+    end_date = now.date().isoformat()
+    raw_water = scraper.get_water_history(house_number=house.house_number, start_date=start_date, end_date=end_date) or {}
+    response_obj = raw_water.get('reponseObj', raw_water) if isinstance(raw_water, dict) else {}
+    ds_data = response_obj.get('dsData', {}) if isinstance(response_obj, dict) else {}
+    rows = ds_data.get('Data', []) if isinstance(ds_data, dict) else []
+    water_by_day = {}
+    feed_by_day = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        gday = row.get('HistoryRecord_GrowthDay')
         try:
-            ref_d = date.fromisoformat(dod_param.strip())
-        except ValueError:
-            return Response(
-                {'detail': 'Invalid dod_reference_date; expected YYYY-MM-DD.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        prev_d = ref_d - timedelta(days=1)
-        day_over_day_context = {
-            'reference_date': ref_d.isoformat(),
-            'compare_date': prev_d.isoformat(),
-        }
-        water_today = max_metric_on_calendar_day('water_consumption', ref_d)
-        water_yesterday = max_metric_on_calendar_day('water_consumption', prev_d)
-        feed_today = max_metric_on_calendar_day('feed_consumption', ref_d)
-        feed_yesterday = max_metric_on_calendar_day('feed_consumption', prev_d)
-    else:
-        # Build day buckets for day-over-day deltas (rolling 7d window).
-        day_water = defaultdict(list)
-        day_feed = defaultdict(list)
-        for snap in snapshots_7d:
-            day_key = snap.timestamp.date().isoformat()
-            if snap.water_consumption is not None:
-                day_water[day_key].append(float(snap.water_consumption))
-            if snap.feed_consumption is not None:
-                day_feed[day_key].append(float(snap.feed_consumption))
+            gday = int(gday)
+        except (TypeError, ValueError):
+            continue
+        if house.batch_start_date:
+            day = house.batch_start_date + timedelta(days=gday)
+            day_key = day.isoformat()
+        else:
+            day_key = str(gday)
+        w = _safe_float(row.get('HistoryRecord_DailyWater') or row.get('DailyWater') or row.get('Water'))
+        f = _safe_float(row.get('HistoryRecord_DailyFeed') or row.get('DailyFeed') or row.get('Feed'))
+        if w is not None:
+            water_by_day[day_key] = w
+        if f is not None:
+            feed_by_day[day_key] = f
 
-        def daily_value(day_map, day):
-            values = day_map.get(day, [])
-            if not values:
-                return None
-            # Use max as daily total proxy to avoid underestimating during intra-day refreshes.
-            return max(values)
+    sorted_water_days = sorted(water_by_day.keys())
+    sorted_feed_days = sorted(feed_by_day.keys())
+    water_today = water_by_day.get(sorted_water_days[-1]) if sorted_water_days else None
+    water_yesterday = water_by_day.get(sorted_water_days[-2]) if len(sorted_water_days) > 1 else None
+    feed_today = feed_by_day.get(sorted_feed_days[-1]) if sorted_feed_days else None
+    feed_yesterday = feed_by_day.get(sorted_feed_days[-2]) if len(sorted_feed_days) > 1 else None
 
-        today_key = now.date().isoformat()
-        yesterday_key = (now.date() - timedelta(days=1)).isoformat()
-        water_today = daily_value(day_water, today_key)
-        water_yesterday = daily_value(day_water, yesterday_key)
-        feed_today = daily_value(day_feed, today_key)
-        feed_yesterday = daily_value(day_feed, yesterday_key)
+    # Live heater runtime from Rotem heater history (CommandID 43).
+    heater_data = scraper.get_heater_history(house_number=house.house_number) or {}
+    heater_records = heater_data.get('records', []) if isinstance(heater_data, dict) else []
+    heater_hours_24h = None
+    heater_cycles_24h = None
+    if heater_records:
+        last = heater_records[-1]
+        heater_hours_24h = _safe_float(last.get('total_runtime_hours'))
+        per_device = last.get('per_device', {}) if isinstance(last.get('per_device'), dict) else {}
+        heater_cycles_24h = len([k for k, v in per_device.items() if isinstance(v, dict) and (v.get('minutes') or 0) > 0])
 
     def calc_delta(current, previous):
         if current is None or previous is None:
@@ -410,97 +544,28 @@ def house_monitoring_kpis(request, house_id):
 
     water_delta = calc_delta(water_today, water_yesterday)
     feed_delta = calc_delta(feed_today, feed_yesterday)
-
-    # Water/feed ratio trend (today and yesterday)
     ratio_today = (water_today / feed_today) if (water_today is not None and feed_today not in [None, 0]) else None
-    ratio_yesterday = (
-        water_yesterday / feed_yesterday
-        if (water_yesterday is not None and feed_yesterday not in [None, 0])
-        else None
-    )
-    ratio_delta_pct = None
-    if ratio_today is not None and ratio_yesterday not in [None, 0]:
-        ratio_delta_pct = ((ratio_today - ratio_yesterday) / ratio_yesterday) * 100.0
+    ratio_yesterday = (water_yesterday / feed_yesterday) if (water_yesterday is not None and feed_yesterday not in [None, 0]) else None
+    ratio_delta_pct = ((ratio_today - ratio_yesterday) / ratio_yesterday * 100.0) if (ratio_today is not None and ratio_yesterday not in [None, 0]) else None
 
-    # Heater and fan runtime estimation from digital output statuses.
-    heater_seconds = 0.0
-    fan_seconds = 0.0
-    heater_cycles = 0
-    last_heater_on = False
-
-    for i, snap in enumerate(snapshots_24h):
-        if i == len(snapshots_24h) - 1:
-            end_time = now
-        else:
-            end_time = snapshots_24h[i + 1].timestamp
-        duration = max((end_time - snap.timestamp).total_seconds(), 0.0)
-
-        sensor_data = snap.sensor_data or {}
-        digital_outputs = sensor_data.get('digital_outputs', {})
-
-        heater_on = any(
-            isinstance(v, dict) and v.get('is_on') is True
-            for k, v in digital_outputs.items()
-            if 'heater' in k
-        )
-        fan_on = any(
-            isinstance(v, dict) and v.get('is_on') is True
-            for k, v in digital_outputs.items()
-            if ('fan' in k or 'tunnel' in k or 'exh' in k or 'stir' in k)
-        )
-
-        if heater_on:
-            heater_seconds += duration
-        if fan_on:
-            fan_seconds += duration
-        if heater_on and not last_heater_on:
-            heater_cycles += 1
-        last_heater_on = heater_on
-
-    heater_runtime_hours = round(heater_seconds / 3600.0, 2) if snapshots_24h else None
-    fan_runtime_hours = round(fan_seconds / 3600.0, 2) if snapshots_24h else None
-
-    # Ventilation effort index (0-100) from latest 24h averages.
-    vent_values = [s.ventilation_level for s in snapshots_24h if s.ventilation_level is not None]
-    airflow_values = [s.airflow_percentage for s in snapshots_24h if s.airflow_percentage is not None]
-    avg_vent = sum(vent_values) / len(vent_values) if vent_values else None
-    avg_airflow = sum(airflow_values) / len(airflow_values) if airflow_values else None
-    ventilation_effort_index = None
-    if avg_vent is not None or avg_airflow is not None or fan_runtime_hours is not None:
-        v = avg_vent if avg_vent is not None else 0.0
-        a = avg_airflow if avg_airflow is not None else 0.0
-        f = min((fan_runtime_hours or 0.0) / 24.0 * 100.0, 100.0)
-        ventilation_effort_index = round((0.4 * v) + (0.4 * a) + (0.2 * f), 2)
-
-    # Alarm burden summary.
-    alarms_24h = HouseAlarm.objects.filter(house=house, timestamp__gte=last_24h)
-    alarm_counts = {
-        'total_24h': alarms_24h.count(),
-        'critical_24h': alarms_24h.filter(severity='critical').count(),
-        'high_24h': alarms_24h.filter(severity='high').count(),
-        'medium_24h': alarms_24h.filter(severity='medium').count(),
-        'low_24h': alarms_24h.filter(severity='low').count(),
-        'active_now': HouseAlarm.objects.filter(house=house, is_active=True).count(),
-    }
-
-    response = {
+    return Response({
         'house_id': house.id,
         'window_hours': 24,
-        'day_over_day_context': day_over_day_context,
+        'day_over_day_context': None,
         'data_quality': {
-            'snapshots_24h': len(snapshots_24h),
-            'snapshots_7d': len(snapshots_7d),
-            'enough_for_runtime': len(snapshots_24h) >= 2,
+            'snapshots_24h': None,
+            'snapshots_7d': None,
+            'enough_for_runtime': heater_hours_24h is not None,
             'enough_for_dod_delta': water_today is not None and water_yesterday is not None,
         },
         'heater_runtime': {
-            'hours_24h': heater_runtime_hours,
-            'cycles_24h': heater_cycles if snapshots_24h else None,
-            'method': 'estimated_from_status_snapshots',
+            'hours_24h': heater_hours_24h,
+            'cycles_24h': heater_cycles_24h,
+            'method': 'rotem_command_43_live',
         },
         'fan_runtime': {
-            'hours_24h': fan_runtime_hours,
-            'method': 'estimated_from_status_snapshots',
+            'hours_24h': None,
+            'method': 'not_available_from_live_path',
         },
         'water_day_over_day': water_delta,
         'feed_day_over_day': feed_delta,
@@ -509,100 +574,134 @@ def house_monitoring_kpis(request, house_id):
             'yesterday': ratio_yesterday,
             'delta_pct': ratio_delta_pct,
         },
-        'ventilation_effort_index': ventilation_effort_index,
-        'alarm_burden': alarm_counts,
-    }
-    return Response(response)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def farm_houses_monitoring_all(request, farm_id):
-    """Get latest monitoring data for all houses in a farm"""
-    farm = get_object_or_404(Farm, id=farm_id)
-    houses = House.objects.filter(farm=farm, is_active=True)
-    
-    results = []
-    for house in houses:
-        snapshot = house.get_latest_snapshot()
-        if snapshot:
-            serializer = HouseMonitoringSummarySerializer(snapshot)
-            results.append(serializer.data)
-        else:
-            results.append({
-                'house_id': house.id,
-                'house_number': house.house_number,
-                'status': 'no_data',
-                'message': 'No monitoring data available'
-            })
-    
-    return Response({
-        'farm_id': farm_id,
-        'farm_name': farm.name,
-        'houses_count': len(results),
-        'houses': results
+        'ventilation_effort_index': None,
+        'alarm_burden': {
+            'total_24h': None,
+            'critical_24h': None,
+            'high_24h': None,
+            'medium_24h': None,
+            'low_24h': None,
+            'active_now': None,
+        },
     })
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def farm_houses_monitoring_all(request, farm_id):
+    """Get latest live monitoring data for all houses in a farm from Rotem API."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
+    if not houses:
+        return Response({'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': 0, 'houses': []})
+
+    scraper, err = _house_rotem_scraper_or_error(houses[0])
+    if err:
+        return err
+    payload = scraper.get_site_controllers_info() or {}
+
+    results = []
+    for house in houses:
+        live = _extract_live_house_from_site_controllers(payload, house.house_number)
+        if live:
+            results.append({
+                'house_id': house.id,
+                'house_number': house.house_number,
+                'timestamp': live.get('timestamp'),
+                'source_timestamp': live.get('source_timestamp'),
+                'average_temperature': live.get('average_temperature'),
+                'outside_temperature': None,
+                'humidity': live.get('humidity'),
+                'static_pressure': live.get('static_pressure'),
+                'target_temperature': None,
+                'ventilation_level': live.get('airflow_percentage'),
+                'growth_day': house.age_days,
+                'bird_count': None,
+                'livability': None,
+                'water_consumption': live.get('water_consumption'),
+                'feed_consumption': live.get('feed_consumption'),
+                'airflow_cfm': None,
+                'airflow_percentage': live.get('airflow_percentage'),
+                'connection_status': 'connected' if live.get('is_connected') else 'disconnected',
+                'alarm_status': live.get('alarm_status') or 'normal',
+                'has_alarms': False,
+                'is_connected': bool(live.get('is_connected')),
+            })
+        else:
+            results.append({
+                'house_id': house.id,
+                'house_number': house.house_number,
+                'status': 'no_data',
+                'message': 'No live Rotem data available for this house',
+            })
+
+    return Response({'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': len(results), 'houses': results})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def farm_houses_monitoring_dashboard(request, farm_id):
-    """Get dashboard data with alerts and summaries for all houses"""
-    farm = get_object_or_404(Farm, id=farm_id)
-    houses = House.objects.filter(farm=farm, is_active=True)
-    
+    """Get dashboard data with live Rotem data only (no DB snapshot reads)."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
     dashboard_data = {
         'farm_id': farm_id,
         'farm_name': farm.name,
-        'total_houses': houses.count(),
+        'total_houses': len(houses),
         'houses': [],
-        'alerts_summary': {
-            'total_active': 0,
-            'critical': 0,
-            'warning': 0,
-            'normal': 0
-        },
-        'connection_summary': {
-            'connected': 0,
-            'disconnected': 0
-        }
+        'alerts_summary': {'total_active': 0, 'critical': 0, 'warning': 0, 'normal': 0},
+        'connection_summary': {'connected': 0, 'disconnected': 0},
     }
-    
+    if not houses:
+        return Response(dashboard_data)
+
+    scraper, err = _house_rotem_scraper_or_error(houses[0])
+    if err:
+        return err
+    payload = scraper.get_site_controllers_info() or {}
+
     for house in houses:
-        snapshot = house.get_latest_snapshot()
-        active_alarms = HouseAlarm.objects.filter(house=house, is_active=True).count()
-        
+        live = _extract_live_house_from_site_controllers(payload, house.house_number)
         house_data = {
             'house_id': house.id,
             'house_number': house.house_number,
-            'current_day': house.current_day,
+            'current_day': house.age_days,
             'status': house.status,
+            'active_alarms_count': 0,
         }
-        
-        if snapshot:
-            serializer = HouseMonitoringSummarySerializer(snapshot)
-            house_data.update(serializer.data)
-            
-            # Update summary counts
-            if snapshot.alarm_status == 'critical':
-                dashboard_data['alerts_summary']['critical'] += 1
-            elif snapshot.alarm_status == 'warning':
-                dashboard_data['alerts_summary']['warning'] += 1
-            else:
-                dashboard_data['alerts_summary']['normal'] += 1
-            
-            if snapshot.is_connected:
-                dashboard_data['connection_summary']['connected'] += 1
-            else:
-                dashboard_data['connection_summary']['disconnected'] += 1
-        else:
+        if not live:
             house_data['status'] = 'no_data'
-        
-        house_data['active_alarms_count'] = active_alarms
-        dashboard_data['alerts_summary']['total_active'] += active_alarms
-        
+            dashboard_data['houses'].append(house_data)
+            continue
+
+        alarm_status = live.get('alarm_status') or 'normal'
+        house_data.update({
+            'timestamp': live.get('timestamp'),
+            'source_timestamp': live.get('source_timestamp'),
+            'average_temperature': live.get('average_temperature'),
+            'humidity': live.get('humidity'),
+            'static_pressure': live.get('static_pressure'),
+            'airflow_percentage': live.get('airflow_percentage'),
+            'water_consumption': live.get('water_consumption'),
+            'feed_consumption': live.get('feed_consumption'),
+            'is_connected': bool(live.get('is_connected')),
+            'alarm_status': alarm_status,
+        })
+
+        if house_data['is_connected']:
+            dashboard_data['connection_summary']['connected'] += 1
+        else:
+            dashboard_data['connection_summary']['disconnected'] += 1
+
+        if alarm_status == 'critical':
+            dashboard_data['alerts_summary']['critical'] += 1
+        elif alarm_status == 'warning':
+            dashboard_data['alerts_summary']['warning'] += 1
+        else:
+            dashboard_data['alerts_summary']['normal'] += 1
+
         dashboard_data['houses'].append(house_data)
-    
+
     return Response(dashboard_data)
 
 
@@ -667,9 +766,34 @@ def house_details(request, house_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_heater_history(request, house_id):
-    """Cached CommandID 43 heater history only (fast; no Rotem call)."""
-    house = get_object_or_404(House, id=house_id)
-    return Response({"heater_history": build_heater_history_payload(house)})
+    """Live CommandID 43 heater history from Rotem API (no cache read)."""
+    house = _house_from_scope_or_404(request, house_id)
+    scraper, err = _house_rotem_scraper_or_error(house)
+    if err:
+        return err
+
+    parsed = scraper.get_heater_history(house_number=house.house_number) or {}
+    records = parsed.get('records', []) if isinstance(parsed, dict) else []
+    daily = []
+    for r in records:
+        growth_day = r.get('growth_day')
+        if growth_day is None:
+            continue
+        dt = None
+        if house.batch_start_date:
+            try:
+                dt = house.batch_start_date + timedelta(days=int(growth_day))
+            except (TypeError, ValueError):
+                dt = None
+        daily.append({
+            'growth_day': int(growth_day),
+            'date': dt.isoformat() if dt else None,
+            'total_hours': _safe_float(r.get('total_runtime_hours')) or 0.0,
+            'total_minutes': int(r.get('total_runtime_minutes') or 0),
+            'device_breakdown': r.get('per_device', {}),
+        })
+    daily.sort(key=lambda row: row.get('growth_day', 0))
+    return Response({'heater_history': {'daily': daily}})
 
 
 @api_view(['POST'])
@@ -697,14 +821,14 @@ def house_heater_history_refresh(request, house_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def houses_comparison(request):
-    """Get comparison data for multiple houses across farms"""
+    """Get comparison data from live Rotem sources only (no DB snapshots)."""
     # Get query parameters
     farm_id = request.query_params.get('farm_id')
     house_ids = request.query_params.getlist('house_ids')
     favorites_only = request.query_params.get('favorites', 'false').lower() == 'true'
     
-    # Build queryset
-    houses = House.objects.filter(is_active=True)
+    # Build queryset (scoped) and select farm for grouped live calls.
+    houses = _scoped_houses_queryset(request).filter(is_active=True).select_related('farm')
     
     if farm_id:
         houses = houses.filter(farm_id=farm_id)
@@ -716,39 +840,37 @@ def houses_comparison(request):
     # if favorites_only:
     #     houses = houses.filter(id__in=user_favorite_house_ids)
     
-    # Get comparison data for each house
     comparison_data = []
-    
     now = timezone.now()
+    live_by_farm = {}
+    for farm_id_value in {h.farm_id for h in houses}:
+        farm_houses = [h for h in houses if h.farm_id == farm_id_value]
+        if not farm_houses:
+            continue
+        scraper, err = _house_rotem_scraper_or_error(farm_houses[0])
+        if err:
+            continue
+        live_by_farm[farm_id_value] = scraper.get_site_controllers_info() or {}
 
     for house in houses:
-        snapshot = house.get_latest_snapshot()
-        # Use age_days which prefers Rotem's current_age_days over calculated current_day
         age_days = house.age_days
-        
-        # Determine if house is full (has chickens)
         is_full_house = age_days is not None and age_days >= 0
-        
-        # Get ventilation mode from snapshot or default
-        ventilation_mode = None
-        if snapshot:
-            # Try to extract ventilation mode from raw_data or sensor_data
-            raw_data = snapshot.raw_data or {}
-            sensor_data = snapshot.sensor_data or {}
-            
-            # Check common ventilation mode fields
-            ventilation_mode = (
-                raw_data.get('ventilation_mode') or
-                raw_data.get('ventMode') or
-                sensor_data.get('ventilation_mode') or
-                'Minimum Vent.'  # Default
-            )
-        
-        active_alarms_count = HouseAlarm.objects.filter(house=house, is_active=True).count()
+        farm_payload = live_by_farm.get(house.farm_id, {})
+        live = _extract_live_house_from_site_controllers(farm_payload, house.house_number) or {}
+        response_obj = farm_payload.get('reponseObj', {}) if isinstance(farm_payload, dict) else {}
 
-        water_consumption = snapshot.water_consumption if snapshot else None
-        feed_consumption = snapshot.feed_consumption if snapshot else None
-        bird_count = snapshot.bird_count if snapshot else None
+        water_consumption = _safe_float(
+            _extract_comparison_item(response_obj, 'Water_Daily', house.house_number)
+        )
+        if water_consumption is None:
+            water_consumption = live.get('water_consumption')
+        feed_consumption = _safe_float(
+            _extract_comparison_item(response_obj, 'Feed_Daily', house.house_number)
+        )
+        if feed_consumption is None:
+            feed_consumption = live.get('feed_consumption')
+        bird_count = _safe_float(_extract_comparison_item(response_obj, 'Current_Birds_Count_In_House', house.house_number))
+        bird_count = int(bird_count) if bird_count is not None else None
         water_per_bird = (
             (float(water_consumption) / float(bird_count))
             if (water_consumption is not None and bird_count not in [None, 0])
@@ -765,36 +887,23 @@ def houses_comparison(request):
             else None
         )
 
-        # Freshness in minutes since last snapshot.
+        # Freshness in minutes since last live update.
         data_freshness_minutes = None
-        if snapshot and snapshot.timestamp:
-            data_freshness_minutes = max(int((now - snapshot.timestamp).total_seconds() / 60), 0)
+        source_ts = live.get('source_timestamp')
+        if source_ts:
+            try:
+                dt = datetime.fromisoformat(str(source_ts).replace('Z', '+00:00'))
+                data_freshness_minutes = max(int((now - dt).total_seconds() / 60), 0)
+            except ValueError:
+                data_freshness_minutes = None
 
-        # Runtime proxies from parsed digital outputs.
-        heater_on = False
-        fan_on = False
-        wind_speed = None
-        wind_direction = None
-        wind_chill_temperature = None
-        if snapshot and snapshot.sensor_data:
-            sensor_data = snapshot.sensor_data or {}
-            digital_outputs = sensor_data.get('digital_outputs', {})
-            if isinstance(digital_outputs, dict):
-                heater_on = any(
-                    isinstance(v, dict) and v.get('is_on') is True
-                    for k, v in digital_outputs.items()
-                    if 'heater' in k
-                )
-                fan_on = any(
-                    isinstance(v, dict) and v.get('is_on') is True
-                    for k, v in digital_outputs.items()
-                    if ('fan' in k or 'tunnel' in k or 'exh' in k or 'stir' in k)
-                )
-            wind_ctx = sensor_data.get('wind', {}) if isinstance(sensor_data, dict) else {}
-            if isinstance(wind_ctx, dict):
-                wind_speed = wind_ctx.get('wind_speed')
-                wind_direction = wind_ctx.get('wind_direction')
-                wind_chill_temperature = wind_ctx.get('wind_chill_temperature')
+        heater_raw = _extract_comparison_item(response_obj, 'Heaters', house.house_number)
+        fan_raw = _extract_comparison_item(response_obj, 'Tunnel_Fans', house.house_number) or _extract_comparison_item(response_obj, 'Exh_Fans', house.house_number)
+        heater_on = bool(heater_raw and str(heater_raw).lower() not in ('langkey_off', 'off', '0', 'false', 'none', ''))
+        fan_on = bool(fan_raw and str(fan_raw).lower() not in ('langkey_off', 'off', '0', 'false', 'none', ''))
+        wind_speed = _safe_float(_extract_comparison_item(response_obj, 'Wind_Speed', house.house_number))
+        wind_direction = _safe_float(_extract_comparison_item(response_obj, 'Wind_Direction', house.house_number))
+        wind_chill_temperature = _safe_float(_extract_comparison_item(response_obj, 'Wind_Chill_Temperature', house.house_number))
 
         house_comparison = {
             'house_id': house.id,
@@ -811,21 +920,21 @@ def houses_comparison(request):
             'is_full_house': is_full_house,
             
             # Time
-            'last_update_time': snapshot.timestamp if snapshot else None,
+            'last_update_time': source_ts or now,
             
             # Metrics - Temperature
-            'average_temperature': snapshot.average_temperature if snapshot else None,
-            'outside_temperature': snapshot.outside_temperature if snapshot else None,
-            'tunnel_temperature': None,  # Will be extracted from sensor_data if available
-            'target_temperature': snapshot.target_temperature if snapshot else None,
+            'average_temperature': live.get('average_temperature'),
+            'outside_temperature': _safe_float(_extract_comparison_item(response_obj, 'Outside_Temperature', house.house_number)),
+            'tunnel_temperature': _safe_float(_extract_comparison_item(response_obj, 'Tunnel_Temperature', house.house_number)),
+            'target_temperature': _safe_float(_extract_comparison_item(response_obj, 'Set_Temperature', house.house_number)),
             
             # Metrics - Environment
-            'static_pressure': snapshot.static_pressure if snapshot else None,
-            'inside_humidity': snapshot.humidity if snapshot else None,
-            'ventilation_mode': ventilation_mode,
-            'ventilation_level': snapshot.ventilation_level if snapshot else None,
-            'airflow_cfm': snapshot.airflow_cfm if snapshot else None,
-            'airflow_percentage': snapshot.airflow_percentage if snapshot else None,
+            'static_pressure': live.get('static_pressure'),
+            'inside_humidity': live.get('humidity'),
+            'ventilation_mode': _extract_comparison_item(response_obj, 'Vent_Mode', house.house_number),
+            'ventilation_level': _safe_float(_extract_comparison_item(response_obj, 'Vent_Level', house.house_number)),
+            'airflow_cfm': _safe_float(str(_extract_comparison_item(response_obj, 'Current_Level_CFM', house.house_number) or '').replace(',', '')),
+            'airflow_percentage': live.get('airflow_percentage'),
             
             # Metrics - Consumption (Daily)
             'water_consumption': water_consumption,
@@ -836,14 +945,14 @@ def houses_comparison(request):
             
             # Metrics - Bird Status
             'bird_count': bird_count,
-            'livability': snapshot.livability if snapshot else None,
-            'growth_day': snapshot.growth_day if snapshot else None,
+            'livability': _safe_float(_extract_comparison_item(response_obj, 'Livablity_Percents', house.house_number)),
+            'growth_day': age_days,
             
             # Additional status
-            'is_connected': snapshot.is_connected if snapshot else False,
-            'has_alarms': snapshot.has_alarms if snapshot else False,
-            'alarm_status': snapshot.alarm_status if snapshot else 'normal',
-            'active_alarms_count': active_alarms_count,
+            'is_connected': bool(live.get('is_connected')),
+            'has_alarms': False,
+            'alarm_status': live.get('alarm_status') or 'normal',
+            'active_alarms_count': None,
             'data_freshness_minutes': data_freshness_minutes,
             'heater_on': heater_on,
             'fan_on': fan_on,
@@ -851,18 +960,6 @@ def houses_comparison(request):
             'wind_direction': wind_direction,
             'wind_chill_temperature': wind_chill_temperature,
         }
-        
-        # Extract tunnel temperature from sensor data if available
-        if snapshot and snapshot.sensor_data:
-            sensor_data = snapshot.sensor_data
-            # Try common field names for tunnel temperature
-            house_comparison['tunnel_temperature'] = (
-                sensor_data.get('tunnel_temperature') or
-                sensor_data.get('tunnelTemp') or
-                sensor_data.get('tunnel_temp') or
-                None
-            )
-        
         comparison_data.append(house_comparison)
     
     # Sort by farm name, then house number
