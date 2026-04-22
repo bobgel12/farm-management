@@ -63,6 +63,8 @@ final class MockDataStore {
     var houseHeaterRealtimeByHouseId: [UUID: Double] = [:]
     /// Tracks houses whose realtime water/heater history has finished loading this cycle.
     var houseRealtimeLoadedIds: Set<UUID> = []
+    /// Farm-level monitoring freshness metadata from backend cache envelope.
+    var monitoringFreshnessByFarmId: [UUID: APIFreshnessMeta] = [:]
 
     // MARK: Derived helpers
 
@@ -332,6 +334,7 @@ final class MockDataStore {
         houseWaterRealtimeByHouseId = [:]
         houseHeaterRealtimeByHouseId = [:]
         houseRealtimeLoadedIds = []
+        monitoringFreshnessByFarmId = [:]
         houseHeaterHoursForListByHouseId = [:]
         defer { isLoading = false }
         do {
@@ -696,10 +699,28 @@ final class MockDataStore {
 
     func fetchFarmMonitoringDashboard(farmBackendID: Int) async -> [APIFarmHouseMonitoringCard] {
         do {
-            return try await apiClient.fetchFarmMonitoringDashboard(farmID: farmBackendID).houses
+            let result = try await apiClient.fetchFarmMonitoringDashboard(farmID: farmBackendID)
+            if let farmUUID = farms.first(where: { $0.backendId == farmBackendID })?.id,
+               let freshness = result.freshness {
+                monitoringFreshnessByFarmId[farmUUID] = freshness
+            }
+            return result.houses
         } catch {
             lastError = error.localizedDescription
             return []
+        }
+    }
+
+    func refreshMonitoringNowForCurrentFarm() async {
+        guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return }
+        do {
+            if let freshness = try await apiClient.refreshFarmMonitoringNow(farmID: farmBackendID) {
+                monitoringFreshnessByFarmId[currentFarmId] = freshness
+            }
+            await reloadSelectedFarmData()
+            await refreshFarmHomeOverviews()
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 

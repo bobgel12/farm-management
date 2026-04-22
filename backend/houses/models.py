@@ -220,6 +220,67 @@ class HouseMonitoringSnapshot(models.Model):
         return self.connection_status == 1
 
 
+class FarmMonitoringCache(models.Model):
+    """Farm-scoped cached monitoring payloads for fast API reads."""
+
+    REFRESH_STATE_CHOICES = [
+        ("idle", "Idle"),
+        ("refreshing", "Refreshing"),
+        ("failed", "Failed"),
+        ("fresh", "Fresh"),
+    ]
+
+    farm = models.OneToOneField(Farm, on_delete=models.CASCADE, related_name="monitoring_cache")
+    dashboard_payload = models.JSONField(default=dict)
+    comparison_payload = models.JSONField(default=dict)
+    houses_payload = models.JSONField(default=dict)
+    source_timestamp = models.DateTimeField(null=True, blank=True)
+    fetched_at = models.DateTimeField(auto_now=True, db_index=True)
+    refresh_state = models.CharField(max_length=16, choices=REFRESH_STATE_CHOICES, default="idle")
+    last_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["fetched_at"]),
+            models.Index(fields=["refresh_state"]),
+        ]
+
+    def __str__(self):
+        return f"Farm cache {self.farm_id} ({self.refresh_state})"
+
+
+class HouseMonitoringCache(models.Model):
+    """House-scoped cached monitoring payloads for fast API reads."""
+
+    REFRESH_STATE_CHOICES = [
+        ("idle", "Idle"),
+        ("refreshing", "Refreshing"),
+        ("failed", "Failed"),
+        ("fresh", "Fresh"),
+    ]
+
+    house = models.OneToOneField(House, on_delete=models.CASCADE, related_name="monitoring_cache")
+    latest_payload = models.JSONField(default=dict)
+    history_payload = models.JSONField(default=dict)
+    kpis_payload = models.JSONField(default=dict)
+    heater_payload = models.JSONField(default=dict)
+    source_timestamp = models.DateTimeField(null=True, blank=True)
+    fetched_at = models.DateTimeField(auto_now=True, db_index=True)
+    refresh_state = models.CharField(max_length=16, choices=REFRESH_STATE_CHOICES, default="idle")
+    last_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["fetched_at"]),
+            models.Index(fields=["refresh_state"]),
+        ]
+
+    def __str__(self):
+        return f"House cache {self.house_id} ({self.refresh_state})"
+
+
 class Device(models.Model):
     """Device/equipment in a house (heaters, fans, lights, etc.)"""
     DEVICE_TYPES = [

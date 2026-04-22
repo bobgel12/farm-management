@@ -13,6 +13,10 @@
     "daily-tasks": {
       "schedule": "0 21 * * *",
       "command": "python manage.py send_daily_tasks"
+    },
+    "rotem-monitoring-cache-upsert": {
+      "schedule": "*/10 * * * *",
+      "command": "python manage.py upsert_monitoring_cache"
     }
   }
 }

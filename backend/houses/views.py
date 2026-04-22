@@ -37,9 +37,27 @@ from collections import defaultdict
 from .services.water_forecast_service import WaterForecastService
 from .services.monitoring_contract import MonitoringUnits
 from .services.heater_history_payload import build_heater_history_payload
+from .services.monitoring_cache_service import (
+    MAX_STALE_SECONDS,
+    build_meta,
+    upsert_farm_monitoring_cache,
+    wrap_cached_response,
+)
+from .models import FarmMonitoringCache, HouseMonitoringCache
 from rotem_scraper.tasks import sync_refresh_house_heater_history
 from farms.views import user_accessible_organization_ids
 from rotem_scraper.scraper import RotemScraper
+
+
+def _cache_mode(request):
+    mode = (request.query_params.get('mode') or 'cached_then_live').lower()
+    if mode not in ('cached', 'live', 'cached_then_live'):
+        return 'cached'
+    return mode
+
+
+def _should_refresh(meta: dict):
+    return bool(meta.get('is_stale')) and meta.get('refresh_state') != 'refreshing'
 
 
 def _house_from_scope_or_404(request, house_id: int) -> House:
@@ -346,8 +364,28 @@ def farm_task_summary(request, farm_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_monitoring_latest(request, house_id):
-    """Get latest live monitoring data for a house from Rotem API (no DB snapshot reads)."""
+    """Get latest monitoring data (cached-first by default, live optional)."""
     house = _house_from_scope_or_404(request, house_id)
+    mode = _cache_mode(request)
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    if mode != 'live' and cache and cache.latest_payload:
+        meta = build_meta(
+            fetched_at=cache.fetched_at,
+            source_timestamp=cache.source_timestamp,
+            refresh_state=cache.refresh_state,
+            stale_seconds=MAX_STALE_SECONDS,
+        )
+        if mode == 'cached_then_live' and _should_refresh(meta):
+            upsert_farm_monitoring_cache(house.farm)
+            cache.refresh_from_db()
+            meta = build_meta(
+                fetched_at=cache.fetched_at,
+                source_timestamp=cache.source_timestamp,
+                refresh_state=cache.refresh_state,
+                stale_seconds=MAX_STALE_SECONDS,
+            )
+        return Response(wrap_cached_response(cache.latest_payload, meta))
+
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
         return err
@@ -364,14 +402,40 @@ def house_monitoring_latest(request, house_id):
             {'detail': 'House live data not found in Rotem response.'},
             status=status.HTTP_404_NOT_FOUND,
         )
-    return Response(live)
+    HouseMonitoringCache.objects.update_or_create(
+        house=house,
+        defaults={
+            'latest_payload': live,
+            'source_timestamp': datetime.fromisoformat(live['source_timestamp'].replace('Z', '+00:00')),
+            'refresh_state': 'fresh',
+            'last_error': '',
+        },
+    )
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    meta = build_meta(
+        fetched_at=cache.fetched_at if cache else timezone.now(),
+        source_timestamp=cache.source_timestamp if cache else timezone.now(),
+        refresh_state='fresh',
+        stale_seconds=MAX_STALE_SECONDS,
+    )
+    return Response(wrap_cached_response(live, meta))
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_monitoring_history(request, house_id):
-    """Get live history from Rotem APIs (water/feed history + latest live sample)."""
+    """Get house monitoring history (cached-first by default)."""
     house = _house_from_scope_or_404(request, house_id)
+    mode = _cache_mode(request)
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    if mode != 'live' and cache and cache.history_payload:
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        if mode == 'cached_then_live' and _should_refresh(meta):
+            upsert_farm_monitoring_cache(house.farm)
+            cache.refresh_from_db()
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(cache.history_payload, meta))
+
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
         return err
@@ -442,7 +506,7 @@ def house_monitoring_history(request, house_id):
         results.append(live)
 
     results = sorted(results, key=lambda x: x.get('source_timestamp') or x.get('timestamp'))[-limit:]
-    return Response({
+    payload = {
         'count': len(results),
         'start_date': start_dt.isoformat(),
         'end_date': end_dt.isoformat(),
@@ -454,7 +518,19 @@ def house_monitoring_history(request, house_id):
             'units': MonitoringUnits().__dict__,
         },
         'results': results
-    })
+    }
+    HouseMonitoringCache.objects.update_or_create(
+        house=house,
+        defaults={
+            'history_payload': payload,
+            'source_timestamp': timezone.now(),
+            'refresh_state': 'fresh',
+            'last_error': '',
+        },
+    )
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    return Response(wrap_cached_response(payload, meta))
 
 
 @api_view(['GET'])
@@ -481,8 +557,18 @@ def house_monitoring_stats(request, house_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_monitoring_kpis(request, house_id):
-    """Get derived operational KPIs from live Rotem data (no DB snapshot reads)."""
+    """Get derived operational KPIs (cached-first by default)."""
     house = _house_from_scope_or_404(request, house_id)
+    mode = _cache_mode(request)
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    if mode != 'live' and cache and cache.kpis_payload:
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        if mode == 'cached_then_live' and _should_refresh(meta):
+            upsert_farm_monitoring_cache(house.farm)
+            cache.refresh_from_db()
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(cache.kpis_payload, meta))
+
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
         return err
@@ -548,7 +634,7 @@ def house_monitoring_kpis(request, house_id):
     ratio_yesterday = (water_yesterday / feed_yesterday) if (water_yesterday is not None and feed_yesterday not in [None, 0]) else None
     ratio_delta_pct = ((ratio_today - ratio_yesterday) / ratio_yesterday * 100.0) if (ratio_today is not None and ratio_yesterday not in [None, 0]) else None
 
-    return Response({
+    payload = {
         'house_id': house.id,
         'window_hours': 24,
         'day_over_day_context': None,
@@ -583,17 +669,40 @@ def house_monitoring_kpis(request, house_id):
             'low_24h': None,
             'active_now': None,
         },
-    })
+    }
+    HouseMonitoringCache.objects.update_or_create(
+        house=house,
+        defaults={
+            'kpis_payload': payload,
+            'source_timestamp': timezone.now(),
+            'refresh_state': 'fresh',
+            'last_error': '',
+        },
+    )
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    return Response(wrap_cached_response(payload, meta))
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def farm_houses_monitoring_all(request, farm_id):
-    """Get latest live monitoring data for all houses in a farm from Rotem API."""
+    """Get latest monitoring for all houses in a farm (cached-first by default)."""
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    mode = _cache_mode(request)
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    if mode != 'live' and cache and cache.houses_payload:
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        if mode == 'cached_then_live' and _should_refresh(meta):
+            upsert_farm_monitoring_cache(farm)
+            cache.refresh_from_db()
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(cache.houses_payload, meta))
+
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
     if not houses:
-        return Response({'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': 0, 'houses': []})
+        payload = {'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': 0, 'houses': []}
+        return Response(wrap_cached_response(payload, build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)))
 
     scraper, err = _house_rotem_scraper_or_error(houses[0])
     if err:
@@ -635,14 +744,36 @@ def farm_houses_monitoring_all(request, farm_id):
                 'message': 'No live Rotem data available for this house',
             })
 
-    return Response({'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': len(results), 'houses': results})
+    payload = {'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': len(results), 'houses': results}
+    FarmMonitoringCache.objects.update_or_create(
+        farm=farm,
+        defaults={
+            'houses_payload': payload,
+            'source_timestamp': timezone.now(),
+            'refresh_state': 'fresh',
+            'last_error': '',
+        },
+    )
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    return Response(wrap_cached_response(payload, meta))
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def farm_houses_monitoring_dashboard(request, farm_id):
-    """Get dashboard data with live Rotem data only (no DB snapshot reads)."""
+    """Get dashboard data (cached-first by default)."""
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    mode = _cache_mode(request)
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    if mode != 'live' and cache and cache.dashboard_payload:
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        if mode == 'cached_then_live' and _should_refresh(meta):
+            upsert_farm_monitoring_cache(farm)
+            cache.refresh_from_db()
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(cache.dashboard_payload, meta))
+
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
     dashboard_data = {
         'farm_id': farm_id,
@@ -653,7 +784,7 @@ def farm_houses_monitoring_dashboard(request, farm_id):
         'connection_summary': {'connected': 0, 'disconnected': 0},
     }
     if not houses:
-        return Response(dashboard_data)
+        return Response(wrap_cached_response(dashboard_data, build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)))
 
     scraper, err = _house_rotem_scraper_or_error(houses[0])
     if err:
@@ -702,7 +833,18 @@ def farm_houses_monitoring_dashboard(request, farm_id):
 
         dashboard_data['houses'].append(house_data)
 
-    return Response(dashboard_data)
+    FarmMonitoringCache.objects.update_or_create(
+        farm=farm,
+        defaults={
+            'dashboard_payload': dashboard_data,
+            'source_timestamp': timezone.now(),
+            'refresh_state': 'fresh',
+            'last_error': '',
+        },
+    )
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    return Response(wrap_cached_response(dashboard_data, meta))
 
 
 @api_view(['GET'])
@@ -766,8 +908,18 @@ def house_details(request, house_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def house_heater_history(request, house_id):
-    """Live CommandID 43 heater history from Rotem API (no cache read)."""
+    """Get house heater history (cached-first by default)."""
     house = _house_from_scope_or_404(request, house_id)
+    mode = _cache_mode(request)
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    if mode != 'live' and cache and cache.heater_payload:
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        if mode == 'cached_then_live' and _should_refresh(meta):
+            upsert_farm_monitoring_cache(house.farm)
+            cache.refresh_from_db()
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(cache.heater_payload, meta))
+
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
         return err
@@ -793,7 +945,19 @@ def house_heater_history(request, house_id):
             'device_breakdown': r.get('per_device', {}),
         })
     daily.sort(key=lambda row: row.get('growth_day', 0))
-    return Response({'heater_history': {'daily': daily}})
+    payload = {'heater_history': {'daily': daily}}
+    HouseMonitoringCache.objects.update_or_create(
+        house=house,
+        defaults={
+            'heater_payload': payload,
+            'source_timestamp': timezone.now(),
+            'refresh_state': 'fresh',
+            'last_error': '',
+        },
+    )
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    return Response(wrap_cached_response(payload, meta))
 
 
 @api_view(['POST'])
@@ -818,12 +982,49 @@ def house_heater_history_refresh(request, house_id):
     )
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def farm_monitoring_refresh(request, farm_id):
+    """Force-refresh cached monitoring bundle for a farm."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    result = upsert_farm_monitoring_cache(farm)
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    meta = build_meta(
+        fetched_at=cache.fetched_at if cache else timezone.now(),
+        source_timestamp=cache.source_timestamp if cache else timezone.now(),
+        refresh_state=cache.refresh_state if cache else ('failed' if result.status != 'success' else 'fresh'),
+        stale_seconds=MAX_STALE_SECONDS,
+    )
+    return Response(
+        {
+            'status': result.status,
+            'message': result.message,
+            'farms_processed': result.farms_processed,
+            'houses_processed': result.houses_processed,
+            'meta': meta,
+        },
+        status=status.HTTP_200_OK if result.status in ('success', 'partial') else status.HTTP_502_BAD_GATEWAY,
+    )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def houses_comparison(request):
-    """Get comparison data from live Rotem sources only (no DB snapshots)."""
+    """Get houses comparison data (cached-first by default)."""
     # Get query parameters
     farm_id = request.query_params.get('farm_id')
+    mode = _cache_mode(request)
+    if farm_id and mode != 'live':
+        scoped_farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+        cache = FarmMonitoringCache.objects.filter(farm=scoped_farm).first()
+        if cache and cache.comparison_payload:
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+            if mode == 'cached_then_live' and _should_refresh(meta):
+                upsert_farm_monitoring_cache(scoped_farm)
+                cache.refresh_from_db()
+                meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+            return Response(wrap_cached_response(cache.comparison_payload, meta))
+
     house_ids = request.query_params.getlist('house_ids')
     favorites_only = request.query_params.get('favorites', 'false').lower() == 'true'
     
@@ -966,10 +1167,25 @@ def houses_comparison(request):
     comparison_data.sort(key=lambda x: (x['farm_name'], x['house_number']))
     
     serializer = HouseComparisonSerializer(comparison_data, many=True)
-    return Response({
+    payload = {
         'count': len(serializer.data),
         'houses': serializer.data
-    })
+    }
+    if farm_id:
+        scoped_farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+        FarmMonitoringCache.objects.update_or_create(
+            farm=scoped_farm,
+            defaults={
+                'comparison_payload': payload,
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+        cache = FarmMonitoringCache.objects.filter(farm=scoped_farm).first()
+        meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(payload, meta))
+    return Response(wrap_cached_response(payload, build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)))
 
 
 @api_view(['GET', 'POST'])

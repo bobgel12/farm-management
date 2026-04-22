@@ -106,7 +106,7 @@ struct FarmMonitoringCardsView: View {
         guard let backendFarmID = store.currentFarm.backendId else { return }
         isLoading = true
         if forceRefresh {
-            await store.refreshRotemDataForCurrentFarm(force: true)
+            await store.refreshMonitoringNowForCurrentFarm()
         } else {
             await store.refreshRotemDataForCurrentFarm()
         }

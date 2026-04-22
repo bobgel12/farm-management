@@ -52,6 +52,20 @@ struct APIMonitoring {
     let airflowPercentage: Double?
 }
 
+struct APIFreshnessMeta {
+    let sourceTimestamp: Date?
+    let fetchedAt: Date?
+    let ageSeconds: Int?
+    let isStale: Bool
+    let refreshState: String
+    let canRefreshNow: Bool
+}
+
+struct APIEnvelope<T> {
+    let data: T
+    let meta: APIFreshnessMeta?
+}
+
 struct APIWaterAlert {
     let id: Int
     let severity: String
@@ -139,6 +153,7 @@ struct APIFarmMonitoringDashboardResult {
     let totalHouses: Int
     let alertsSummaryTotalActive: Int
     let houses: [APIFarmHouseMonitoringCard]
+    let freshness: APIFreshnessMeta?
 }
 
 struct APITask {
@@ -345,14 +360,18 @@ actor APIClient {
             requiresAuth: true
         )
         guard
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let houses = json["houses"] as? [[String: Any]]
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
             throw APIClientError.decoding
         }
-        let alertsSummary = json["alerts_summary"] as? [String: Any]
+        let envelope = decodeEnvelope(root)
+        let payload = envelope.payload
+        guard let houses = payload["houses"] as? [[String: Any]] else {
+            throw APIClientError.decoding
+        }
+        let alertsSummary = payload["alerts_summary"] as? [String: Any]
         let totalActiveAlerts = (alertsSummary?["total_active"] as? Int) ?? 0
-        let totalHouses = (json["total_houses"] as? Int) ?? houses.count
+        let totalHouses = (payload["total_houses"] as? Int) ?? houses.count
         let cards: [APIFarmHouseMonitoringCard] = houses.compactMap { item in
             guard let houseID = item["house_id"] as? Int, let houseNumber = item["house_number"] as? Int else {
                 return nil
@@ -371,8 +390,22 @@ actor APIClient {
         return APIFarmMonitoringDashboardResult(
             totalHouses: totalHouses,
             alertsSummaryTotalActive: totalActiveAlerts,
-            houses: cards
+            houses: cards,
+            freshness: envelope.meta
         )
+    }
+
+    func refreshFarmMonitoringNow(farmID: Int) async throws -> APIFreshnessMeta? {
+        let data = try await request(
+            path: "/api/farms/\(farmID)/houses/monitoring/refresh/",
+            method: "POST",
+            payload: [:],
+            requiresAuth: true
+        )
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIClientError.decoding
+        }
+        return parseMeta(json["meta"] as? [String: Any])
     }
 
     func triggerFarmScrape(rotemFarmID: String) async throws {
@@ -403,9 +436,10 @@ actor APIClient {
     func fetchLatestMonitoring(houseID: Int) async throws -> APIMonitoring? {
         do {
             let data = try await request(path: "/api/houses/\(houseID)/monitoring/latest/", method: "GET", payload: nil, requiresAuth: true)
-            guard let item = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
+            let item = decodeEnvelope(root).payload
             return APIMonitoring(
                 averageTemperature: item["average_temperature"] as? Double,
                 humidity: item["humidity"] as? Double,
@@ -638,9 +672,12 @@ actor APIClient {
             requiresAuth: true
         )
         guard
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let results = json["results"] as? [[String: Any]]
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
+            throw APIClientError.decoding
+        }
+        let payload = decodeEnvelope(root).payload
+        guard let results = payload["results"] as? [[String: Any]] else {
             throw APIClientError.decoding
         }
         return results.compactMap { item in
@@ -666,9 +703,10 @@ actor APIClient {
             payload: nil,
             requiresAuth: true
         )
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIClientError.decoding
         }
+        let json = decodeEnvelope(root).payload
         let heater = json["heater_runtime"] as? [String: Any]
         let waterDod = json["water_day_over_day"] as? [String: Any]
         let feedDod = json["feed_day_over_day"] as? [String: Any]
@@ -721,7 +759,12 @@ actor APIClient {
             requiresAuth: true
         )
         guard
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return []
+        }
+        let json = decodeEnvelope(root).payload
+        guard
             let heaterHistory = json["heater_history"] as? [String: Any],
             let daily = heaterHistory["daily"] as? [[String: Any]]
         else {
@@ -756,6 +799,27 @@ actor APIClient {
             return results
         }
         throw APIClientError.decoding
+    }
+
+    private func decodeEnvelope(_ root: [String: Any]) -> (payload: [String: Any], meta: APIFreshnessMeta?) {
+        if let payload = root["data"] as? [String: Any] {
+            return (payload, parseMeta(root["meta"] as? [String: Any]))
+        }
+        return (root, nil)
+    }
+
+    private func parseMeta(_ raw: [String: Any]?) -> APIFreshnessMeta? {
+        guard let raw else { return nil }
+        let sourceTimestamp = (raw["source_timestamp"] as? String).flatMap(parseISODate)
+        let fetchedAt = (raw["fetched_at"] as? String).flatMap(parseISODate)
+        return APIFreshnessMeta(
+            sourceTimestamp: sourceTimestamp,
+            fetchedAt: fetchedAt,
+            ageSeconds: raw["age_seconds"] as? Int,
+            isStale: (raw["is_stale"] as? Bool) ?? false,
+            refreshState: (raw["refresh_state"] as? String) ?? "idle",
+            canRefreshNow: (raw["can_refresh_now"] as? Bool) ?? true
+        )
     }
 
     private func mapFlock(_ item: [String: Any]) -> APIFlock? {

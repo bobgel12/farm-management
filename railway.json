@@ -18,6 +18,10 @@
     "daily-rotem-scrape": {
       "schedule": "0 2 * * *",
       "command": "cd /app && python manage.py collect_rotem_data_daily"
+    },
+    "rotem-monitoring-cache-upsert": {
+      "schedule": "*/10 * * * *",
+      "command": "cd /app && python manage.py upsert_monitoring_cache"
     }
   },
   "services": {
