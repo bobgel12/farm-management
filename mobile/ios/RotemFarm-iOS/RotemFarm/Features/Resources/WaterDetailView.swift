@@ -12,11 +12,11 @@ struct WaterDetailView: View {
 
     enum Mode: String, CaseIterable, Hashable { case bars = "Bars", line = "Line", hourly = "Hourly" }
     @State private var mode: Mode = .bars
+    @State private var daily: [DailyResourcePoint] = []
+    @State private var hourly: [HourlyPoint] = []
+    @State private var waterFeedRatio: Double?
 
     var body: some View {
-        let daily = store.waterHistory(houseId: house.id, days: 14)
-        let hourly = store.hourlyFlow(houseId: house.id)
-
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header(daily: daily)
@@ -31,6 +31,9 @@ struct WaterDetailView: View {
         .background(Color.appBackground)
         .navigationTitle("Water")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await loadWaterData()
+        }
     }
 
     // MARK: Header
@@ -146,9 +149,9 @@ struct WaterDetailView: View {
 
     private var ratioCard: some View {
         HStack(spacing: 10) {
-            KPICard(label: "Water:Feed", value: "1.81", delta: "Target 1.8", deltaState: .ok)
-            KPICard(label: "Peak L/hr", value: "98", delta: "11:30", deltaState: .ok)
-            KPICard(label: "Anomalies", value: "1", delta: "Today", deltaState: .warning)
+            KPICard(label: "Water:Feed", value: waterFeedRatio.map { String(format: "%.2f", $0) } ?? "-", delta: "Live KPI", deltaState: .ok)
+            KPICard(label: "Peak L/hr", value: "\(Int(hourly.map(\.value).max() ?? 0))", delta: "Today", deltaState: .ok)
+            KPICard(label: "Samples", value: "\(daily.count)", delta: "Last 14 days", deltaState: .ok)
         }
     }
 
@@ -182,7 +185,7 @@ struct WaterDetailView: View {
     // MARK: Compare
 
     private var compareLink: some View {
-        NavigationLink(destination: WaterCompareView()) {
+        NavigationLink(destination: CompareView()) {
             HStack {
                 Image(systemName: "square.grid.2x2.fill")
                 Text("Compare with other houses")
@@ -199,63 +202,41 @@ struct WaterDetailView: View {
     }
 }
 
-// MARK: - Compare across houses
+extension WaterDetailView {
+    private func loadWaterData() async {
+        await store.refreshRotemDataForCurrentFarm()
+        let history = await store.fetchMonitoringHistory(
+            houseId: house.id,
+            limit: 500,
+            startDate: Calendar.current.date(byAdding: .day, value: -14, to: Date()),
+            endDate: Date()
+        )
+        daily = buildDailyWater(history: history)
+        hourly = buildHourlyWater(history: history)
+        waterFeedRatio = await store.fetchMonitoringKpis(houseId: house.id)?.waterFeedRatioToday
+    }
 
-struct WaterCompareView: View {
-    @Environment(MockDataStore.self) private var store
-
-    var body: some View {
-        let series = store.compareWater()
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                CardSection {
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionHeader(title: "Last 7 days", trailing: "L / day")
-                            .padding(.horizontal, -6)
-                        Chart {
-                            ForEach(series) { s in
-                                ForEach(s.points) { p in
-                                    LineMark(
-                                        x: .value("day", p.day),
-                                        y: .value("L", p.value)
-                                    )
-                                    .foregroundStyle(by: .value("house", s.houseName))
-                                    .interpolationMethod(.monotone)
-                                }
-                            }
-                        }
-                        .chartForegroundStyleScale(range: series.map(\.color))
-                        .frame(height: 220)
-                        .chartYAxis { AxisMarks(position: .leading) }
-                        .chartLegend(position: .bottom, alignment: .leading, spacing: 8)
-                    }
-                }
-                SectionHeader(title: "Today's delta vs yesterday")
-                CardSection {
-                    VStack(spacing: 0) {
-                        ForEach(Array(series.enumerated()), id: \.element.id) { idx, s in
-                            HStack(spacing: 10) {
-                                Circle().fill(s.color).frame(width: 10, height: 10)
-                                Text(s.houseName).font(AppFont.body)
-                                Spacer()
-                                Text(s.todayDelta)
-                                    .font(AppFont.bodyBold)
-                                    .foregroundStyle(s.todayDeltaState.tint)
-                            }
-                            if idx < series.count - 1 {
-                                Divider().overlay(Color.appSeparator).padding(.vertical, 10)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(14)
+    private func buildDailyWater(history: [APIHouseMonitoringPoint]) -> [DailyResourcePoint] {
+        let grouped = Dictionary(grouping: history) { Calendar.current.startOfDay(for: $0.timestamp) }
+        let sortedDays = grouped.keys.sorted().suffix(14)
+        return sortedDays.enumerated().map { idx, day in
+            let total = grouped[day]?.compactMap(\.waterConsumption).reduce(0, +) ?? 0
+            return DailyResourcePoint(day: idx + 1, date: day, value: total, target: nil, isAnomaly: false)
         }
-        .background(Color.appBackground)
-        .navigationTitle("Compare · Water")
-        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func buildHourlyWater(history: [APIHouseMonitoringPoint]) -> [HourlyPoint] {
+        let today = Calendar.current.startOfDay(for: Date())
+        let todaysPoints = history.filter { Calendar.current.startOfDay(for: $0.timestamp) == today }
+        let grouped = Dictionary(grouping: todaysPoints) { Calendar.current.component(.hour, from: $0.timestamp) }
+        return (0..<24).map { hour in
+            let value = grouped[hour]?.compactMap(\.waterConsumption).reduce(0, +) ?? 0
+            return HourlyPoint(hour: hour, value: value)
+        }
     }
 }
+
+// MARK: - Compare across houses
 
 #Preview {
     NavigationStack {

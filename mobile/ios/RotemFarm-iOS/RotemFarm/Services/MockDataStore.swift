@@ -14,6 +14,7 @@ import SwiftUI
 @MainActor
 final class MockDataStore {
     private let apiClient: APIClient
+    private let verboseLogging: Bool
 
     // MARK: Farm context
     var currentFarmId: UUID
@@ -26,6 +27,14 @@ final class MockDataStore {
     var tips: [AITip] = []
     var team: [TeamMember] = []
     var controllers: [PairedController] = []
+    var tasks: [FarmTask] = []
+    var programs: [Program] = []
+    var workers: [WorkerProfile] = []
+    var organizations: [Organization] = []
+    var organizationMembers: [OrganizationMember] = []
+    var biKPIs: [BIKPI] = []
+    var generatedReports: [ReportItem] = []
+    var rotemHealth: [RotemFarmHealth] = []
 
     var currentUser: AppUser = AppUser(
         id: UUID(),
@@ -40,10 +49,30 @@ final class MockDataStore {
     var lastError: String?
     private var hasLoadedLiveData = false
     private var liveSensorHistoryByHouse: [UUID: [SensorKind: [SensorSample]]] = [:]
+    private var farmRotemIDs: [UUID: String] = [:]
+    private var lastFarmScrapeAt: [UUID: Date] = [:]
+    /// Per-farm snapshot for home: house count, avg growth day, house alarm count (from monitoring dashboard).
+    var farmHomeOverviewByFarmId: [UUID: FarmHomeOverview] = [:]
+    /// Latest KPI row (feed/water DOD, etc.) keyed by house UUID.
+    var houseKpisByHouseId: [UUID: APIHouseMonitoringKpis] = [:]
+    /// Heater hours shown on Operations: daily total from heater-history for flock day when available, else KPI 24h.
+    var houseHeaterHoursForListByHouseId: [UUID: Double] = [:]
 
     // MARK: Derived helpers
 
-    var currentFarm: Farm { farms.first { $0.id == currentFarmId } ?? farms[0] }
+    var currentFarm: Farm {
+        farms.first(where: { $0.id == currentFarmId }) ?? Farm(
+            id: currentFarmId,
+            backendId: nil,
+            name: "No farm selected",
+            houseIds: [],
+            totalBirds: 0,
+            flockAgeDays: 0,
+            worstState: .ok,
+            alertSummary: "No alerts",
+            activeHousesFromApi: 0
+        )
+    }
     var housesForCurrentFarm: [House] { houses.filter { $0.farmId == currentFarmId } }
     var activeFlock: Flock? { flocks.first { $0.isActive && $0.farmId == currentFarmId } }
     var activeAlerts: [Alarm] { alarms.filter { !$0.isAcknowledged } }
@@ -55,10 +84,40 @@ final class MockDataStore {
     func acknowledgeAlarm(_ id: UUID) {
         guard let idx = alarms.firstIndex(where: { $0.id == id }) else { return }
         alarms[idx].isAcknowledged = true
+        log("Acknowledge alarm id=\(id.uuidString)")
         if let backendId = alarms[idx].backendId {
             Task {
                 do {
                     try await apiClient.acknowledgeWaterAlert(id: backendId)
+                } catch {
+                    lastError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func snoozeAlarm(_ id: UUID, hours: Int = 1) {
+        guard let idx = alarms.firstIndex(where: { $0.id == id }) else { return }
+        log("Snooze alarm id=\(id.uuidString) hours=\(hours)")
+        if let backendId = alarms[idx].backendId {
+            Task {
+                do {
+                    try await apiClient.snoozeWaterAlert(id: backendId, hours: hours)
+                } catch {
+                    lastError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func resolveAlarm(_ id: UUID) {
+        guard let idx = alarms.firstIndex(where: { $0.id == id }) else { return }
+        alarms[idx].isAcknowledged = true
+        log("Resolve alarm id=\(id.uuidString)")
+        if let backendId = alarms[idx].backendId {
+            Task {
+                do {
+                    try await apiClient.resolveWaterAlert(id: backendId)
                 } catch {
                     lastError = error.localizedDescription
                 }
@@ -74,7 +133,54 @@ final class MockDataStore {
         tips.removeAll { $0.id == id }
     }
 
-    func switchFarm(_ farmId: UUID) { currentFarmId = farmId }
+    func switchFarm(_ farmId: UUID) {
+        currentFarmId = farmId
+        Task {
+            await reloadSelectedFarmData()
+        }
+    }
+
+    func updateTaskStatus(_ taskId: UUID, to status: TaskStatus) {
+        guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        log("Update task id=\(taskId.uuidString) status=\(status.rawValue)")
+        tasks[idx].status = status
+        guard let backendId = tasks[idx].backendId else { return }
+        Task {
+            do {
+                let payloadStatus: String
+                switch status {
+                case .done: payloadStatus = "done"
+                case .inProgress: payloadStatus = "in_progress"
+                case .blocked: payloadStatus = "blocked"
+                case .pending: payloadStatus = "pending"
+                }
+                try await apiClient.updateTaskStatus(taskID: backendId, status: payloadStatus, notes: tasks[idx].notes)
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func toggleProgram(_ programId: UUID) {
+        guard let idx = programs.firstIndex(where: { $0.id == programId }) else { return }
+        programs[idx].isActive.toggle()
+        programs[idx].updatedAt = Date()
+        log("Toggle program id=\(programId.uuidString) -> \(programs[idx].isActive)")
+        guard let backendId = programs[idx].backendId else { return }
+        let nextState = programs[idx].isActive
+        Task {
+            do {
+                try await apiClient.updateProgram(programID: backendId, isActive: nextState)
+            } catch {
+                // Revert optimistic toggle if backend update fails.
+                if let revertIdx = programs.firstIndex(where: { $0.id == programId }) {
+                    programs[revertIdx].isActive.toggle()
+                    programs[revertIdx].updatedAt = Date()
+                }
+                lastError = error.localizedDescription
+            }
+        }
+    }
 
     // MARK: Sample sensor series
 
@@ -111,357 +217,47 @@ final class MockDataStore {
         }
     }
 
-    /// 14-day water consumption (L/day) for a given house.
-    func waterHistory(houseId: UUID, days: Int = 14) -> [DailyResourcePoint] {
-        let baseTarget: [Double] = (0..<days).map { Double($0) * 85 + 350 }
-        let actual: [Double] = (0..<days).map { i in
-            baseTarget[i] * Double.random(in: 0.9...1.05)
-        }
-        return (0..<days).map { i in
-            let isLast = i == days - 1
-            return DailyResourcePoint(
-                day: 9 + i,
-                date: Date().addingTimeInterval(-Double(days - 1 - i) * 86_400),
-                value: isLast ? 1520 : actual[i],
-                target: baseTarget[i],
-                isAnomaly: isLast
-            )
-        }
-    }
-
-    func feedHistory(houseId: UUID, days: Int = 14) -> [DailyResourcePoint] {
-        let target: [Double] = (0..<days).map { Double($0) * 170 + 400 }
-        return (0..<days).map { i in
-            DailyResourcePoint(
-                day: 9 + i,
-                date: Date().addingTimeInterval(-Double(days - 1 - i) * 86_400),
-                value: target[i] * Double.random(in: 0.95...1.02),
-                target: target[i],
-                isAnomaly: i == days - 1
-            )
-        }
-    }
-
-    func heaterHistory(houseId: UUID, days: Int = 14) -> [DailyResourcePoint] {
-        // Runtime tapers as birds age
-        return (0..<days).map { i in
-            let base = max(0.3, 15.0 - Double(i) * 1.0)
-            return DailyResourcePoint(
-                day: 9 + i,
-                date: Date().addingTimeInterval(-Double(days - 1 - i) * 86_400),
-                value: base * Double.random(in: 0.9...1.1)
-            )
-        }
-    }
-
-    func hourlyFlow(houseId: UUID) -> [HourlyPoint] {
-        (0..<24).map { h in
-            let peakWeight = exp(-pow(Double(h - 11), 2) / 28.0) * 60
-            return HourlyPoint(hour: h, value: 20 + peakWeight + Double.random(in: -4...4))
-        }
-    }
-
-    func compareWater() -> [CompareSeries] {
-        let colors: [Color] = [.farmGreen, .stateInfo, .stateWarning, .aiEnd, .stateOK,
-                               Color(red: 166/255, green: 90/255, blue: 40/255)]
-        return housesForCurrentFarm.prefix(6).enumerated().map { (idx, house) in
-            let hist = waterHistory(houseId: house.id, days: 7)
-            let today = hist.last?.value ?? 0
-            let yesterday = hist.dropLast().last?.value ?? 1
-            let pct = (today - yesterday) / yesterday * 100
-            let state: SensorState = pct > 10 ? .critical : (abs(pct) > 5 ? .warning : .ok)
-            return CompareSeries(
-                houseName: house.name,
-                color: colors[idx % colors.count],
-                points: hist,
-                todayDelta: (pct >= 0 ? "+" : "") + String(format: "%.0f%%", pct),
-                todayDeltaState: state
-            )
-        }
-    }
-
-    func compareFeed() -> [CompareSeries] {
-        let colors: [Color] = [.farmGreen, .stateInfo, .stateWarning, .aiEnd, .stateOK,
-                               Color(red: 166/255, green: 90/255, blue: 40/255)]
-        return housesForCurrentFarm.prefix(6).enumerated().map { (idx, house) in
-            let base = feedHistory(houseId: house.id, days: 7)
-            let points = base.map { point in
-                DailyResourcePoint(
-                    day: point.day,
-                    date: point.date,
-                    value: point.value * Double.random(in: 0.96...1.06),
-                    target: point.target,
-                    isAnomaly: false
-                )
-            }
-            let today = points.last?.value ?? 0
-            let yesterday = points.dropLast().last?.value ?? 1
-            let pct = (today - yesterday) / yesterday * 100
-            let state: SensorState = pct > 10 ? .critical : (abs(pct) > 5 ? .warning : .ok)
-            return CompareSeries(
-                houseName: house.name,
-                color: colors[idx % colors.count],
-                points: points,
-                todayDelta: (pct >= 0 ? "+" : "") + String(format: "%.0f%%", pct),
-                todayDeltaState: state
-            )
-        }
-    }
-
-    func compareHeater() -> [CompareSeries] {
-        let colors: [Color] = [.farmGreen, .stateInfo, .stateWarning, .aiEnd, .stateOK,
-                               Color(red: 166/255, green: 90/255, blue: 40/255)]
-        return housesForCurrentFarm.prefix(6).enumerated().map { (idx, house) in
-            let points = heaterHistory(houseId: house.id, days: 7)
-            let today = points.last?.value ?? 0
-            let yesterday = points.dropLast().last?.value ?? 1
-            let pct = (today - yesterday) / yesterday * 100
-            let state: SensorState = pct > 12 ? .critical : (abs(pct) > 6 ? .warning : .ok)
-            return CompareSeries(
-                houseName: house.name,
-                color: colors[idx % colors.count],
-                points: points,
-                todayDelta: (pct >= 0 ? "+" : "") + String(format: "%.0f%%", pct),
-                todayDeltaState: state
-            )
-        }
-    }
-
-    // MARK: init with mock content ------------------------------------------------
+    // MARK: init with live-first content ------------------------------------------
 
     init(apiClient: APIClient = APIClient()) {
         self.apiClient = apiClient
-        // Build stable UUIDs so views keep identity across reloads
-        let farmId = UUID()
-        currentFarmId = farmId
-
-        // Houses
-        let houseRecipes: [(name: String, type: HouseType, state: SensorState, pill: String,
-                            temp: Double, rh: Double, co2: Double, nh3: Double, staticP: Double)] = [
-            ("House 1 · Tunnel",  .tunnel,  .ok,       "All OK",   28.4, 68, 2.1, 14, 28),
-            ("House 2 · Tunnel",  .tunnel,  .ok,       "All OK",   28.1, 65, 2.0, 12, 26),
-            ("House 3 · Tunnel",  .tunnel,  .warning,  "High RH",  28.9, 71, 2.4, 14, 28),
-            ("House 4 · Curtain", .curtain, .critical, "Static P", 29.1, 69, 2.3, 15, 42),
-            ("House 5 · Tunnel",  .tunnel,  .ok,       "All OK",   28.3, 66, 2.1, 13, 27),
-            ("House 6 · Tunnel",  .tunnel,  .ok,       "All OK",   28.0, 64, 2.0, 12, 26)
-        ]
-        houses = houseRecipes.map { recipe in
-            House(
-                id: UUID(),
-                backendId: nil,
-                farmId: farmId,
-                name: recipe.name,
-                type: recipe.type,
-                birdCount: 28_000,
-                flockDay: 22,
-                state: recipe.state,
-                pillText: recipe.pill,
-                snapshot: HouseSnapshot(
-                    tempC: recipe.temp,
-                    humidity: recipe.rh,
-                    co2Ppm: recipe.co2,
-                    ammoniaPpm: recipe.nh3,
-                    staticPressurePa: recipe.staticP,
-                    airflowPct: 62,
-                    waterLphr: 132,
-                    feedCyclesDone: 3,
-                    feedCyclesPlanned: 4,
-                    tempFill: (recipe.temp - 25) / 6,
-                    humidityFill: recipe.rh / 90,
-                    co2Fill: recipe.co2 / 5,
-                    ammoniaFill: recipe.nh3 / 40,
-                    staticFill: recipe.staticP / 45,
-                    airflowFill: 0.62
-                )
-            )
-        }
-
-        // Farm
-        farms = [
-            Farm(id: farmId,
-                 backendId: nil,
-                 name: "Greenfield Farm",
-                 houseIds: houses.map(\.id),
-                 totalBirds: 168_400,
-                 flockAgeDays: 22,
-                 worstState: .critical,
-                 alertSummary: "1 critical"),
-            Farm(id: UUID(), backendId: nil, name: "Maple Ridge", houseIds: [], totalBirds: 92_000,
-                 flockAgeDays: 35, worstState: .warning, alertSummary: "2 alerts"),
-            Farm(id: UUID(), backendId: nil, name: "Cedar Point", houseIds: [], totalBirds: 48_000,
-                 flockAgeDays: 8, worstState: .ok, alertSummary: "Healthy")
-        ]
-
-        // Flock
-        let placed = Calendar.current.date(byAdding: .day, value: -22, to: Date())!
-        let catch_ = Calendar.current.date(byAdding: .day, value: 20, to: Date())!
-        // Cobb 500-like target weight (kg) by day
-        let targetWeight: [Double] = (0...42).map { d in
-            let day = Double(d)
-            return 0.04 + 0.065 * day + 0.0015 * day * day
-        }
-        let actualWeight: [Double] = (0...22).map { d in
-            targetWeight[d] * Double.random(in: 0.92...1.02)
-        } + Array(repeating: 0, count: 20)
-
-        flocks = [
-            Flock(id: UUID(), farmId: farmId, name: "Flock 24-A", breed: "Cobb 500",
-                  placedOn: placed, targetCatchOn: catch_,
-                  currentDay: 22, totalDays: 42,
-                  birdsPlaced: 170_000, birdsRemaining: 168_400,
-                  avgWeightKg: 1.04, targetWeightKg: 1.06,
-                  fcr: 1.42, targetFcr: 1.45,
-                  livabilityPct: 98.6,
-                  dailyGainG: 62,
-                  waterFeedRatio: 1.81,
-                  epef: 412,
-                  state: .ok, statePillText: "On target",
-                  isActive: true,
-                  actualWeightCurve: actualWeight,
-                  targetWeightCurve: targetWeight,
-                  log: (0..<5).map { i in
-                      FlockLogEntry(id: UUID(), day: 22 - i,
-                                    date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
-                                    deaths: [14, 11, 16, 12, 9][i],
-                                    avgWeightKg: 1.04 - Double(i) * 0.06,
-                                    note: i == 0 ? "Humidity trending high in H3" : nil)
-                  }),
-            Flock(id: UUID(), farmId: farmId, name: "Flock 23-F", breed: "Cobb 500",
-                  placedOn: placed, targetCatchOn: catch_,
-                  currentDay: 42, totalDays: 42,
-                  birdsPlaced: 170_000, birdsRemaining: 167_100,
-                  avgWeightKg: 2.68, targetWeightKg: 2.72,
-                  fcr: 1.51, targetFcr: 1.55,
-                  livabilityPct: 98.3,
-                  dailyGainG: 64, waterFeedRatio: 1.82, epef: 398,
-                  state: .ok, statePillText: "Completed",
-                  isActive: false,
-                  actualWeightCurve: targetWeight,
-                  targetWeightCurve: targetWeight,
-                  log: [])
-        ]
-
-        // Alarms
-        let h3 = houses[2].name
-        let h4 = houses[3].name
-        let h2 = houses[1].name
-        alarms = [
-            Alarm(id: UUID(), backendId: nil, severity: .critical,
-                  title: "Static pressure 42 Pa",
-                  meta: "\(h4) · 6 min ago · over alarm threshold (35 Pa)",
-                  houseName: h4,
-                  occurredAt: Date().addingTimeInterval(-6 * 60),
-                  sparkline: stride(from: 24.0, through: 42.0, by: 1).map { $0 + Double.random(in: -1...1) },
-                  threshold: 35, peakValue: 42,
-                  recommendation: AIRecommendation(
-                      title: "Inspect inlets — likely partially blocked",
-                      body: "Static pressure climbing while fans are at full output usually means restricted air intake. Check curtain seals and inlet doors on the south wall first.",
-                      confidence: 0.87,
-                      primaryAction: "I'm on it",
-                      secondaryAction: "Open SOP"),
-                  isAcknowledged: false),
-            Alarm(id: UUID(), backendId: nil, severity: .warning,
-                  title: "Humidity 71% · trending up",
-                  meta: "\(h3) · sustained 2 h above 65% target",
-                  houseName: h3,
-                  occurredAt: Date().addingTimeInterval(-2 * 60 * 60),
-                  sparkline: (0..<12).map { 63 + Double($0) * 0.7 },
-                  threshold: 65, peakValue: 71,
-                  recommendation: AIRecommendation(
-                      title: "Open Fan 9 to dry out the litter",
-                      body: "Adding one more 54\" fan (≈+12% airflow) brings RH from 71% → 64% in ~25 min without dropping inside temp below the brood band.",
-                      confidence: 0.82,
-                      primaryAction: "Apply 30 min",
-                      secondaryAction: "Why?"),
-                  isAcknowledged: false),
-            Alarm(id: UUID(), backendId: nil, severity: .warning,
-                  title: "Feed line auger #2 stalled",
-                  meta: "\(h2) · auto-recovered after 4 min",
-                  houseName: h2,
-                  occurredAt: Date().addingTimeInterval(-30 * 60),
-                  sparkline: [0, 0, 5, 10, 0, 0, 10, 12, 8, 10],
-                  threshold: nil, peakValue: nil,
-                  recommendation: nil, isAcknowledged: false),
-            Alarm(id: UUID(), backendId: nil, severity: .info,
-                  title: "Water meter reset detected",
-                  meta: "\(houses[0].name) · 02:14 · counter rolled over",
-                  houseName: houses[0].name,
-                  occurredAt: Date().addingTimeInterval(-8 * 60 * 60),
-                  sparkline: [], threshold: nil, peakValue: nil,
-                  recommendation: nil, isAcknowledged: false),
-            Alarm(id: UUID(), backendId: nil, severity: .acknowledged,
-                  title: "CO₂ peaked 3.1k ppm",
-                  meta: "\(h3) · 04:12 · resolved in 18 min",
-                  houseName: h3,
-                  occurredAt: Date().addingTimeInterval(-5 * 60 * 60),
-                  sparkline: [], threshold: nil, peakValue: nil,
-                  recommendation: nil, isAcknowledged: true),
-            Alarm(id: UUID(), backendId: nil, severity: .acknowledged,
-                  title: "Controller offline · 47 s",
-                  meta: "\(h2) gateway · reconnected",
-                  houseName: h2,
-                  occurredAt: Date().addingTimeInterval(-6 * 60 * 60),
-                  sparkline: [], threshold: nil, peakValue: nil,
-                  recommendation: nil, isAcknowledged: true)
-        ]
-
-        // AI tips
-        tips = [
-            AITip(id: UUID(), category: .air, scope: h3, severity: .warning,
-                  title: "Open Fan 9 to dry out the litter",
-                  body: "RH has been > 70% for 2 hours. Wet litter at day 22 raises ammonia within 24 h and hurts paw quality (downgrade risk).",
-                  primaryAction: "Apply 30 min", secondaryAction: "Dismiss",
-                  confidence: 0.87, createdAt: Date().addingTimeInterval(-20 * 60)),
-            AITip(id: UUID(), category: .heat, scope: "Farm-wide", severity: .warning,
-                  title: "Pre-cool houses before noon peak",
-                  body: "Outside temp will hit 31°C at 14:00. Drop set-points by 0.5°C from 11:30 to 12:30 to bank cool air; ramp tunnel fans from stage 4→5 at 12:45.",
-                  primaryAction: "Schedule", secondaryAction: "Edit",
-                  confidence: 0.79, createdAt: Date().addingTimeInterval(-1 * 60 * 60)),
-            AITip(id: UUID(), category: .feed, scope: "Flock 24-A", severity: .warning,
-                  title: "You're 4% behind feed target",
-                  body: "Current intake is 2.32 kg / bird vs Cobb 500 target of 2.42 kg. Add a fifth feeding window (22:30) to catch up before grow-out window closes.",
-                  primaryAction: "Add window", secondaryAction: "Compare",
-                  confidence: 0.74, createdAt: Date().addingTimeInterval(-3 * 60 * 60))
-        ]
-
-        // Team
-        team = [
-            TeamMember(id: UUID(), name: "Phuc Le", initials: "PL", role: .owner,
-                       scope: "all houses", isYou: true),
-            TeamMember(id: UUID(), name: "Maria Rivera", initials: "MR", role: .manager,
-                       scope: "all houses · alerts on", isYou: false),
-            TeamMember(id: UUID(), name: "Joe Tran", initials: "JT", role: .worker,
-                       scope: "House 1–3", isYou: false),
-            TeamMember(id: UUID(), name: "Sam Khan", initials: "SK", role: .worker,
-                       scope: "House 4–6", isYou: false),
-            TeamMember(id: UUID(), name: "Dr. Vega", initials: "DV", role: .vet,
-                       scope: "read-only · all flocks", isYou: false)
-        ]
-
-        // Controllers
-        controllers = houses.enumerated().map { (i, h) in
-            PairedController(
-                id: UUID(),
-                model: i < 4 ? "Platinum Touch" : "Trio",
-                serial: "RT-\(String(format: "%04d", 2204 + i))",
-                houseName: h.name,
-                lastSeen: Date().addingTimeInterval(-Double(i) * 30),
-                state: h.state
-            )
-        }
-
-        // User
-        currentUser = AppUser(id: UUID(), backendId: nil, name: "Phuc Le", email: "bobgel12@gmail.com",
-                              initials: "PL", role: .owner, assignedHouseIds: [])
+        self.verboseLogging = (ProcessInfo.processInfo.environment["ROTEM_IOS_VERBOSE_LOGS"] ?? "").lowercased() == "true"
+        currentFarmId = UUID()
+        farms = []
+        houses = []
+        flocks = []
+        alarms = []
+        tips = []
+        team = []
+        controllers = []
+        tasks = []
+        programs = []
+        workers = []
+        organizations = []
+        organizationMembers = []
+        biKPIs = []
+        generatedReports = []
+        rotemHealth = []
+        currentUser = AppUser(
+            id: UUID(),
+            backendId: nil,
+            name: "User",
+            email: "",
+            initials: "U",
+            role: .manager,
+            assignedHouseIds: []
+        )
     }
 
     func refreshCoreDataIfNeeded() async {
         if !hasLoadedLiveData {
+            log("refreshCoreDataIfNeeded -> reloadCoreData()")
             await reloadCoreData()
         }
     }
 
     func reloadCoreData() async {
+        log("reloadCoreData() start")
         isLoading = true
         defer { isLoading = false }
         do {
@@ -479,6 +275,10 @@ final class MockDataStore {
             let apiFarms = try await apiClient.fetchFarms()
             guard let firstFarm = apiFarms.first else {
                 lastError = "No farms available for this account."
+                farms = []
+                houses = []
+                flocks = []
+                alarms = []
                 return
             }
             let mappedFarms: [Farm] = apiFarms.map { farm in
@@ -490,13 +290,40 @@ final class MockDataStore {
                     totalBirds: 0,
                     flockAgeDays: 0,
                     worstState: .ok,
-                    alertSummary: "\(farm.activeHouses) active houses"
+                    alertSummary: "\(farm.activeHouses) active houses",
+                    activeHousesFromApi: farm.activeHouses
                 )
             }
             farms = mappedFarms
-            currentFarmId = Self.stableUUID(prefix: "farm", intID: firstFarm.id)
+            farmRotemIDs = Dictionary(uniqueKeysWithValues: apiFarms.map {
+                (Self.stableUUID(prefix: "farm", intID: $0.id), $0.rotemFarmID ?? "")
+            })
+            let firstFarmID = Self.stableUUID(prefix: "farm", intID: firstFarm.id)
+            if !farms.contains(where: { $0.id == currentFarmId }) {
+                currentFarmId = firstFarmID
+            }
+            await reloadSelectedFarmData()
+            await refreshFarmHomeOverviews()
+            hasLoadedLiveData = true
+            lastError = nil
+            log("reloadCoreData() success farms=\(farms.count) houses=\(houses.count) alarms=\(alarms.count) flocks=\(flocks.count)")
+        } catch {
+            lastError = error.localizedDescription
+            log("reloadCoreData() failed error=\(error.localizedDescription)")
+        }
+    }
 
-            let apiHouses = try await apiClient.fetchHouses(farmID: firstFarm.id)
+    func reloadSelectedFarmData() async {
+        guard let selectedFarm = farms.first(where: { $0.id == currentFarmId }),
+              let selectedFarmBackendID = selectedFarm.backendId else {
+            houses = []
+            flocks = []
+            alarms = []
+            return
+        }
+        do {
+            log("reloadSelectedFarmData() farmBackendID=\(selectedFarmBackendID)")
+            let apiHouses = try await apiClient.fetchHouses(farmID: selectedFarmBackendID)
             var mappedHouses: [House] = []
             var mappedAlarms: [Alarm] = []
 
@@ -525,7 +352,7 @@ final class MockDataStore {
                     House(
                         id: houseID,
                         backendId: apiHouse.id,
-                        farmId: currentFarmId,
+                        farmId: selectedFarm.id,
                         name: "House \(apiHouse.houseNumber)",
                         type: .tunnel,
                         birdCount: 0,
@@ -557,60 +384,205 @@ final class MockDataStore {
             }
 
             houses = mappedHouses
+            var kpiByHouse: [UUID: APIHouseMonitoringKpis] = [:]
+            var heaterListByHouse: [UUID: Double] = [:]
+            let kpiClient = apiClient
+            await withTaskGroup(of: (UUID, APIHouseMonitoringKpis?, Double?).self) { group in
+                for h in mappedHouses {
+                    guard let bid = h.backendId else { continue }
+                    let hid = h.id
+                    let flockDay = h.flockDay
+                    group.addTask {
+                        let k = try? await kpiClient.fetchHouseMonitoringKpis(houseID: bid)
+                        let heaterHistory = (try? await kpiClient.fetchHouseHeaterHistory(houseID: bid)) ?? []
+                        let fromDaily: Double? = {
+                            guard !heaterHistory.isEmpty else { return nil }
+                            if let row = heaterHistory.first(where: { $0.day == flockDay }) {
+                                return row.value
+                            }
+                            return heaterHistory.max(by: { $0.day < $1.day })?.value
+                        }()
+                        let listHeater = fromDaily ?? k?.heaterHours24h
+                        return (hid, k, listHeater)
+                    }
+                }
+                for await (hid, kpi, listHeater) in group {
+                    if let kpi {
+                        kpiByHouse[hid] = kpi
+                    }
+                    if let listHeater {
+                        heaterListByHouse[hid] = listHeater
+                    }
+                }
+            }
+            houseKpisByHouseId = kpiByHouse
+            houseHeaterHoursForListByHouseId = heaterListByHouse
             alarms = mappedAlarms.sorted { $0.occurredAt > $1.occurredAt }
             if let idx = farms.firstIndex(where: { $0.id == currentFarmId }) {
                 farms[idx].houseIds = houses.map(\.id)
+                farms[idx].alertSummary = alarms.isEmpty ? "No alerts" : "\(alarms.count) alerts"
+                farms[idx].worstState = Self.farmState(from: mappedHouses)
             }
             do {
-                let apiFlocks = try await apiClient.fetchFlocks(farmID: firstFarm.id)
-                flocks = apiFlocks.map { apiFlock in
+                let apiFlocks = try await apiClient.fetchFlocks(farmID: selectedFarmBackendID)
+                var rows: [Flock] = []
+                for apiFlock in apiFlocks {
                     let metrics = Self.metricsFromStatus(apiFlock.status)
                     let totalDays = Self.totalDays(arrival: apiFlock.arrivalDate, expectedHarvest: apiFlock.expectedHarvestDate)
                     let currentDay = max(0, apiFlock.currentAgeDays)
                     let mortalityRate = apiFlock.mortalityRate ?? 0
                     let livability = max(0, 100 - mortalityRate)
-                    let avgWeightKg = Self.estimateWeightKg(day: currentDay)
+                    let performance = (try? await apiClient.fetchFlockPerformance(flockID: apiFlock.id)) ?? []
+                    let sortedPerf = performance.sorted { (lhs, rhs) in
+                        (lhs.flockAgeDays ?? 0) < (rhs.flockAgeDays ?? 0)
+                    }
+                    let actualWeightCurve = Self.actualWeightCurve(from: sortedPerf, totalDays: max(totalDays, 42))
+                    let latestPerf = sortedPerf.last
+                    let avgWeightKg = (latestPerf?.averageWeightGrams ?? Self.estimateWeightKg(day: currentDay) * 1000) / 1000
                     let targetWeightKg = Self.estimateWeightKg(day: currentDay + 1)
-                    return Flock(
-                        id: Self.stableUUID(prefix: "flock", intID: apiFlock.id),
-                        farmId: currentFarmId,
-                        name: "Flock \(apiFlock.batchNumber)",
-                        breed: apiFlock.breedName,
-                        placedOn: apiFlock.arrivalDate ?? Date(),
-                        targetCatchOn: apiFlock.expectedHarvestDate ?? Date().addingTimeInterval(40 * 86_400),
-                        currentDay: currentDay,
-                        totalDays: totalDays,
-                        birdsPlaced: apiFlock.initialChickenCount,
-                        birdsRemaining: apiFlock.currentChickenCount,
-                        avgWeightKg: avgWeightKg,
-                        targetWeightKg: targetWeightKg,
-                        fcr: metrics.fcr,
-                        targetFcr: 1.45,
-                        livabilityPct: livability,
-                        dailyGainG: max(0, avgWeightKg) * 1000 / Double(max(currentDay, 1)),
-                        waterFeedRatio: metrics.waterFeedRatio,
-                        epef: Self.epef(day: currentDay, livability: livability, weightKg: avgWeightKg, fcr: metrics.fcr),
-                        state: metrics.state,
-                        statePillText: metrics.pill,
-                        isActive: apiFlock.isActive,
-                        actualWeightCurve: Self.actualWeightCurve(forDay: currentDay),
-                        targetWeightCurve: Self.targetWeightCurve(totalDays: totalDays),
-                        log: []
+                    let fcr = latestPerf?.feedConversionRatio ?? metrics.fcr
+                    let dailyGain = Self.estimateDailyGain(from: sortedPerf, fallbackDay: currentDay, fallbackWeightKg: avgWeightKg)
+                    let logEntries = Self.buildFlockLogs(from: sortedPerf)
+                    rows.append(
+                        Flock(
+                            id: Self.stableUUID(prefix: "flock", intID: apiFlock.id),
+                            farmId: selectedFarm.id,
+                            name: "Flock \(apiFlock.batchNumber)",
+                            breed: apiFlock.breedName,
+                            placedOn: apiFlock.arrivalDate ?? Date(),
+                            targetCatchOn: apiFlock.expectedHarvestDate ?? Date().addingTimeInterval(40 * 86_400),
+                            currentDay: currentDay,
+                            totalDays: totalDays,
+                            birdsPlaced: apiFlock.initialChickenCount,
+                            birdsRemaining: apiFlock.currentChickenCount,
+                            avgWeightKg: avgWeightKg,
+                            targetWeightKg: targetWeightKg,
+                            fcr: fcr,
+                            targetFcr: 1.45,
+                            livabilityPct: livability,
+                            dailyGainG: dailyGain,
+                            waterFeedRatio: metrics.waterFeedRatio,
+                            epef: Self.epef(day: max(currentDay, 1), livability: livability, weightKg: avgWeightKg, fcr: fcr),
+                            state: metrics.state,
+                            statePillText: metrics.pill,
+                            isActive: apiFlock.isActive,
+                            actualWeightCurve: actualWeightCurve,
+                            targetWeightCurve: Self.targetWeightCurve(totalDays: max(totalDays, 42)),
+                            log: logEntries
+                        )
                     )
                 }
+                flocks = rows.sorted { $0.placedOn > $1.placedOn }
             } catch {
-                // Keep current mock flocks if live flock endpoints fail.
+                flocks = []
             }
-            hasLoadedLiveData = true
+            // Load task center, program library, and workers from live APIs.
+            var loadedTasks: [FarmTask] = []
+            for house in mappedHouses {
+                guard let houseBackendID = house.backendId else { continue }
+                let apiTasks = (try? await apiClient.fetchTasks(houseID: houseBackendID)) ?? []
+                loadedTasks.append(contentsOf: apiTasks.map { task in
+                    let status: TaskStatus = task.isCompleted ? .done : .pending
+                    let dueAt = Calendar.current.date(
+                        byAdding: .day,
+                        value: max(task.dayOffset - house.flockDay, 0),
+                        to: Date()
+                    ) ?? Date()
+                    return FarmTask(
+                        id: Self.stableUUID(prefix: "task", intID: task.id),
+                        backendId: task.id,
+                        title: task.taskName,
+                        houseId: house.id,
+                        assigneeName: task.completedBy.isEmpty ? "Unassigned" : task.completedBy,
+                        dueAt: dueAt,
+                        status: status,
+                        notes: task.notes.isEmpty ? task.description : task.notes
+                    )
+                })
+            }
+            tasks = loadedTasks.sorted(by: { $0.dueAt < $1.dueAt })
+
+            let apiPrograms = (try? await apiClient.fetchPrograms()) ?? []
+            programs = apiPrograms.map { item in
+                Program(
+                    id: Self.stableUUID(prefix: "program", intID: item.id),
+                    backendId: item.id,
+                    name: item.name,
+                    category: "Duration \(item.durationDays)d",
+                    isActive: item.isActive,
+                    assignedHouseIds: mappedHouses.map(\.id),
+                    updatedAt: Date()
+                )
+            }
+
+            let apiWorkers = (try? await apiClient.fetchWorkers(farmID: selectedFarmBackendID)) ?? []
+            workers = apiWorkers.filter(\.isActive).map { item in
+                WorkerProfile(
+                    id: Self.stableUUID(prefix: "worker", intID: item.id),
+                    backendId: item.id,
+                    name: item.name,
+                    role: Self.mapWorkerRole(item.role),
+                    phone: item.phone,
+                    farmName: selectedFarm.name,
+                    assignedHouseIds: []
+                )
+            }
+            organizations = []
+            organizationMembers = []
+            biKPIs = []
+            generatedReports = []
+            if let integration = try? await apiClient.fetchFarmIntegrationStatus(farmID: selectedFarmBackendID) {
+                rotemHealth = [
+                    RotemFarmHealth(
+                        id: UUID(),
+                        farmName: selectedFarm.name,
+                        devicesOnline: integration.integrationStatus == "active" ? mappedHouses.count : 0,
+                        devicesTotal: mappedHouses.count,
+                        criticalCount: integration.integrationStatus == "error" ? 1 : 0,
+                        warningCount: integration.integrationType == "none" ? 1 : 0
+                    )
+                ]
+            } else {
+                rotemHealth = []
+            }
+            tips = []
+            controllers = houses.map { h in
+                PairedController(
+                    id: UUID(),
+                    model: "Rotem",
+                    serial: h.backendId.map { "RT-\($0)" } ?? "RT-N/A",
+                    houseName: h.name,
+                    lastSeen: Date(),
+                    state: h.state
+                )
+            }
             lastError = nil
+            log("reloadSelectedFarmData() success houses=\(houses.count) alarms=\(alarms.count) flocks=\(flocks.count) tasks=\(tasks.count) programs=\(programs.count) workers=\(workers.count)")
         } catch {
             lastError = error.localizedDescription
+            log("reloadSelectedFarmData() failed error=\(error.localizedDescription)")
         }
     }
 
-    func resetToMockData() {
+    func resetSessionData() {
         hasLoadedLiveData = false
         liveSensorHistoryByHouse = [:]
+        farmHomeOverviewByFarmId = [:]
+        houseKpisByHouseId = [:]
+        houseHeaterHoursForListByHouseId = [:]
+        farms = []
+        houses = []
+        flocks = []
+        alarms = []
+        tips = []
+        tasks = []
+        programs = []
+        workers = []
+        organizations = []
+        organizationMembers = []
+        biKPIs = []
+        generatedReports = []
+        rotemHealth = []
     }
 
     func refreshSensorHistory(houseId: UUID, kind: SensorKind, points: Int) async {
@@ -619,6 +591,7 @@ final class MockDataStore {
             let backendID = house.backendId
         else { return }
         do {
+            log("refreshSensorHistory() house=\(houseId.uuidString) kind=\(kind.rawValue) points=\(points)")
             let history = try await apiClient.fetchHouseMonitoringHistory(houseID: backendID, limit: max(points, 24))
             let mapped: [SensorSample] = history.compactMap { point in
                 let value: Double?
@@ -642,8 +615,195 @@ final class MockDataStore {
                 var houseSamples = liveSensorHistoryByHouse[houseId] ?? [:]
                 houseSamples[kind] = mapped.sorted(by: { $0.timestamp < $1.timestamp })
                 liveSensorHistoryByHouse[houseId] = houseSamples
+                log("refreshSensorHistory() loaded samples=\(mapped.count)")
             }
         } catch {
+            lastError = error.localizedDescription
+            log("refreshSensorHistory() failed error=\(error.localizedDescription)")
+        }
+    }
+
+    func fetchMonitoringHistory(
+        houseId: UUID,
+        limit: Int = 200,
+        startDate: Date? = nil,
+        endDate: Date? = nil
+    ) async -> [APIHouseMonitoringPoint] {
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
+        do {
+            return try await apiClient.fetchHouseMonitoringHistory(
+                houseID: backendID,
+                limit: limit,
+                startDate: startDate,
+                endDate: endDate
+            )
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    func fetchMonitoringKpis(houseId: UUID) async -> APIHouseMonitoringKpis? {
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return nil }
+        do {
+            return try await apiClient.fetchHouseMonitoringKpis(houseID: backendID)
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func fetchHeaterHistory(houseId: UUID) async -> [DailyResourcePoint] {
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
+        do {
+            return try await apiClient.fetchHouseHeaterHistory(houseID: backendID)
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    func fetchFarmHouseMeta(farmBackendID: Int) async -> [APIFarmHouseMeta] {
+        do {
+            return try await apiClient.fetchFarmHouseMeta(farmID: farmBackendID)
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    func fetchFarmMonitoringDashboard(farmBackendID: Int) async -> [APIFarmHouseMonitoringCard] {
+        do {
+            return try await apiClient.fetchFarmMonitoringDashboard(farmID: farmBackendID).houses
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    func fetchProgramTasks(programId: UUID, day: Int? = nil) async -> [APIProgramTask] {
+        guard let backendProgramID = programs.first(where: { $0.id == programId })?.backendId else { return [] }
+        do {
+            return try await apiClient.fetchProgramTasks(programID: backendProgramID, day: day)
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    func assignProgram(programId: UUID, houseIDs: [UUID]) async {
+        guard
+            let backendProgramID = programs.first(where: { $0.id == programId })?.backendId,
+            let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId
+        else { return }
+        let mappedHouseIDs = houseIDs.compactMap { houseID in
+            houses.first(where: { $0.id == houseID })?.backendId
+        }
+        do {
+            try await apiClient.assignProgram(
+                programID: backendProgramID,
+                farmIDs: [farmBackendID],
+                houseIDs: mappedHouseIDs
+            )
+            await reloadSelectedFarmData()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func fetchCurrentFarmIntegrationStatus() async -> APIFarmIntegrationStatus? {
+        guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return nil }
+        do {
+            return try await apiClient.fetchFarmIntegrationStatus(farmID: farmBackendID)
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func updateCurrentFarmIntegration(type: String, username: String?, password: String?) async {
+        guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return }
+        do {
+            try await apiClient.updateFarmIntegration(
+                farmID: farmBackendID,
+                integrationType: type,
+                username: username,
+                password: password
+            )
+            await reloadSelectedFarmData()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func houseKpi(for houseId: UUID) -> APIHouseMonitoringKpis? {
+        houseKpisByHouseId[houseId]
+    }
+
+    func heaterHoursForOperationsList(houseId: UUID) -> Double? {
+        houseHeaterHoursForListByHouseId[houseId]
+    }
+
+    /// Loads per-farm house counts, average growth day, and house alarm totals for the home screen.
+    func refreshFarmHomeOverviews() async {
+        guard !farms.isEmpty else {
+            farmHomeOverviewByFarmId = [:]
+            return
+        }
+        let client = apiClient
+        var next: [UUID: FarmHomeOverview] = [:]
+        await withTaskGroup(of: (UUID, FarmHomeOverview?).self) { group in
+            for farm in farms {
+                guard let bid = farm.backendId else { continue }
+                let farmUUID = farm.id
+                let fallbackCount = farm.activeHousesFromApi
+                group.addTask {
+                    do {
+                        let result = try await client.fetchFarmMonitoringDashboard(farmID: bid)
+                        let days = result.houses.compactMap { card -> Int? in
+                            if let g = card.growthDay { return g }
+                            return card.houseCurrentDay
+                        }
+                        let avg: Int? = {
+                            guard !days.isEmpty else { return nil }
+                            return days.reduce(0, +) / days.count
+                        }()
+                        let count = result.totalHouses > 0 ? result.totalHouses : result.houses.count
+                        let overview = FarmHomeOverview(
+                            houseCount: max(count, fallbackCount),
+                            avgDayAge: avg,
+                            houseRelatedAlertCount: result.alertsSummaryTotalActive
+                        )
+                        return (farmUUID, overview)
+                    } catch {
+                        let overview = FarmHomeOverview(
+                            houseCount: fallbackCount,
+                            avgDayAge: nil,
+                            houseRelatedAlertCount: 0
+                        )
+                        return (farmUUID, overview)
+                    }
+                }
+            }
+            for await (fid, overview) in group {
+                if let overview {
+                    next[fid] = overview
+                }
+            }
+        }
+        farmHomeOverviewByFarmId = next
+    }
+
+    func refreshRotemDataForCurrentFarm(force: Bool = false) async {
+        guard let rotemFarmID = farmRotemIDs[currentFarmId], !rotemFarmID.isEmpty else { return }
+        if !force, let last = lastFarmScrapeAt[currentFarmId], Date().timeIntervalSince(last) < 45 {
+            return
+        }
+        do {
+            try await apiClient.triggerFarmScrape(rotemFarmID: rotemFarmID)
+            lastFarmScrapeAt[currentFarmId] = Date()
+        } catch {
+            // Keep UI usable even when scrape trigger fails.
             lastError = error.localizedDescription
         }
     }
@@ -677,6 +837,12 @@ final class MockDataStore {
         if snapshot.humidity > 65 || snapshot.tempC > 30 {
             return .warning
         }
+        return .ok
+    }
+
+    private static func farmState(from houses: [House]) -> SensorState {
+        if houses.contains(where: { $0.state == .critical }) { return .critical }
+        if houses.contains(where: { $0.state == .warning }) { return .warning }
         return .ok
     }
 
@@ -719,6 +885,58 @@ final class MockDataStore {
         return curve
     }
 
+    private static func actualWeightCurve(from performance: [APIFlockPerformance], totalDays: Int) -> [Double] {
+        if performance.isEmpty {
+            return actualWeightCurve(forDay: max(0, totalDays / 2))
+        }
+        var points = Array(repeating: 0.0, count: max(totalDays, 1) + 1)
+        for row in performance {
+            guard let age = row.flockAgeDays, age >= 0, age < points.count else { continue }
+            if let grams = row.averageWeightGrams {
+                points[age] = grams / 1000
+            }
+        }
+        // Fill missing gaps by carrying forward nearest known value.
+        var lastKnown = 0.0
+        for idx in points.indices {
+            if points[idx] > 0 {
+                lastKnown = points[idx]
+            } else {
+                points[idx] = lastKnown
+            }
+        }
+        return points
+    }
+
+    private static func estimateDailyGain(from performance: [APIFlockPerformance], fallbackDay: Int, fallbackWeightKg: Double) -> Double {
+        let rows = performance.compactMap { row -> (Int, Double)? in
+            guard let day = row.flockAgeDays, let grams = row.averageWeightGrams else { return nil }
+            return (day, grams)
+        }.sorted(by: { $0.0 < $1.0 })
+        guard rows.count >= 2 else {
+            return max(0, fallbackWeightKg) * 1000 / Double(max(fallbackDay, 1))
+        }
+        let last = rows[rows.count - 1]
+        let prev = rows[rows.count - 2]
+        let dayDelta = max(last.0 - prev.0, 1)
+        return max((last.1 - prev.1) / Double(dayDelta), 0)
+    }
+
+    private static func buildFlockLogs(from performance: [APIFlockPerformance]) -> [FlockLogEntry] {
+        let rows = performance.compactMap { row -> FlockLogEntry? in
+            guard let day = row.flockAgeDays else { return nil }
+            return FlockLogEntry(
+                id: UUID(),
+                day: day,
+                date: row.recordDate ?? Date(),
+                deaths: 0,
+                avgWeightKg: (row.averageWeightGrams ?? 0) / 1000,
+                note: row.mortalityRate.map { "Mortality \($0.formatted(.number.precision(.fractionLength(2))))%" }
+            )
+        }
+        return rows.sorted(by: { $0.day > $1.day }).prefix(10).map { $0 }
+    }
+
     private static func epef(day: Int, livability: Double, weightKg: Double, fcr: Double) -> Int {
         let denominator = max(Double(day) * max(fcr, 0.1), 1)
         let score = (livability * weightKg * 100) / denominator
@@ -736,6 +954,20 @@ final class MockDataStore {
         default:
             return (.ok, "On target", 1.45, 1.80)
         }
+    }
+
+    private static func mapWorkerRole(_ value: String) -> UserRole {
+        switch value.lowercased() {
+        case "owner", "admin": return .owner
+        case "manager", "supervisor": return .manager
+        case "vet", "veterinarian": return .vet
+        default: return .worker
+        }
+    }
+
+    private func log(_ message: String) {
+        guard verboseLogging else { return }
+        print("[MockDataStore] \(message)")
     }
 }
 

@@ -24,6 +24,9 @@ struct ProfileView: View {
                     SectionHeader(title: "Team")
                     teamCard
 
+                    SectionHeader(title: "Web parity modules")
+                    parityModulesCard
+
                     SectionHeader(title: "Controllers")
                     controllersCard
 
@@ -242,6 +245,28 @@ struct ProfileView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .padding(.top, 10)
+            }
+        }
+    }
+
+    private var parityModulesCard: some View {
+        CardSection {
+            VStack(spacing: 10) {
+                NavigationLink(destination: OrganizationsView()) {
+                    ValueRow(systemImage: "building.2.fill", iconColor: .stateInfo, title: "Organizations", value: "\(store.organizations.count) orgs")
+                }
+                NavigationLink(destination: WorkersManagementView()) {
+                    ValueRow(systemImage: "person.3.fill", iconColor: .farmGreen, title: "Worker management", value: "\(store.workers.count) workers")
+                }
+                NavigationLink(destination: ProgramManagerView()) {
+                    ValueRow(systemImage: "slider.horizontal.3", iconColor: .stateWarning, title: "Program management", value: "\(store.programs.count) programs")
+                }
+                NavigationLink(destination: TaskCenterView()) {
+                    ValueRow(systemImage: "checklist", iconColor: .stateInfo, title: "Task manager", value: "\(store.tasks.count) tasks")
+                }
+                NavigationLink(destination: AdminToolsView()) {
+                    ValueRow(systemImage: "lock.shield.fill", iconColor: .stateCritical, title: "Email, security, Rotem admin", value: "Admin tools")
+                }
             }
         }
     }

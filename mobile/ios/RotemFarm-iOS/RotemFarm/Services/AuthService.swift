@@ -75,7 +75,7 @@ final class AuthService {
             try await apiClient.setEnvironment(newEnvironment)
             environment = newEnvironment
             UserDefaults.standard.set(newEnvironment.rawValue, forKey: Keys.environment)
-            await store?.resetToMockData()
+            await store?.resetSessionData()
             status = .signedOut
             errorMessage = nil
         } catch {
@@ -102,7 +102,7 @@ final class AuthService {
     func signOut() {
         Task {
             try? await apiClient.logout()
-            await store?.resetToMockData()
+            await store?.resetSessionData()
             status = .signedOut
         }
     }

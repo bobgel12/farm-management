@@ -62,6 +62,11 @@ struct AlertsView: View {
             }
             .background(Color.appBackground)
             .navigationTitle("Alerts")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    FarmSwitcherMenu()
+                }
+            }
             .navigationDestination(for: Alarm.self) { alarm in
                 AlertDetailView(alarm: alarm)
             }
@@ -258,8 +263,19 @@ struct AlertDetailView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
 
-            Button { } label: {
+            Button {
+                store.snoozeAlarm(alarm.id, hours: 1)
+                dismiss()
+            } label: {
                 Label("Snooze 30 min", systemImage: "clock.badge")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            Button {
+                store.resolveAlarm(alarm.id)
+                dismiss()
+            } label: {
+                Label("Resolve", systemImage: "checkmark.seal.fill")
             }
             .buttonStyle(SecondaryButtonStyle())
         }

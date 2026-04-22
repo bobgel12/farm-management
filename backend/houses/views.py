@@ -38,6 +38,31 @@ from .services.water_forecast_service import WaterForecastService
 from .services.monitoring_contract import MonitoringUnits
 from .services.heater_history_payload import build_heater_history_payload
 from rotem_scraper.tasks import sync_refresh_house_heater_history
+from farms.views import user_accessible_organization_ids
+
+
+def _scoped_farms_queryset(request):
+    farms = Farm.objects.all()
+    org_ids = user_accessible_organization_ids(request)
+    if org_ids is None:
+        return farms
+    return farms.filter(organization_id__in=org_ids)
+
+
+def _scoped_houses_queryset(request):
+    houses = House.objects.select_related('farm')
+    org_ids = user_accessible_organization_ids(request)
+    if org_ids is None:
+        return houses
+    return houses.filter(farm__organization_id__in=org_ids)
+
+
+def _scoped_water_alerts_queryset(request):
+    alerts = WaterConsumptionAlert.objects.select_related('house', 'house__farm')
+    org_ids = user_accessible_organization_ids(request)
+    if org_ids is None:
+        return alerts
+    return alerts.filter(house__farm__organization_id__in=org_ids)
 
 
 class HouseListCreateView(generics.ListCreateAPIView):
@@ -45,9 +70,10 @@ class HouseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         farm_id = self.request.query_params.get('farm_id')
+        queryset = _scoped_houses_queryset(self.request)
         if farm_id:
-            return House.objects.filter(farm_id=farm_id)
-        return House.objects.all()
+            return queryset.filter(farm_id=farm_id)
+        return queryset
 
     def get_serializer_class(self):
         if self.request.method == 'GET':
@@ -123,7 +149,7 @@ def house_dashboard(request):
 @api_view(['GET'])
 def farm_houses(request, farm_id):
     """Get all houses for a specific farm"""
-    farm = get_object_or_404(Farm, id=farm_id)
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     houses = House.objects.filter(farm=farm)
     serializer = HouseListSerializer(houses, many=True)
     return Response(serializer.data)
@@ -132,7 +158,7 @@ def farm_houses(request, farm_id):
 @api_view(['GET'])
 def farm_house_detail(request, farm_id, house_id):
     """Get a specific house within a farm context"""
-    farm = get_object_or_404(Farm, id=farm_id)
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     house = get_object_or_404(House, id=house_id, farm=farm)
     serializer = HouseSerializer(house)
     return Response(serializer.data)
@@ -1089,7 +1115,7 @@ def generate_water_forecast(request, house_id):
 @permission_classes([IsAuthenticated])
 def list_water_forecasts(request, house_id):
     """List persisted water forecasts for a house."""
-    house = get_object_or_404(House, id=house_id)
+    house = get_object_or_404(_scoped_houses_queryset(request), id=house_id)
     qs = WaterConsumptionForecast.objects.filter(house=house).order_by('-forecast_date')[:20]
     serializer = WaterConsumptionForecastSerializer(qs, many=True)
     return Response({'count': len(serializer.data), 'results': serializer.data})
@@ -1099,7 +1125,7 @@ def list_water_forecasts(request, house_id):
 @permission_classes([IsAuthenticated])
 def list_water_alerts(request, house_id):
     """List water alerts with optional lifecycle filters."""
-    house = get_object_or_404(House, id=house_id)
+    house = get_object_or_404(_scoped_houses_queryset(request), id=house_id)
     include_resolved = request.query_params.get('include_resolved', 'false').lower() == 'true'
     include_snoozed = request.query_params.get('include_snoozed', 'true').lower() == 'true'
     qs = WaterConsumptionAlert.objects.filter(house=house).order_by('-created_at')
@@ -1116,7 +1142,7 @@ def list_water_alerts(request, house_id):
 @permission_classes([IsAuthenticated])
 def acknowledge_water_alert(request, alert_id):
     """Acknowledge a water alert."""
-    alert = get_object_or_404(WaterConsumptionAlert, id=alert_id)
+    alert = get_object_or_404(_scoped_water_alerts_queryset(request), id=alert_id)
     alert.acknowledge(user=request.user)
     return Response(WaterConsumptionAlertSerializer(alert).data)
 
@@ -1125,7 +1151,7 @@ def acknowledge_water_alert(request, alert_id):
 @permission_classes([IsAuthenticated])
 def resolve_water_alert(request, alert_id):
     """Resolve a water alert."""
-    alert = get_object_or_404(WaterConsumptionAlert, id=alert_id)
+    alert = get_object_or_404(_scoped_water_alerts_queryset(request), id=alert_id)
     alert.resolve(user=request.user)
     return Response(WaterConsumptionAlertSerializer(alert).data)
 
@@ -1134,11 +1160,43 @@ def resolve_water_alert(request, alert_id):
 @permission_classes([IsAuthenticated])
 def snooze_water_alert(request, alert_id):
     """Snooze a water alert by N hours (default 6)."""
-    alert = get_object_or_404(WaterConsumptionAlert, id=alert_id)
+    alert = get_object_or_404(_scoped_water_alerts_queryset(request), id=alert_id)
     hours = int(request.data.get('hours', 6))
     until = timezone.now() + timedelta(hours=max(hours, 1))
     alert.snooze(until)
     return Response(WaterConsumptionAlertSerializer(alert).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def water_alerts_feed(request):
+    """Cross-farm water alerts feed for mobile alerts center."""
+    include_resolved = request.query_params.get('include_resolved', 'false').lower() == 'true'
+    include_snoozed = request.query_params.get('include_snoozed', 'true').lower() == 'true'
+    status_filter = request.query_params.get('status')  # unread|acknowledged|resolved|all
+    severity = request.query_params.get('severity')
+    farm_id = request.query_params.get('farm_id')
+
+    qs = _scoped_water_alerts_queryset(request).order_by('-created_at')
+    if farm_id:
+        qs = qs.filter(house__farm_id=farm_id)
+    if severity:
+        qs = qs.filter(severity__iexact=severity)
+    if not include_resolved:
+        qs = qs.filter(is_resolved=False)
+    if not include_snoozed:
+        now = timezone.now()
+        qs = qs.filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now))
+    if status_filter and status_filter != 'all':
+        if status_filter == 'unread':
+            qs = qs.filter(is_acknowledged=False, is_resolved=False)
+        elif status_filter == 'acknowledged':
+            qs = qs.filter(is_acknowledged=True, is_resolved=False)
+        elif status_filter == 'resolved':
+            qs = qs.filter(is_resolved=True)
+
+    serializer = WaterConsumptionAlertSerializer(qs[:300], many=True)
+    return Response({'count': len(serializer.data), 'results': serializer.data})
 
 
 @api_view(['POST'])

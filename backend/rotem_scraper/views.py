@@ -13,12 +13,21 @@ from .serializers import (
 from .services.scraper_service import DjangoRotemScraperService
 from .services.ml_service import MLAnalysisService
 from farms.models import Farm
+from farms.views import user_accessible_organization_ids
 from houses.models import House
 from django.utils import timezone
 from datetime import timedelta
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _scoped_rotem_farms(request):
+    farms = Farm.objects.filter(is_active=True, integration_type='rotem')
+    org_ids = user_accessible_organization_ids(request)
+    if org_ids is None:
+        return farms
+    return farms.filter(organization_id__in=org_ids)
 
 
 def get_farm_by_identifier(farm_identifier):
@@ -55,6 +64,9 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Filter queryset based on query parameters"""
         queryset = super().get_queryset()
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is not None:
+            queryset = queryset.filter(controller__farm__organization_id__in=org_ids)
         
         # Filter by farm_id if provided (uses rotem_farm_id from Farm model)
         farm_id = self.request.query_params.get('farm_id')
@@ -124,7 +136,7 @@ class RotemDataViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Get data summary by farm"""
-        farms = Farm.objects.filter(is_active=True, integration_type='rotem')
+        farms = _scoped_rotem_farms(request)
         summary = []
         
         for farm in farms:
@@ -269,10 +281,7 @@ class RotemFarmViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """Return farms with Rotem integration"""
-        return Farm.objects.filter(
-            integration_type='rotem',
-            is_active=True
-        ).prefetch_related('rotem_controllers')
+        return _scoped_rotem_farms(self.request).prefetch_related('rotem_controllers')
 
 
 class RotemUserViewSet(viewsets.ReadOnlyModelViewSet):
@@ -456,6 +465,9 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Filter queryset based on query parameters"""
         queryset = super().get_queryset()
+        org_ids = user_accessible_organization_ids(self.request)
+        if org_ids is not None:
+            queryset = queryset.filter(controller__farm__organization_id__in=org_ids)
         
         # Filter by farm_id if provided (uses rotem_farm_id from Farm model)
         farm_id = self.request.query_params.get('farm_id')

@@ -5,10 +5,12 @@
 
 import SwiftUI
 
-enum AppTab: Hashable { case home, houses, alerts, reports, profile }
+enum AppTab: Hashable { case home, operations, alerts, analytics, profile }
 
 struct RootView: View {
     @Environment(AuthService.self) private var auth
+    @Environment(MockDataStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab = .home
 
     var body: some View {
@@ -26,21 +28,25 @@ struct RootView: View {
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(AppTab.home)
 
-            HousesView()
-                .tabItem { Label("Houses", systemImage: "square.grid.2x2.fill") }
-                .tag(AppTab.houses)
+            OperationsView()
+                .tabItem { Label("Operations", systemImage: "square.grid.2x2.fill") }
+                .tag(AppTab.operations)
 
             AlertsView()
                 .tabItem { Label("Alerts", systemImage: "bell.badge.fill") }
                 .tag(AppTab.alerts)
 
-            ReportsView()
-                .tabItem { Label("Reports", systemImage: "chart.line.uptrend.xyaxis") }
-                .tag(AppTab.reports)
+            AnalyticsHubView()
+                .tabItem { Label("Analytics", systemImage: "chart.line.uptrend.xyaxis") }
+                .tag(AppTab.analytics)
 
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
                 .tag(AppTab.profile)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, auth.status == .signedIn else { return }
+            Task { await store.reloadSelectedFarmData() }
         }
     }
 }

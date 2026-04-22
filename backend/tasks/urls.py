@@ -5,6 +5,7 @@ urlpatterns = [
     path('tasks/', views.TaskListCreateView.as_view(), name='task-list-create'),
     path('tasks/<int:pk>/', views.TaskDetailView.as_view(), name='task-detail'),
     path('tasks/<int:task_id>/complete/', views.complete_task, name='complete-task'),
+    path('tasks/<int:task_id>/status/', views.update_task_status, name='update-task-status'),
     path('houses/<int:house_id>/tasks/', views.house_tasks, name='house-tasks'),
     path('houses/<int:house_id>/tasks/today/', views.today_tasks, name='today-tasks'),
     path('houses/<int:house_id>/tasks/upcoming/', views.upcoming_tasks, name='upcoming-tasks'),

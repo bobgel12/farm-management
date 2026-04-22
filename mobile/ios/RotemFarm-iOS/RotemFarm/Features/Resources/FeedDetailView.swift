@@ -9,28 +9,36 @@ import SwiftUI
 struct FeedDetailView: View {
     @Environment(MockDataStore.self) private var store
     let house: House
+    @State private var daily: [DailyResourcePoint] = []
 
     var body: some View {
-        let daily = store.feedHistory(houseId: house.id, days: 14)
-
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header(daily: daily)
 
-                SectionHeader(title: "Silos")
-                silos
-
                 SectionHeader(title: "Last 14 days", trailing: "kg / day")
                 chartCard(daily: daily)
-
-                SectionHeader(title: "Today's feeding windows")
-                windows
+                CardSection {
+                    Text("Live silo and feeding-window telemetry is not exposed by current backend endpoints.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(14)
         }
         .background(Color.appBackground)
         .navigationTitle("Feed")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await store.refreshRotemDataForCurrentFarm()
+            let history = await store.fetchMonitoringHistory(
+                houseId: house.id,
+                limit: 500,
+                startDate: Calendar.current.date(byAdding: .day, value: -14, to: Date()),
+                endDate: Date()
+            )
+            daily = buildDailyFeed(history: history)
+        }
     }
 
     private func header(daily: [DailyResourcePoint]) -> some View {
@@ -63,44 +71,6 @@ struct FeedDetailView: View {
         .background(Color.appCard, in: RoundedRectangle(cornerRadius: AppRadius.hero))
     }
 
-    private var silos: some View {
-        HStack(spacing: 8) {
-            siloTile(name: "Silo A", ration: "Grower", tons: 6.8, pct: 0.62, days: 3.1)
-            siloTile(name: "Silo B", ration: "Grower", tons: 2.1, pct: 0.19, days: 0.9)
-        }
-    }
-
-    private func siloTile(name: String, ration: String, tons: Double, pct: Double, days: Double) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(name).font(AppFont.bodyBold)
-                Spacer()
-                Text(ration).font(AppFont.caption).foregroundStyle(.secondary)
-            }
-            HStack(alignment: .bottom, spacing: 4) {
-                Text(String(format: "%.1f", tons))
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                Text("t remaining")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 3)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color(uiColor: .tertiarySystemFill))
-                    Capsule().fill(pct < 0.25 ? Color.stateWarning : Color.farmGreen)
-                        .frame(width: geo.size.width * pct)
-                }
-            }
-            .frame(height: 6)
-            Text(String(format: "%.1f days runway", days))
-                .font(AppFont.caption)
-                .foregroundStyle(pct < 0.25 ? Color.stateWarning : .secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.appCard, in: RoundedRectangle(cornerRadius: AppRadius.card))
-    }
 
     private func chartCard(daily: [DailyResourcePoint]) -> some View {
         CardSection {
@@ -125,33 +95,15 @@ struct FeedDetailView: View {
         }
     }
 
-    private var windows: some View {
-        CardSection {
-            VStack(spacing: 0) {
-                windowRow(time: "05:30", state: "Complete", tint: .farmGreen, icon: "checkmark.circle.fill")
-                Divider().overlay(Color.appSeparator).padding(.vertical, 10)
-                windowRow(time: "10:00", state: "Complete", tint: .farmGreen, icon: "checkmark.circle.fill")
-                Divider().overlay(Color.appSeparator).padding(.vertical, 10)
-                windowRow(time: "14:30", state: "Running · cycle 3/6", tint: .stateInfo,
-                          icon: "arrow.triangle.2.circlepath")
-                Divider().overlay(Color.appSeparator).padding(.vertical, 10)
-                windowRow(time: "18:30", state: "Scheduled", tint: .secondary, icon: "clock.fill")
-                Divider().overlay(Color.appSeparator).padding(.vertical, 10)
-                windowRow(time: "22:30", state: "Suggested by AI", tint: .aiEnd, icon: "sparkles")
-            }
-        }
-    }
+}
 
-    private func windowRow(time: String, state: String, tint: Color, icon: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 26, height: 26)
-                .background(tint, in: RoundedRectangle(cornerRadius: 7))
-            Text(time).font(AppFont.body)
-            Spacer()
-            Text(state).font(AppFont.caption).foregroundStyle(.secondary)
+extension FeedDetailView {
+    private func buildDailyFeed(history: [APIHouseMonitoringPoint]) -> [DailyResourcePoint] {
+        let grouped = Dictionary(grouping: history) { Calendar.current.startOfDay(for: $0.timestamp) }
+        let sortedDays = grouped.keys.sorted().suffix(14)
+        return sortedDays.enumerated().map { idx, day in
+            let total = grouped[day]?.compactMap(\.feedConsumption).reduce(0, +) ?? 0
+            return DailyResourcePoint(day: idx + 1, date: day, value: total, target: nil, isAnomaly: false)
         }
     }
 }

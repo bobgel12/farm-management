@@ -9,6 +9,23 @@ from .serializers import TaskSerializer, TaskListSerializer, TaskCompletionSeria
 from .task_scheduler import TaskScheduler
 from .email_service import TaskEmailService
 from houses.models import House
+from farms.views import user_accessible_organization_ids
+
+
+def _scoped_houses_queryset(request):
+    qs = House.objects.all()
+    org_ids = user_accessible_organization_ids(request)
+    if org_ids is None:
+        return qs
+    return qs.filter(farm__organization_id__in=org_ids)
+
+
+def _scoped_tasks_queryset(request):
+    qs = Task.objects.select_related('house', 'house__farm')
+    org_ids = user_accessible_organization_ids(request)
+    if org_ids is None:
+        return qs
+    return qs.filter(house__farm__organization_id__in=org_ids)
 
 
 class TaskListCreateView(generics.ListCreateAPIView):
@@ -17,8 +34,7 @@ class TaskListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         house_id = self.request.query_params.get('house_id')
         day_offset = self.request.query_params.get('day_offset')
-        
-        queryset = Task.objects.all()
+        queryset = _scoped_tasks_queryset(self.request)
         
         if house_id:
             queryset = queryset.filter(house_id=house_id)
@@ -35,14 +51,16 @@ class TaskListCreateView(generics.ListCreateAPIView):
 
 
 class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Task.objects.all()
     serializer_class = TaskSerializer
+
+    def get_queryset(self):
+        return _scoped_tasks_queryset(self.request)
 
 
 @api_view(['POST'])
 def complete_task(request, task_id):
     """Mark a task as completed"""
-    task = get_object_or_404(Task, id=task_id)
+    task = get_object_or_404(_scoped_tasks_queryset(request), id=task_id)
     serializer = TaskCompletionSerializer(data=request.data)
     
     if serializer.is_valid():
@@ -58,7 +76,7 @@ def complete_task(request, task_id):
 @api_view(['GET'])
 def house_tasks(request, house_id):
     """Get all tasks for a specific house"""
-    house = get_object_or_404(House, id=house_id)
+    house = get_object_or_404(_scoped_houses_queryset(request), id=house_id)
     tasks = Task.objects.filter(house=house).order_by('day_offset', 'task_name')
     serializer = TaskListSerializer(tasks, many=True)
     return Response(serializer.data)
@@ -67,7 +85,7 @@ def house_tasks(request, house_id):
 @api_view(['GET'])
 def today_tasks(request, house_id):
     """Get today's tasks for a specific house"""
-    house = get_object_or_404(House, id=house_id)
+    house = get_object_or_404(_scoped_houses_queryset(request), id=house_id)
     tasks = TaskScheduler.get_today_tasks(house)
     serializer = TaskListSerializer(tasks, many=True)
     return Response(serializer.data)
@@ -76,7 +94,7 @@ def today_tasks(request, house_id):
 @api_view(['GET'])
 def upcoming_tasks(request, house_id):
     """Get upcoming tasks for a specific house"""
-    house = get_object_or_404(House, id=house_id)
+    house = get_object_or_404(_scoped_houses_queryset(request), id=house_id)
     days_ahead = request.query_params.get('days', 7)
     tasks = TaskScheduler.get_upcoming_tasks(house, int(days_ahead))
     serializer = TaskListSerializer(tasks, many=True)
@@ -86,7 +104,7 @@ def upcoming_tasks(request, house_id):
 @api_view(['POST'])
 def generate_tasks(request, house_id):
     """Generate all tasks for a house"""
-    house = get_object_or_404(House, id=house_id)
+    house = get_object_or_404(_scoped_houses_queryset(request), id=house_id)
     tasks = TaskScheduler.generate_tasks_for_house(house)
     serializer = TaskListSerializer(tasks, many=True)
     return Response(serializer.data)
@@ -101,7 +119,7 @@ def task_dashboard(request):
     # Get today's tasks across all houses
     # Use age_days which prefers current_age_days (from Rotem) over calculated current_day
     today_tasks = []
-    for house in House.objects.filter(is_active=True):
+    for house in _scoped_houses_queryset(request).filter(is_active=True):
         age_days = house.age_days  # Unified age - prefers current_age_days, fallback to current_day
         if age_days is not None:
             house_tasks = Task.objects.filter(
@@ -121,7 +139,7 @@ def task_dashboard(request):
     
     # Get overdue tasks (tasks from previous days that are incomplete)
     overdue_tasks = []
-    for house in House.objects.filter(is_active=True):
+    for house in _scoped_houses_queryset(request).filter(is_active=True):
         age_days = house.age_days  # Unified age - prefers current_age_days, fallback to current_day
         if age_days is not None and age_days > 0:
             overdue = Task.objects.filter(
@@ -147,6 +165,36 @@ def task_dashboard(request):
         'overdue_count': len(overdue_tasks)
     }
     return Response(data)
+
+
+@api_view(['POST'])
+def update_task_status(request, task_id):
+    """Update task lifecycle status for iOS task center parity."""
+    task = get_object_or_404(_scoped_tasks_queryset(request), id=task_id)
+    status_value = (request.data.get('status') or '').strip().lower()
+    notes = request.data.get('notes', '')
+    completed_by = request.data.get('completed_by') or (
+        request.user.username if request.user.is_authenticated else ''
+    )
+
+    if status_value in ('done', 'completed', 'complete'):
+        task.mark_completed(completed_by=completed_by, notes=notes)
+    elif status_value in ('pending', 'in_progress', 'blocked'):
+        task.is_completed = False
+        task.completed_at = None
+        task.completed_by = ''
+        if notes:
+            task.notes = notes
+        task.save(update_fields=['is_completed', 'completed_at', 'completed_by', 'notes', 'updated_at'])
+    else:
+        return Response(
+            {'error': 'status must be one of pending, in_progress, blocked, done'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    payload = TaskSerializer(task).data
+    payload['status'] = 'done' if task.is_completed else status_value or 'pending'
+    return Response(payload)
 
 
 class RecurringTaskListCreateView(generics.ListCreateAPIView):

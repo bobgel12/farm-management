@@ -54,6 +54,7 @@ urlpatterns = [
     
     # Water consumption monitoring
     path('houses/<int:house_id>/water/alerts/', views.list_water_alerts, name='list-water-alerts'),
+    path('houses/water/alerts/feed/', views.water_alerts_feed, name='water-alerts-feed'),
     path('houses/water/alerts/<int:alert_id>/acknowledge/', views.acknowledge_water_alert, name='ack-water-alert'),
     path('houses/water/alerts/<int:alert_id>/resolve/', views.resolve_water_alert, name='resolve-water-alert'),
     path('houses/water/alerts/<int:alert_id>/snooze/', views.snooze_water_alert, name='snooze-water-alert'),
