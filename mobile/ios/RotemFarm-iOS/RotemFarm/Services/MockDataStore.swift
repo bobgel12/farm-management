@@ -344,24 +344,30 @@ final class MockDataStore {
             var mappedAlarms: [Alarm] = []
 
             for apiHouse in apiHouses where apiHouse.isActive {
-                let monitoring = try await apiClient.fetchLatestMonitoring(houseID: apiHouse.id)
+                let monitoring = try? await apiClient.fetchLatestMonitoring(houseID: apiHouse.id)
                 let houseID = Self.stableUUID(prefix: "house", intID: apiHouse.id)
+                let fallbackSnapshot = houses.first(where: { $0.backendId == apiHouse.id })?.snapshot
+                let resolvedTemp = monitoring?.averageTemperature ?? fallbackSnapshot?.tempC ?? 0
+                let resolvedHumidity = monitoring?.humidity ?? fallbackSnapshot?.humidity ?? 0
+                let resolvedStatic = monitoring?.staticPressure ?? fallbackSnapshot?.staticPressurePa ?? 0
+                let resolvedAirflow = monitoring?.airflowPercentage ?? fallbackSnapshot?.airflowPct ?? 0
+                let resolvedWater = monitoring?.waterConsumption ?? fallbackSnapshot?.waterLphr ?? 0
                 let snapshot = HouseSnapshot(
-                    tempC: monitoring?.averageTemperature ?? 0,
-                    humidity: monitoring?.humidity ?? 0,
-                    co2Ppm: 0,
-                    ammoniaPpm: 0,
-                    staticPressurePa: monitoring?.staticPressure ?? 0,
-                    airflowPct: monitoring?.airflowPercentage ?? 0,
-                    waterLphr: monitoring?.waterConsumption ?? 0,
-                    feedCyclesDone: 0,
-                    feedCyclesPlanned: 0,
-                    tempFill: Self.clamp01((monitoring?.averageTemperature ?? 0) / 35),
-                    humidityFill: Self.clamp01((monitoring?.humidity ?? 0) / 100),
-                    co2Fill: 0,
-                    ammoniaFill: 0,
-                    staticFill: Self.clamp01((monitoring?.staticPressure ?? 0) / 60),
-                    airflowFill: Self.clamp01((monitoring?.airflowPercentage ?? 0) / 100)
+                    tempC: resolvedTemp,
+                    humidity: resolvedHumidity,
+                    co2Ppm: fallbackSnapshot?.co2Ppm ?? 0,
+                    ammoniaPpm: fallbackSnapshot?.ammoniaPpm ?? 0,
+                    staticPressurePa: resolvedStatic,
+                    airflowPct: resolvedAirflow,
+                    waterLphr: resolvedWater,
+                    feedCyclesDone: fallbackSnapshot?.feedCyclesDone ?? 0,
+                    feedCyclesPlanned: fallbackSnapshot?.feedCyclesPlanned ?? 0,
+                    tempFill: Self.clamp01(resolvedTemp / 35),
+                    humidityFill: Self.clamp01(resolvedHumidity / 100),
+                    co2Fill: fallbackSnapshot?.co2Fill ?? 0,
+                    ammoniaFill: fallbackSnapshot?.ammoniaFill ?? 0,
+                    staticFill: Self.clamp01(resolvedStatic / 60),
+                    airflowFill: Self.clamp01(resolvedAirflow / 100)
                 )
                 let state = Self.stateForSnapshot(snapshot)
                 mappedHouses.append(
@@ -379,7 +385,7 @@ final class MockDataStore {
                     )
                 )
 
-                let alerts = try await apiClient.fetchWaterAlerts(houseID: apiHouse.id)
+                let alerts = (try? await apiClient.fetchWaterAlerts(houseID: apiHouse.id)) ?? []
                 let houseAlerts = alerts.map { alert in
                     Alarm(
                         id: Self.stableUUID(prefix: "alert", intID: alert.id),
