@@ -1,0 +1,11 @@
+{
+  "message": "Login successful",
+  "token": "sample-token",
+  "user": {
+    "id": 8,
+    "username": "manager",
+    "email": "manager@example.com",
+    "is_staff": false,
+    "is_authenticated": true
+  }
+}
