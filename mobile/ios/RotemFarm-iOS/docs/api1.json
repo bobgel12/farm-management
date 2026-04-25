@@ -1,0 +1,956 @@
+curl 'https://rotemnetweb.com/Host6_V1/Services/AllServices.svc/GetFarmRegistration' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json;charset=UTF-8' \
+  -b 'ASP.NET_SessionId=<REDACTED_SESSION_ID>' \
+  -H 'Origin: https://rotemnetweb.com' \
+  -H 'Referer: https://rotemnetweb.com/Host6_V1/rotemWebApp/Main.html' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+  -H 'connectionId;' \
+  -H 'contextId: 88ba1540-83c6-f1b5-0a74-844bffcf0d63' \
+  -H 'farmConnectionToken: <REDACTED_FARM_CONNECTION_TOKEN>' \
+  -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'userLanguage: ENGLISH' \
+  -H 'userToken: <REDACTED_USER_TOKEN>' \
+  --data-raw '{"prmFarmRegistrationParams":{"GatewayCode":"<REDACTED_GATEWAY_CODE>"}}'
+
+  Response:
+  {
+  "reponseObj": {
+    "IsValid": true,
+    "ErrorMessage": null,
+    "GeneralFarmSettings": null,
+    "FarmRegistration": {
+      "GatewayCode": "<REDACTED_GATEWAY_CODE>",
+      "FarmCode": "",
+      "GatewayAliasName": "<REDACTED_FARM_NAME>",
+      "Street": "<REDACTED_STREET>",
+      "CityState": "<REDACTED_CITY_STATE>",
+      "CountryID": "<REDACTED_COUNTRY_ID>",
+      "ZipCode": "<REDACTED_ZIP_CODE>",
+      "IntegratorID": 20,
+      "CustomIntegratorName": "<REDACTED_CUSTOM_INTEGRATOR_NAME>",
+      "SegmentID": 1,
+      "IsFarmRegistered": true,
+      "FarmRegisterationSkipCounter": <REDACTED_FARM_REGISTERATION_SKIP_COUNTER>,
+      "DtIntegrators": [
+        {
+          "ID": 0,
+          "IntegratorName": "None"
+        },
+        {
+          "ID": 1,
+          "IntegratorName": "Other"
+        },
+        {
+          "ID": 2,
+          "IntegratorName": "AVIAGEN"
+        },
+        {
+          "ID": 3,
+          "IntegratorName": "BENTON COUNTY FOODS"
+        },
+        {
+          "ID": 4,
+          "IntegratorName": "BOAR'S HEAD"
+        },
+        {
+          "ID": 5,
+          "IntegratorName": "BUTTERBALL LLC"
+        },
+        {
+          "ID": 6,
+          "IntegratorName": "CAL-MAINE FOODS INC"
+        },
+        {
+          "ID": 7,
+          "IntegratorName": "CALDWELL FOODS, LLC"
+        },
+        {
+          "ID": 8,
+          "IntegratorName": "CARGILL INC"
+        },
+        {
+          "ID": 9,
+          "IntegratorName": "COBB-VANTRESS INC"
+        },
+        {
+          "ID": 10,
+          "IntegratorName": "ENGLAND FARMS INC"
+        },
+        {
+          "ID": 11,
+          "IntegratorName": "FOSTER FARMS"
+        },
+        {
+          "ID": 12,
+          "IntegratorName": "GEORGE'S INC"
+        },
+        {
+          "ID": 13,
+          "IntegratorName": "GREEN FOREST FOODS, LLC"
+        },
+        {
+          "ID": 14,
+          "IntegratorName": "HYBRID TURKEYS, INC"
+        },
+        {
+          "ID": 15,
+          "IntegratorName": "KEITH SMITH COMPANY INC"
+        },
+        {
+          "ID": 16,
+          "IntegratorName": "MOUNTAIRE CORPORATION"
+        },
+        {
+          "ID": 17,
+          "IntegratorName": "OK FOODS, INC."
+        },
+        {
+          "ID": 18,
+          "IntegratorName": "OZARK MOUNTAIN POULTRY"
+        },
+        {
+          "ID": 19,
+          "IntegratorName": "PECO FOODS"
+        },
+        {
+          "ID": 20,
+          "IntegratorName": "PILGRIM'S"
+        },
+        {
+          "ID": 21,
+          "IntegratorName": "SELECT GENETICS"
+        },
+        {
+          "ID": 22,
+          "IntegratorName": "SIMMONS FOODS INC."
+        },
+        {
+          "ID": 23,
+          "IntegratorName": "TWIN RIVER FOODS, INC."
+        },
+        {
+          "ID": 24,
+          "IntegratorName": "TYSON FOODS INC"
+        },
+        {
+          "ID": 25,
+          "IntegratorName": "WAYNE FARMS LLC"
+        }
+      ],
+      "DtCountries": [
+        {
+          "ID": "Afghanistan",
+          "CountryName": "Afghanistan"
+        },
+        {
+          "ID": "Albania",
+          "CountryName": "Albania"
+        },
+        {
+          "ID": "Algeria",
+          "CountryName": "Algeria"
+        },
+        {
+          "ID": "Andorra",
+          "CountryName": "Andorra"
+        },
+        {
+          "ID": "Angola",
+          "CountryName": "Angola"
+        },
+        {
+          "ID": "Antigua and Barbuda",
+          "CountryName": "Antigua and Barbuda"
+        },
+        {
+          "ID": "Argentina",
+          "CountryName": "Argentina"
+        },
+        {
+          "ID": "Armenia",
+          "CountryName": "Armenia"
+        },
+        {
+          "ID": "Australia",
+          "CountryName": "Australia"
+        },
+        {
+          "ID": "Austria",
+          "CountryName": "Austria"
+        },
+        {
+          "ID": "Azerbaijan",
+          "CountryName": "Azerbaijan"
+        },
+        {
+          "ID": "Bahamas",
+          "CountryName": "Bahamas"
+        },
+        {
+          "ID": "Bahrain",
+          "CountryName": "Bahrain"
+        },
+        {
+          "ID": "Bangladesh",
+          "CountryName": "Bangladesh"
+        },
+        {
+          "ID": "Barbados",
+          "CountryName": "Barbados"
+        },
+        {
+          "ID": "Belarus",
+          "CountryName": "Belarus"
+        },
+        {
+          "ID": "Belgium",
+          "CountryName": "Belgium"
+        },
+        {
+          "ID": "Belize",
+          "CountryName": "Belize"
+        },
+        {
+          "ID": "Benin",
+          "CountryName": "Benin"
+        },
+        {
+          "ID": "Bhutan",
+          "CountryName": "Bhutan"
+        },
+        {
+          "ID": "Bolivia",
+          "CountryName": "Bolivia"
+        },
+        {
+          "ID": "Bosnia and Herzegovina",
+          "CountryName": "Bosnia and Herzegovina"
+        },
+        {
+          "ID": "Botswana",
+          "CountryName": "Botswana"
+        },
+        {
+          "ID": "Brazil",
+          "CountryName": "Brazil"
+        },
+        {
+          "ID": "Brunei",
+          "CountryName": "Brunei"
+        },
+        {
+          "ID": "Bulgaria",
+          "CountryName": "Bulgaria"
+        },
+        {
+          "ID": "Burkina Faso",
+          "CountryName": "Burkina Faso"
+        },
+        {
+          "ID": "Burundi",
+          "CountryName": "Burundi"
+        },
+        {
+          "ID": "Cabo Verde",
+          "CountryName": "Cabo Verde"
+        },
+        {
+          "ID": "Cambodia",
+          "CountryName": "Cambodia"
+        },
+        {
+          "ID": "Cameroon",
+          "CountryName": "Cameroon"
+        },
+        {
+          "ID": "Canada",
+          "CountryName": "Canada"
+        },
+        {
+          "ID": "Central African Republic",
+          "CountryName": "Central African Republic"
+        },
+        {
+          "ID": "Chad",
+          "CountryName": "Chad"
+        },
+        {
+          "ID": "Chile",
+          "CountryName": "Chile"
+        },
+        {
+          "ID": "China",
+          "CountryName": "China"
+        },
+        {
+          "ID": "Colombia",
+          "CountryName": "Colombia"
+        },
+        {
+          "ID": "Comoros",
+          "CountryName": "Comoros"
+        },
+        {
+          "ID": "Congo (Congo-Brazzaville)",
+          "CountryName": "Congo (Congo-Brazzaville)"
+        },
+        {
+          "ID": "Costa Rica",
+          "CountryName": "Costa Rica"
+        },
+        {
+          "ID": "Côte d'Ivoire",
+          "CountryName": "Côte d'Ivoire"
+        },
+        {
+          "ID": "Croatia",
+          "CountryName": "Croatia"
+        },
+        {
+          "ID": "Cuba",
+          "CountryName": "Cuba"
+        },
+        {
+          "ID": "Cyprus",
+          "CountryName": "Cyprus"
+        },
+        {
+          "ID": "Czechia (Czech Republic)",
+          "CountryName": "Czechia (Czech Republic)"
+        },
+        {
+          "ID": "Democratic Republic of the Congo",
+          "CountryName": "Democratic Republic of the Congo"
+        },
+        {
+          "ID": "Denmark",
+          "CountryName": "Denmark"
+        },
+        {
+          "ID": "Djibouti",
+          "CountryName": "Djibouti"
+        },
+        {
+          "ID": "Dominica",
+          "CountryName": "Dominica"
+        },
+        {
+          "ID": "Dominican Republic",
+          "CountryName": "Dominican Republic"
+        },
+        {
+          "ID": "Ecuador",
+          "CountryName": "Ecuador"
+        },
+        {
+          "ID": "Egypt",
+          "CountryName": "Egypt"
+        },
+        {
+          "ID": "El Salvador",
+          "CountryName": "El Salvador"
+        },
+        {
+          "ID": "Equatorial Guinea",
+          "CountryName": "Equatorial Guinea"
+        },
+        {
+          "ID": "Eritrea",
+          "CountryName": "Eritrea"
+        },
+        {
+          "ID": "Estonia",
+          "CountryName": "Estonia"
+        },
+        {
+          "ID": "Eswatini (fmr. \"Swaziland\")",
+          "CountryName": "Eswatini (fmr. \"Swaziland\")"
+        },
+        {
+          "ID": "Ethiopia",
+          "CountryName": "Ethiopia"
+        },
+        {
+          "ID": "Fiji",
+          "CountryName": "Fiji"
+        },
+        {
+          "ID": "Finland",
+          "CountryName": "Finland"
+        },
+        {
+          "ID": "France",
+          "CountryName": "France"
+        },
+        {
+          "ID": "Gabon",
+          "CountryName": "Gabon"
+        },
+        {
+          "ID": "Gambia",
+          "CountryName": "Gambia"
+        },
+        {
+          "ID": "Georgia",
+          "CountryName": "Georgia"
+        },
+        {
+          "ID": "Germany",
+          "CountryName": "Germany"
+        },
+        {
+          "ID": "Ghana",
+          "CountryName": "Ghana"
+        },
+        {
+          "ID": "Greece",
+          "CountryName": "Greece"
+        },
+        {
+          "ID": "Grenada",
+          "CountryName": "Grenada"
+        },
+        {
+          "ID": "Guatemala",
+          "CountryName": "Guatemala"
+        },
+        {
+          "ID": "Guinea",
+          "CountryName": "Guinea"
+        },
+        {
+          "ID": "Guinea-Bissau",
+          "CountryName": "Guinea-Bissau"
+        },
+        {
+          "ID": "Guyana",
+          "CountryName": "Guyana"
+        },
+        {
+          "ID": "Haiti",
+          "CountryName": "Haiti"
+        },
+        {
+          "ID": "Holy See",
+          "CountryName": "Holy See"
+        },
+        {
+          "ID": "Honduras",
+          "CountryName": "Honduras"
+        },
+        {
+          "ID": "Hungary",
+          "CountryName": "Hungary"
+        },
+        {
+          "ID": "Iceland",
+          "CountryName": "Iceland"
+        },
+        {
+          "ID": "India",
+          "CountryName": "India"
+        },
+        {
+          "ID": "Indonesia",
+          "CountryName": "Indonesia"
+        },
+        {
+          "ID": "Iran",
+          "CountryName": "Iran"
+        },
+        {
+          "ID": "Iraq",
+          "CountryName": "Iraq"
+        },
+        {
+          "ID": "Ireland",
+          "CountryName": "Ireland"
+        },
+        {
+          "ID": "Israel",
+          "CountryName": "Israel"
+        },
+        {
+          "ID": "Italy",
+          "CountryName": "Italy"
+        },
+        {
+          "ID": "Jamaica",
+          "CountryName": "Jamaica"
+        },
+        {
+          "ID": "Japan",
+          "CountryName": "Japan"
+        },
+        {
+          "ID": "Jordan",
+          "CountryName": "Jordan"
+        },
+        {
+          "ID": "Kazakhstan",
+          "CountryName": "Kazakhstan"
+        },
+        {
+          "ID": "Kenya",
+          "CountryName": "Kenya"
+        },
+        {
+          "ID": "Kiribati",
+          "CountryName": "Kiribati"
+        },
+        {
+          "ID": "Kuwait",
+          "CountryName": "Kuwait"
+        },
+        {
+          "ID": "Kyrgyzstan",
+          "CountryName": "Kyrgyzstan"
+        },
+        {
+          "ID": "Laos",
+          "CountryName": "Laos"
+        },
+        {
+          "ID": "Latvia",
+          "CountryName": "Latvia"
+        },
+        {
+          "ID": "Lebanon",
+          "CountryName": "Lebanon"
+        },
+        {
+          "ID": "Lesotho",
+          "CountryName": "Lesotho"
+        },
+        {
+          "ID": "Liberia",
+          "CountryName": "Liberia"
+        },
+        {
+          "ID": "Libya",
+          "CountryName": "Libya"
+        },
+        {
+          "ID": "Liechtenstein",
+          "CountryName": "Liechtenstein"
+        },
+        {
+          "ID": "Lithuania",
+          "CountryName": "Lithuania"
+        },
+        {
+          "ID": "Luxembourg",
+          "CountryName": "Luxembourg"
+        },
+        {
+          "ID": "Madagascar",
+          "CountryName": "Madagascar"
+        },
+        {
+          "ID": "Malawi",
+          "CountryName": "Malawi"
+        },
+        {
+          "ID": "Malaysia",
+          "CountryName": "Malaysia"
+        },
+        {
+          "ID": "Maldives",
+          "CountryName": "Maldives"
+        },
+        {
+          "ID": "Mali",
+          "CountryName": "Mali"
+        },
+        {
+          "ID": "Malta",
+          "CountryName": "Malta"
+        },
+        {
+          "ID": "Marshall Islands",
+          "CountryName": "Marshall Islands"
+        },
+        {
+          "ID": "Mauritania",
+          "CountryName": "Mauritania"
+        },
+        {
+          "ID": "Mauritius",
+          "CountryName": "Mauritius"
+        },
+        {
+          "ID": "Mexico",
+          "CountryName": "Mexico"
+        },
+        {
+          "ID": "Micronesia",
+          "CountryName": "Micronesia"
+        },
+        {
+          "ID": "Moldova",
+          "CountryName": "Moldova"
+        },
+        {
+          "ID": "Monaco",
+          "CountryName": "Monaco"
+        },
+        {
+          "ID": "Mongolia",
+          "CountryName": "Mongolia"
+        },
+        {
+          "ID": "Montenegro",
+          "CountryName": "Montenegro"
+        },
+        {
+          "ID": "Morocco",
+          "CountryName": "Morocco"
+        },
+        {
+          "ID": "Mozambique",
+          "CountryName": "Mozambique"
+        },
+        {
+          "ID": "Myanmar (formerly Burma)",
+          "CountryName": "Myanmar (formerly Burma)"
+        },
+        {
+          "ID": "Namibia",
+          "CountryName": "Namibia"
+        },
+        {
+          "ID": "Nauru",
+          "CountryName": "Nauru"
+        },
+        {
+          "ID": "Nepal",
+          "CountryName": "Nepal"
+        },
+        {
+          "ID": "Netherlands",
+          "CountryName": "Netherlands"
+        },
+        {
+          "ID": "New Zealand",
+          "CountryName": "New Zealand"
+        },
+        {
+          "ID": "Nicaragua",
+          "CountryName": "Nicaragua"
+        },
+        {
+          "ID": "Niger",
+          "CountryName": "Niger"
+        },
+        {
+          "ID": "Nigeria",
+          "CountryName": "Nigeria"
+        },
+        {
+          "ID": "North Korea",
+          "CountryName": "North Korea"
+        },
+        {
+          "ID": "North Macedonia",
+          "CountryName": "North Macedonia"
+        },
+        {
+          "ID": "Norway",
+          "CountryName": "Norway"
+        },
+        {
+          "ID": "Oman",
+          "CountryName": "Oman"
+        },
+        {
+          "ID": "Pakistan",
+          "CountryName": "Pakistan"
+        },
+        {
+          "ID": "Palau",
+          "CountryName": "Palau"
+        },
+        {
+          "ID": "Palestine State",
+          "CountryName": "Palestine State"
+        },
+        {
+          "ID": "Panama",
+          "CountryName": "Panama"
+        },
+        {
+          "ID": "Papua New Guinea",
+          "CountryName": "Papua New Guinea"
+        },
+        {
+          "ID": "Paraguay",
+          "CountryName": "Paraguay"
+        },
+        {
+          "ID": "Peru",
+          "CountryName": "Peru"
+        },
+        {
+          "ID": "Philippines",
+          "CountryName": "Philippines"
+        },
+        {
+          "ID": "Poland",
+          "CountryName": "Poland"
+        },
+        {
+          "ID": "Portugal",
+          "CountryName": "Portugal"
+        },
+        {
+          "ID": "Qatar",
+          "CountryName": "Qatar"
+        },
+        {
+          "ID": "Romania",
+          "CountryName": "Romania"
+        },
+        {
+          "ID": "Russia",
+          "CountryName": "Russia"
+        },
+        {
+          "ID": "Rwanda",
+          "CountryName": "Rwanda"
+        },
+        {
+          "ID": "Saint Kitts and Nevis",
+          "CountryName": "Saint Kitts and Nevis"
+        },
+        {
+          "ID": "Saint Lucia",
+          "CountryName": "Saint Lucia"
+        },
+        {
+          "ID": "Saint Vincent and the Grenadines",
+          "CountryName": "Saint Vincent and the Grenadines"
+        },
+        {
+          "ID": "Samoa",
+          "CountryName": "Samoa"
+        },
+        {
+          "ID": "San Marino",
+          "CountryName": "San Marino"
+        },
+        {
+          "ID": "Sao Tome and Principe",
+          "CountryName": "Sao Tome and Principe"
+        },
+        {
+          "ID": "Saudi Arabia",
+          "CountryName": "Saudi Arabia"
+        },
+        {
+          "ID": "Senegal",
+          "CountryName": "Senegal"
+        },
+        {
+          "ID": "Serbia",
+          "CountryName": "Serbia"
+        },
+        {
+          "ID": "Seychelles",
+          "CountryName": "Seychelles"
+        },
+        {
+          "ID": "Sierra Leone",
+          "CountryName": "Sierra Leone"
+        },
+        {
+          "ID": "Singapore",
+          "CountryName": "Singapore"
+        },
+        {
+          "ID": "Slovakia",
+          "CountryName": "Slovakia"
+        },
+        {
+          "ID": "Slovenia",
+          "CountryName": "Slovenia"
+        },
+        {
+          "ID": "Solomon Islands",
+          "CountryName": "Solomon Islands"
+        },
+        {
+          "ID": "Somalia",
+          "CountryName": "Somalia"
+        },
+        {
+          "ID": "South Africa",
+          "CountryName": "South Africa"
+        },
+        {
+          "ID": "South Korea",
+          "CountryName": "South Korea"
+        },
+        {
+          "ID": "South Sudan",
+          "CountryName": "South Sudan"
+        },
+        {
+          "ID": "Spain",
+          "CountryName": "Spain"
+        },
+        {
+          "ID": "Sri Lanka",
+          "CountryName": "Sri Lanka"
+        },
+        {
+          "ID": "Sudan",
+          "CountryName": "Sudan"
+        },
+        {
+          "ID": "Suriname",
+          "CountryName": "Suriname"
+        },
+        {
+          "ID": "Sweden",
+          "CountryName": "Sweden"
+        },
+        {
+          "ID": "Switzerland",
+          "CountryName": "Switzerland"
+        },
+        {
+          "ID": "Syria",
+          "CountryName": "Syria"
+        },
+        {
+          "ID": "Tajikistan",
+          "CountryName": "Tajikistan"
+        },
+        {
+          "ID": "Tanzania",
+          "CountryName": "Tanzania"
+        },
+        {
+          "ID": "Thailand",
+          "CountryName": "Thailand"
+        },
+        {
+          "ID": "Timor-Leste",
+          "CountryName": "Timor-Leste"
+        },
+        {
+          "ID": "Togo",
+          "CountryName": "Togo"
+        },
+        {
+          "ID": "Tonga",
+          "CountryName": "Tonga"
+        },
+        {
+          "ID": "Trinidad and Tobago",
+          "CountryName": "Trinidad and Tobago"
+        },
+        {
+          "ID": "Tunisia",
+          "CountryName": "Tunisia"
+        },
+        {
+          "ID": "Turkey",
+          "CountryName": "Turkey"
+        },
+        {
+          "ID": "Turkmenistan",
+          "CountryName": "Turkmenistan"
+        },
+        {
+          "ID": "Tuvalu",
+          "CountryName": "Tuvalu"
+        },
+        {
+          "ID": "Uganda",
+          "CountryName": "Uganda"
+        },
+        {
+          "ID": "Ukraine",
+          "CountryName": "Ukraine"
+        },
+        {
+          "ID": "United Arab Emirates",
+          "CountryName": "United Arab Emirates"
+        },
+        {
+          "ID": "United Kingdom",
+          "CountryName": "United Kingdom"
+        },
+        {
+          "ID": "United States of America",
+          "CountryName": "United States of America"
+        },
+        {
+          "ID": "Uruguay",
+          "CountryName": "Uruguay"
+        },
+        {
+          "ID": "Uzbekistan",
+          "CountryName": "Uzbekistan"
+        },
+        {
+          "ID": "Vanuatu",
+          "CountryName": "Vanuatu"
+        },
+        {
+          "ID": "Venezuela",
+          "CountryName": "Venezuela"
+        },
+        {
+          "ID": "Vietnam",
+          "CountryName": "Vietnam"
+        },
+        {
+          "ID": "Yemen",
+          "CountryName": "Yemen"
+        },
+        {
+          "ID": "Zambia",
+          "CountryName": "Zambia"
+        },
+        {
+          "ID": "Zimbabwe",
+          "CountryName": "Zimbabwe"
+        }
+      ],
+      "DtSegments": [
+        {
+          "ID": 1,
+          "SegmentName": "Poultry"
+        },
+        {
+          "ID": 2,
+          "SegmentName": "Swine"
+        },
+        {
+          "ID": 3,
+          "SegmentName": "Others"
+        }
+      ]
+    }
+  },
+  "ErrorObj": {
+    "ErrorCode": 0,
+    "ErrorMessage": ""
+  },
+  "exceptionMessage": null,
+  "isInSession": true,
+  "isAuthorize": true,
+  "isSucceed": true,
+  "contextId": "88ba1540-83c6-f1b5-0a74-844bffcf0d63"
+}
+

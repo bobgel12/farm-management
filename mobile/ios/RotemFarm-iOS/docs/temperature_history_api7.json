@@ -1,0 +1,887 @@
+curl 'https://rotemnetweb.com/Host6_V1/Services/AllServices.svc/RNBL_GetCommandData' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json;charset=UTF-8' \
+  -b 'ASP.NET_SessionId=<REDACTED_SESSION_ID>' \
+  -H 'Origin: https://rotemnetweb.com' \
+  -H 'Referer: https://rotemnetweb.com/Host6_V1/Main.html' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+  -H 'connectionId: 81634d73-b1c3-40a3-bf7d-36e0a3ba363b' \
+  -H 'contextId: 52b78784-6e2d-b9d3-c799-41742bde4d1d' \
+  -H 'farmConnectionToken: <REDACTED_FARM_CONNECTION_TOKEN>' \
+  -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'userLanguage: ENGLISH' \
+  -H 'userToken: <REDACTED_USER_TOKEN>' \
+  --data-raw '{"prmGetCommandDataParams":{"CommandID":35,"IsSetPointCommand":false,"HouseNumber":"1","RoomNumber":-1,"ClientLanguageIndex":1,"IsIgnoreCache":false,"PageNumber":-1,"IsLoadPageFromCache":false}}'
+
+  Response:
+  {
+  "reponseObj": {
+    "HouseNumber": 1,
+    "MenuID": 35,
+    "dsData": {
+      "SecondaryMDT": [],
+      "Attributes": [],
+      "MDT": [
+        {
+          "CommandName": "HistoryTemperature",
+          "CommandID": "83",
+          "ControllerType": "BROILER,PIGS,BREEDER,AC3G",
+          "VentilationMode": "RESTRICTEDFEED,BASICFEED,PRECISION,STANDARD,LAYERS",
+          "LevelControl": "0",
+          "ScaleMode": "0",
+          "FromMajorVer": "1",
+          "ToMajorVer": "-999",
+          "FromMinorVer": "1",
+          "ToMinorVer": "-999",
+          "FromMemoryVer": "3",
+          "ToMemoryVer": "33",
+          "FieldName": "QueueRecord_GrowthDay",
+          "ParentField": "",
+          "FromRow": "-1",
+          "ToRow": "-1",
+          "FromCol": "0",
+          "ToCol": "0",
+          "ColWidth": "",
+          "MobileColWidth": "80px",
+          "MobileHeaderText": "Day",
+          "HeaderText": "Day",
+          "DisplayFormat": "N0",
+          "EditFormat": "N0",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Number",
+          "FieldType": "FT_Text",
+          "UnitType": "UT_Number",
+          "KeyPadType": "BaseNumericKeyPad",
+          "KeypadTitle": "0",
+          "MobileListOfValues": "0",
+          "ListOfValues": "0",
+          "IsReadOnly": "TRUE",
+          "IsMandatory": "FALSE",
+          "MobileCaptionText": "0",
+          "CaptionText": "0",
+          "VisibleIndex": 0,
+          "MobileGroupName": "0",
+          "GroupName": "0",
+          "HeaderCSS": "0",
+          "CellCSS": "column-dayOfGrowth",
+          "ScreenTamplate": "ST_MenuTable",
+          "ContainerID": "0",
+          "IsColumnLocked": "FALSE",
+          "IsIgnored": "",
+          "MobileLangKey": "<HeaderText>PP_Day;<CaptionText>;<GroupName>;<ListOfValues>",
+          "LangKey": "<HeaderText>PP_Day;<CaptionText>;<GroupName>;<ListOfValues>",
+          "IsFilter": "FALSE",
+          "Filters": null,
+          "ReadOnlyCondition": "",
+          "FeedScaleProgram_feed_per_bird": null,
+          "HK_BirdsScales_Scale": null
+        },
+        {
+          "CommandName": "HistoryTemperature",
+          "CommandID": "83",
+          "ControllerType": "BROILER,PIGS,BREEDER,AC3G",
+          "VentilationMode": "RESTRICTEDFEED,BASICFEED,PRECISION,STANDARD,LAYERS",
+          "LevelControl": "0",
+          "ScaleMode": "0",
+          "FromMajorVer": "1",
+          "ToMajorVer": "-999",
+          "FromMinorVer": "1",
+          "ToMinorVer": "-999",
+          "FromMemoryVer": "3",
+          "ToMemoryVer": "33",
+          "FieldName": "QueueRecord_MinimumValue",
+          "ParentField": "",
+          "FromRow": "-1",
+          "ToRow": "-1",
+          "FromCol": "1",
+          "ToCol": "1",
+          "ColWidth": "",
+          "MobileColWidth": "0",
+          "MobileHeaderText": "Minimum",
+          "HeaderText": "Min",
+          "DisplayFormat": "N1",
+          "EditFormat": "N1",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Float",
+          "FieldType": "FT_Text",
+          "UnitType": "UT_Temperature",
+          "KeyPadType": "MinusPointNumericKeyPad",
+          "KeypadTitle": "0",
+          "MobileListOfValues": "0",
+          "ListOfValues": "0",
+          "IsReadOnly": "TRUE",
+          "IsMandatory": "FALSE",
+          "MobileCaptionText": "0",
+          "CaptionText": "0",
+          "VisibleIndex": 0,
+          "MobileGroupName": "0",
+          "GroupName": "0",
+          "HeaderCSS": "0",
+          "CellCSS": "0",
+          "ScreenTamplate": "ST_MenuTable",
+          "ContainerID": "0",
+          "IsColumnLocked": "FALSE",
+          "IsIgnored": "",
+          "MobileLangKey": "<HeaderText>PP_Min;<CaptionText>;<GroupName>;<ListOfValues>",
+          "LangKey": "<HeaderText>PP_Min;<CaptionText>;<GroupName>;<ListOfValues>",
+          "IsFilter": "FALSE",
+          "Filters": null,
+          "ReadOnlyCondition": "",
+          "FeedScaleProgram_feed_per_bird": null,
+          "HK_BirdsScales_Scale": null
+        },
+        {
+          "CommandName": "HistoryTemperature",
+          "CommandID": "83",
+          "ControllerType": "BROILER,PIGS,BREEDER,AC3G",
+          "VentilationMode": "RESTRICTEDFEED,BASICFEED,PRECISION,STANDARD,LAYERS",
+          "LevelControl": "0",
+          "ScaleMode": "0",
+          "FromMajorVer": "1",
+          "ToMajorVer": "-999",
+          "FromMinorVer": "1",
+          "ToMinorVer": "-999",
+          "FromMemoryVer": "3",
+          "ToMemoryVer": "33",
+          "FieldName": "QueueRecord_AverageValue",
+          "ParentField": "",
+          "FromRow": "-1",
+          "ToRow": "-1",
+          "FromCol": "2",
+          "ToCol": "2",
+          "ColWidth": "",
+          "MobileColWidth": "0",
+          "MobileHeaderText": "Average",
+          "HeaderText": "Avg",
+          "DisplayFormat": "N1",
+          "EditFormat": "N1",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Float",
+          "FieldType": "FT_Text",
+          "UnitType": "UT_Temperature",
+          "KeyPadType": "MinusPointNumericKeyPad",
+          "KeypadTitle": "0",
+          "MobileListOfValues": "0",
+          "ListOfValues": "0",
+          "IsReadOnly": "TRUE",
+          "IsMandatory": "FALSE",
+          "MobileCaptionText": "0",
+          "CaptionText": "0",
+          "VisibleIndex": 0,
+          "MobileGroupName": "0",
+          "GroupName": "0",
+          "HeaderCSS": "0",
+          "CellCSS": "0",
+          "ScreenTamplate": "ST_MenuTable",
+          "ContainerID": "0",
+          "IsColumnLocked": "FALSE",
+          "IsIgnored": "",
+          "MobileLangKey": "<HeaderText>PP_Avg;<CaptionText>;<GroupName>;<ListOfValues>",
+          "LangKey": "<HeaderText>PP_Avg;<CaptionText>;<GroupName>;<ListOfValues>",
+          "IsFilter": "FALSE",
+          "Filters": null,
+          "ReadOnlyCondition": "",
+          "FeedScaleProgram_feed_per_bird": null,
+          "HK_BirdsScales_Scale": null
+        },
+        {
+          "CommandName": "HistoryTemperature",
+          "CommandID": "83",
+          "ControllerType": "BROILER,PIGS,BREEDER,AC3G",
+          "VentilationMode": "RESTRICTEDFEED,BASICFEED,PRECISION,STANDARD,LAYERS",
+          "LevelControl": "0",
+          "ScaleMode": "0",
+          "FromMajorVer": "1",
+          "ToMajorVer": "-999",
+          "FromMinorVer": "1",
+          "ToMinorVer": "-999",
+          "FromMemoryVer": "3",
+          "ToMemoryVer": "33",
+          "FieldName": "QueueRecord_MaximumValue",
+          "ParentField": "",
+          "FromRow": "-1",
+          "ToRow": "-1",
+          "FromCol": "3",
+          "ToCol": "3",
+          "ColWidth": "",
+          "MobileColWidth": "0",
+          "MobileHeaderText": "Maximum",
+          "HeaderText": "Max",
+          "DisplayFormat": "N1",
+          "EditFormat": "N1",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Float",
+          "FieldType": "FT_Text",
+          "UnitType": "UT_Temperature",
+          "KeyPadType": "MinusPointNumericKeyPad",
+          "KeypadTitle": "0",
+          "MobileListOfValues": "0",
+          "ListOfValues": "0",
+          "IsReadOnly": "TRUE",
+          "IsMandatory": "FALSE",
+          "MobileCaptionText": "0",
+          "CaptionText": "0",
+          "VisibleIndex": 0,
+          "MobileGroupName": "0",
+          "GroupName": "0",
+          "HeaderCSS": "0",
+          "CellCSS": "0",
+          "ScreenTamplate": "ST_MenuTable",
+          "ContainerID": "0",
+          "IsColumnLocked": "FALSE",
+          "IsIgnored": "",
+          "MobileLangKey": "<HeaderText>PP_Max;<CaptionText>;<GroupName>;<ListOfValues>",
+          "LangKey": "<HeaderText>PP_Max;<CaptionText>;<GroupName>;<ListOfValues>",
+          "IsFilter": "FALSE",
+          "Filters": null,
+          "ReadOnlyCondition": "",
+          "FeedScaleProgram_feed_per_bird": null,
+          "HK_BirdsScales_Scale": null
+        }
+      ],
+      "Errors": [],
+      "eRNBLResult": [
+        {
+          "Value": 20
+        }
+      ],
+      "ColumnsModelFields": [
+        {
+          "ModelFieldsData": {
+            "QueueRecord_GrowthDay": {
+              "editable": false
+            },
+            "QueueRecord_MinimumValue": {
+              "editable": false
+            },
+            "QueueRecord_AverageValue": {
+              "editable": false
+            },
+            "QueueRecord_MaximumValue": {
+              "editable": false
+            }
+          }
+        }
+      ],
+      "ColumnsDefinitions": [
+        {
+          "field": "QueueRecord_GrowthDay",
+          "title": "Day",
+          "mobileTitle": "Day",
+          "width": "",
+          "mobileWidth": "80px",
+          "attributes": {
+            "class": "column-dayOfGrowth"
+          },
+          "FieldType": "FT_Text",
+          "DisplayFormat": "N0",
+          "EditFormat": "N0",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "KeyPadType": "BaseNumericKeyPad",
+          "KeyPadTitle": "0",
+          "template": "#: kendoUtils.setCellValue(data.QueueRecord_GrowthDay, 'N0') #",
+          "ListOfValues": null,
+          "ListOfValues_Arr": null,
+          "columns": null,
+          "IsReadOnly": "TRUE",
+          "hidden": false,
+          "ContainerID": "0",
+          "ParentField": "",
+          "ReadOnlyCondition": ""
+        },
+        {
+          "field": "QueueRecord_MinimumValue",
+          "title": "Min",
+          "mobileTitle": "Minimum",
+          "width": "",
+          "mobileWidth": null,
+          "attributes": {
+            "class": "0"
+          },
+          "FieldType": "FT_Text",
+          "DisplayFormat": "N1",
+          "EditFormat": "N1",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Float",
+          "UnitType": "UT_Temperature",
+          "KeyPadType": "MinusPointNumericKeyPad",
+          "KeyPadTitle": "0",
+          "template": "#: kendoUtils.setCellValue(data.QueueRecord_MinimumValue, 'N1') #",
+          "ListOfValues": null,
+          "ListOfValues_Arr": null,
+          "columns": null,
+          "IsReadOnly": "TRUE",
+          "hidden": false,
+          "ContainerID": "0",
+          "ParentField": "",
+          "ReadOnlyCondition": ""
+        },
+        {
+          "field": "QueueRecord_AverageValue",
+          "title": "Avg",
+          "mobileTitle": "Average",
+          "width": "",
+          "mobileWidth": null,
+          "attributes": {
+            "class": "0"
+          },
+          "FieldType": "FT_Text",
+          "DisplayFormat": "N1",
+          "EditFormat": "N1",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Float",
+          "UnitType": "UT_Temperature",
+          "KeyPadType": "MinusPointNumericKeyPad",
+          "KeyPadTitle": "0",
+          "template": "#: kendoUtils.setCellValue(data.QueueRecord_AverageValue, 'N1') #",
+          "ListOfValues": null,
+          "ListOfValues_Arr": null,
+          "columns": null,
+          "IsReadOnly": "TRUE",
+          "hidden": false,
+          "ContainerID": "0",
+          "ParentField": "",
+          "ReadOnlyCondition": ""
+        },
+        {
+          "field": "QueueRecord_MaximumValue",
+          "title": "Max",
+          "mobileTitle": "Maximum",
+          "width": "",
+          "mobileWidth": null,
+          "attributes": {
+            "class": "0"
+          },
+          "FieldType": "FT_Text",
+          "DisplayFormat": "N1",
+          "EditFormat": "N1",
+          "MinValue": "0",
+          "MaxValue": "0",
+          "DefaultValue": "0",
+          "DataType": "DT_Float",
+          "UnitType": "UT_Temperature",
+          "KeyPadType": "MinusPointNumericKeyPad",
+          "KeyPadTitle": "0",
+          "template": "#: kendoUtils.setCellValue(data.QueueRecord_MaximumValue, 'N1') #",
+          "ListOfValues": null,
+          "ListOfValues_Arr": null,
+          "columns": null,
+          "IsReadOnly": "TRUE",
+          "hidden": false,
+          "ContainerID": "0",
+          "ParentField": "",
+          "ReadOnlyCondition": ""
+        }
+      ],
+      "Data": [
+        {
+          "QueueRecord_GrowthDay": -1.0,
+          "QueueRecord_MinimumValue": 23.77,
+          "QueueRecord_AverageValue": 32.26,
+          "QueueRecord_MaximumValue": 33.12,
+          "RowNum": 0
+        },
+        {
+          "QueueRecord_GrowthDay": 0.0,
+          "QueueRecord_MinimumValue": 24.38,
+          "QueueRecord_AverageValue": 32.71,
+          "QueueRecord_MaximumValue": 33.51,
+          "RowNum": 1
+        },
+        {
+          "QueueRecord_GrowthDay": 1.0,
+          "QueueRecord_MinimumValue": 31.38,
+          "QueueRecord_AverageValue": 31.58,
+          "QueueRecord_MaximumValue": 33.32,
+          "RowNum": 2
+        },
+        {
+          "QueueRecord_GrowthDay": 2.0,
+          "QueueRecord_MinimumValue": 30.32,
+          "QueueRecord_AverageValue": 30.49,
+          "QueueRecord_MaximumValue": 32.35,
+          "RowNum": 3
+        },
+        {
+          "QueueRecord_GrowthDay": 3.0,
+          "QueueRecord_MinimumValue": 30.15,
+          "QueueRecord_AverageValue": 31.24,
+          "QueueRecord_MaximumValue": 31.55,
+          "RowNum": 4
+        },
+        {
+          "QueueRecord_GrowthDay": 4.0,
+          "QueueRecord_MinimumValue": 29.78,
+          "QueueRecord_AverageValue": 30.47,
+          "QueueRecord_MaximumValue": 31.34,
+          "RowNum": 5
+        },
+        {
+          "QueueRecord_GrowthDay": 5.0,
+          "QueueRecord_MinimumValue": 28.89,
+          "QueueRecord_AverageValue": 29.99,
+          "QueueRecord_MaximumValue": 31.08,
+          "RowNum": 6
+        },
+        {
+          "QueueRecord_GrowthDay": 6.0,
+          "QueueRecord_MinimumValue": 28.09,
+          "QueueRecord_AverageValue": 30.12,
+          "QueueRecord_MaximumValue": 31.89,
+          "RowNum": 7
+        },
+        {
+          "QueueRecord_GrowthDay": 7.0,
+          "QueueRecord_MinimumValue": 23.28,
+          "QueueRecord_AverageValue": 29.5,
+          "QueueRecord_MaximumValue": 31.35,
+          "RowNum": 8
+        },
+        {
+          "QueueRecord_GrowthDay": 8.0,
+          "QueueRecord_MinimumValue": 28.79,
+          "QueueRecord_AverageValue": 29.58,
+          "QueueRecord_MaximumValue": 31.5,
+          "RowNum": 9
+        },
+        {
+          "QueueRecord_GrowthDay": 9.0,
+          "QueueRecord_MinimumValue": 28.86,
+          "QueueRecord_AverageValue": 29.95,
+          "QueueRecord_MaximumValue": 31.55,
+          "RowNum": 10
+        },
+        {
+          "QueueRecord_GrowthDay": 10.0,
+          "QueueRecord_MinimumValue": 28.79,
+          "QueueRecord_AverageValue": 29.52,
+          "QueueRecord_MaximumValue": 31.11,
+          "RowNum": 11
+        },
+        {
+          "QueueRecord_GrowthDay": 11.0,
+          "QueueRecord_MinimumValue": 28.6,
+          "QueueRecord_AverageValue": 29.42,
+          "QueueRecord_MaximumValue": 31.31,
+          "RowNum": 12
+        },
+        {
+          "QueueRecord_GrowthDay": 12.0,
+          "QueueRecord_MinimumValue": 28.41,
+          "QueueRecord_AverageValue": 29.73,
+          "QueueRecord_MaximumValue": 31.53,
+          "RowNum": 13
+        },
+        {
+          "QueueRecord_GrowthDay": 13.0,
+          "QueueRecord_MinimumValue": 28.73,
+          "QueueRecord_AverageValue": 29.69,
+          "QueueRecord_MaximumValue": 31.77,
+          "RowNum": 14
+        },
+        {
+          "QueueRecord_GrowthDay": 14.0,
+          "QueueRecord_MinimumValue": 29.06,
+          "QueueRecord_AverageValue": 29.44,
+          "QueueRecord_MaximumValue": 31.86,
+          "RowNum": 15
+        },
+        {
+          "QueueRecord_GrowthDay": 15.0,
+          "QueueRecord_MinimumValue": 28.84,
+          "QueueRecord_AverageValue": 29.11,
+          "QueueRecord_MaximumValue": 31.73,
+          "RowNum": 16
+        },
+        {
+          "QueueRecord_GrowthDay": 16.0,
+          "QueueRecord_MinimumValue": 27.74,
+          "QueueRecord_AverageValue": 28.11,
+          "QueueRecord_MaximumValue": 29.93,
+          "RowNum": 17
+        },
+        {
+          "QueueRecord_GrowthDay": 17.0,
+          "QueueRecord_MinimumValue": 26.92,
+          "QueueRecord_AverageValue": 28.44,
+          "QueueRecord_MaximumValue": 30.06,
+          "RowNum": 18
+        },
+        {
+          "QueueRecord_GrowthDay": 18.0,
+          "QueueRecord_MinimumValue": 27.72,
+          "QueueRecord_AverageValue": 28.47,
+          "QueueRecord_MaximumValue": 30.14,
+          "RowNum": 19
+        },
+        {
+          "QueueRecord_GrowthDay": 19.0,
+          "QueueRecord_MinimumValue": 27.74,
+          "QueueRecord_AverageValue": 27.74,
+          "QueueRecord_MaximumValue": 30.83,
+          "RowNum": 20
+        },
+        {
+          "QueueRecord_GrowthDay": 20.0,
+          "QueueRecord_MinimumValue": 27.63,
+          "QueueRecord_AverageValue": 27.8,
+          "QueueRecord_MaximumValue": 31.04,
+          "RowNum": 21
+        },
+        {
+          "QueueRecord_GrowthDay": 21.0,
+          "QueueRecord_MinimumValue": 27.4,
+          "QueueRecord_AverageValue": 29.83,
+          "QueueRecord_MaximumValue": 30.08,
+          "RowNum": 22
+        }
+      ],
+      "GridTables": [
+        {
+          "ContainerID": "Data",
+          "ColumnsModel": [
+            {
+              "ModelFieldsData": {
+                "QueueRecord_GrowthDay": {
+                  "editable": false
+                },
+                "QueueRecord_MinimumValue": {
+                  "editable": false
+                },
+                "QueueRecord_AverageValue": {
+                  "editable": false
+                },
+                "QueueRecord_MaximumValue": {
+                  "editable": false
+                }
+              }
+            }
+          ],
+          "ColumnsDefinitions": [
+            {
+              "field": "QueueRecord_GrowthDay",
+              "title": "Day",
+              "mobileTitle": "Day",
+              "width": "",
+              "mobileWidth": "80px",
+              "attributes": {
+                "class": "column-dayOfGrowth"
+              },
+              "FieldType": "FT_Text",
+              "DisplayFormat": "N0",
+              "EditFormat": "N0",
+              "MinValue": "0",
+              "MaxValue": "0",
+              "DefaultValue": "0",
+              "DataType": "DT_Number",
+              "UnitType": "UT_Number",
+              "KeyPadType": "BaseNumericKeyPad",
+              "KeyPadTitle": "0",
+              "template": "#: kendoUtils.setCellValue(data.QueueRecord_GrowthDay, 'N0') #",
+              "ListOfValues": null,
+              "ListOfValues_Arr": null,
+              "columns": null,
+              "IsReadOnly": "TRUE",
+              "hidden": false,
+              "ContainerID": "0",
+              "ParentField": "",
+              "ReadOnlyCondition": ""
+            },
+            {
+              "field": "QueueRecord_MinimumValue",
+              "title": "Min",
+              "mobileTitle": "Minimum",
+              "width": "",
+              "mobileWidth": null,
+              "attributes": {
+                "class": "0"
+              },
+              "FieldType": "FT_Text",
+              "DisplayFormat": "N1",
+              "EditFormat": "N1",
+              "MinValue": "0",
+              "MaxValue": "0",
+              "DefaultValue": "0",
+              "DataType": "DT_Float",
+              "UnitType": "UT_Temperature",
+              "KeyPadType": "MinusPointNumericKeyPad",
+              "KeyPadTitle": "0",
+              "template": "#: kendoUtils.setCellValue(data.QueueRecord_MinimumValue, 'N1') #",
+              "ListOfValues": null,
+              "ListOfValues_Arr": null,
+              "columns": null,
+              "IsReadOnly": "TRUE",
+              "hidden": false,
+              "ContainerID": "0",
+              "ParentField": "",
+              "ReadOnlyCondition": ""
+            },
+            {
+              "field": "QueueRecord_AverageValue",
+              "title": "Avg",
+              "mobileTitle": "Average",
+              "width": "",
+              "mobileWidth": null,
+              "attributes": {
+                "class": "0"
+              },
+              "FieldType": "FT_Text",
+              "DisplayFormat": "N1",
+              "EditFormat": "N1",
+              "MinValue": "0",
+              "MaxValue": "0",
+              "DefaultValue": "0",
+              "DataType": "DT_Float",
+              "UnitType": "UT_Temperature",
+              "KeyPadType": "MinusPointNumericKeyPad",
+              "KeyPadTitle": "0",
+              "template": "#: kendoUtils.setCellValue(data.QueueRecord_AverageValue, 'N1') #",
+              "ListOfValues": null,
+              "ListOfValues_Arr": null,
+              "columns": null,
+              "IsReadOnly": "TRUE",
+              "hidden": false,
+              "ContainerID": "0",
+              "ParentField": "",
+              "ReadOnlyCondition": ""
+            },
+            {
+              "field": "QueueRecord_MaximumValue",
+              "title": "Max",
+              "mobileTitle": "Maximum",
+              "width": "",
+              "mobileWidth": null,
+              "attributes": {
+                "class": "0"
+              },
+              "FieldType": "FT_Text",
+              "DisplayFormat": "N1",
+              "EditFormat": "N1",
+              "MinValue": "0",
+              "MaxValue": "0",
+              "DefaultValue": "0",
+              "DataType": "DT_Float",
+              "UnitType": "UT_Temperature",
+              "KeyPadType": "MinusPointNumericKeyPad",
+              "KeyPadTitle": "0",
+              "template": "#: kendoUtils.setCellValue(data.QueueRecord_MaximumValue, 'N1') #",
+              "ListOfValues": null,
+              "ListOfValues_Arr": null,
+              "columns": null,
+              "IsReadOnly": "TRUE",
+              "hidden": false,
+              "ContainerID": "0",
+              "ParentField": "",
+              "ReadOnlyCondition": ""
+            }
+          ],
+          "Data": [
+            {
+              "QueueRecord_GrowthDay": -1.0,
+              "QueueRecord_MinimumValue": 23.77,
+              "QueueRecord_AverageValue": 32.26,
+              "QueueRecord_MaximumValue": 33.12,
+              "RowNum": 0
+            },
+            {
+              "QueueRecord_GrowthDay": 0.0,
+              "QueueRecord_MinimumValue": 24.38,
+              "QueueRecord_AverageValue": 32.71,
+              "QueueRecord_MaximumValue": 33.51,
+              "RowNum": 1
+            },
+            {
+              "QueueRecord_GrowthDay": 1.0,
+              "QueueRecord_MinimumValue": 31.38,
+              "QueueRecord_AverageValue": 31.58,
+              "QueueRecord_MaximumValue": 33.32,
+              "RowNum": 2
+            },
+            {
+              "QueueRecord_GrowthDay": 2.0,
+              "QueueRecord_MinimumValue": 30.32,
+              "QueueRecord_AverageValue": 30.49,
+              "QueueRecord_MaximumValue": 32.35,
+              "RowNum": 3
+            },
+            {
+              "QueueRecord_GrowthDay": 3.0,
+              "QueueRecord_MinimumValue": 30.15,
+              "QueueRecord_AverageValue": 31.24,
+              "QueueRecord_MaximumValue": 31.55,
+              "RowNum": 4
+            },
+            {
+              "QueueRecord_GrowthDay": 4.0,
+              "QueueRecord_MinimumValue": 29.78,
+              "QueueRecord_AverageValue": 30.47,
+              "QueueRecord_MaximumValue": 31.34,
+              "RowNum": 5
+            },
+            {
+              "QueueRecord_GrowthDay": 5.0,
+              "QueueRecord_MinimumValue": 28.89,
+              "QueueRecord_AverageValue": 29.99,
+              "QueueRecord_MaximumValue": 31.08,
+              "RowNum": 6
+            },
+            {
+              "QueueRecord_GrowthDay": 6.0,
+              "QueueRecord_MinimumValue": 28.09,
+              "QueueRecord_AverageValue": 30.12,
+              "QueueRecord_MaximumValue": 31.89,
+              "RowNum": 7
+            },
+            {
+              "QueueRecord_GrowthDay": 7.0,
+              "QueueRecord_MinimumValue": 23.28,
+              "QueueRecord_AverageValue": 29.5,
+              "QueueRecord_MaximumValue": 31.35,
+              "RowNum": 8
+            },
+            {
+              "QueueRecord_GrowthDay": 8.0,
+              "QueueRecord_MinimumValue": 28.79,
+              "QueueRecord_AverageValue": 29.58,
+              "QueueRecord_MaximumValue": 31.5,
+              "RowNum": 9
+            },
+            {
+              "QueueRecord_GrowthDay": 9.0,
+              "QueueRecord_MinimumValue": 28.86,
+              "QueueRecord_AverageValue": 29.95,
+              "QueueRecord_MaximumValue": 31.55,
+              "RowNum": 10
+            },
+            {
+              "QueueRecord_GrowthDay": 10.0,
+              "QueueRecord_MinimumValue": 28.79,
+              "QueueRecord_AverageValue": 29.52,
+              "QueueRecord_MaximumValue": 31.11,
+              "RowNum": 11
+            },
+            {
+              "QueueRecord_GrowthDay": 11.0,
+              "QueueRecord_MinimumValue": 28.6,
+              "QueueRecord_AverageValue": 29.42,
+              "QueueRecord_MaximumValue": 31.31,
+              "RowNum": 12
+            },
+            {
+              "QueueRecord_GrowthDay": 12.0,
+              "QueueRecord_MinimumValue": 28.41,
+              "QueueRecord_AverageValue": 29.73,
+              "QueueRecord_MaximumValue": 31.53,
+              "RowNum": 13
+            },
+            {
+              "QueueRecord_GrowthDay": 13.0,
+              "QueueRecord_MinimumValue": 28.73,
+              "QueueRecord_AverageValue": 29.69,
+              "QueueRecord_MaximumValue": 31.77,
+              "RowNum": 14
+            },
+            {
+              "QueueRecord_GrowthDay": 14.0,
+              "QueueRecord_MinimumValue": 29.06,
+              "QueueRecord_AverageValue": 29.44,
+              "QueueRecord_MaximumValue": 31.86,
+              "RowNum": 15
+            },
+            {
+              "QueueRecord_GrowthDay": 15.0,
+              "QueueRecord_MinimumValue": 28.84,
+              "QueueRecord_AverageValue": 29.11,
+              "QueueRecord_MaximumValue": 31.73,
+              "RowNum": 16
+            },
+            {
+              "QueueRecord_GrowthDay": 16.0,
+              "QueueRecord_MinimumValue": 27.74,
+              "QueueRecord_AverageValue": 28.11,
+              "QueueRecord_MaximumValue": 29.93,
+              "RowNum": 17
+            },
+            {
+              "QueueRecord_GrowthDay": 17.0,
+              "QueueRecord_MinimumValue": 26.92,
+              "QueueRecord_AverageValue": 28.44,
+              "QueueRecord_MaximumValue": 30.06,
+              "RowNum": 18
+            },
+            {
+              "QueueRecord_GrowthDay": 18.0,
+              "QueueRecord_MinimumValue": 27.72,
+              "QueueRecord_AverageValue": 28.47,
+              "QueueRecord_MaximumValue": 30.14,
+              "RowNum": 19
+            },
+            {
+              "QueueRecord_GrowthDay": 19.0,
+              "QueueRecord_MinimumValue": 27.74,
+              "QueueRecord_AverageValue": 27.74,
+              "QueueRecord_MaximumValue": 30.83,
+              "RowNum": 20
+            },
+            {
+              "QueueRecord_GrowthDay": 20.0,
+              "QueueRecord_MinimumValue": 27.63,
+              "QueueRecord_AverageValue": 27.8,
+              "QueueRecord_MaximumValue": 31.04,
+              "RowNum": 21
+            },
+            {
+              "QueueRecord_GrowthDay": 21.0,
+              "QueueRecord_MinimumValue": 27.4,
+              "QueueRecord_AverageValue": 29.83,
+              "QueueRecord_MaximumValue": 30.08,
+              "RowNum": 22
+            }
+          ],
+          "IsHeaderHidden": false,
+          "IsReadOnly": false,
+          "IsEmptyCellsEditable": false,
+          "IsScrollDown": true
+        }
+      ],
+      "ExtraTables": []
+    },
+    "RequestID": "1ac086f3-5429-45fc-8151-2eee16c4ceae",
+    "IsSetPointCommand": false,
+    "IsDataSentViaService": false,
+    "Controllers": null,
+    "PagingInfo": null
+  },
+  "ErrorObj": {
+    "ErrorCode": 0,
+    "ErrorMessage": ""
+  },
+  "exceptionMessage": null,
+  "isInSession": true,
+  "isAuthorize": true,
+  "isSucceed": true,
+  "contextId": "52b78784-6e2d-b9d3-c799-41742bde4d1d"
+}

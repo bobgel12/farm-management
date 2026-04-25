@@ -8,8 +8,8 @@ const getApiUrl = () => {
   
   // Production detection
   if (process.env.NODE_ENV === 'production') {
-    // This will be set by Vercel environment variable
-    return 'https://farm-management-production.up.railway.app/api'; // Production API URL
+    // Align with iOS prod default (`APIEnvironment.prod`); override with REACT_APP_API_URL on Vercel if needed.
+    return 'https://farm-management-production-54e4.up.railway.app/api';
   }
   
   // Development

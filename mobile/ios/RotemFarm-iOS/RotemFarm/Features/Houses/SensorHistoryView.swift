@@ -20,15 +20,23 @@ struct SensorHistoryView: View {
     }
 
     @State private var range: Range = .day
+    @State private var samples: [SensorSample] = []
+    @State private var isLoading = false
+    @State private var errorText: String?
 
     var body: some View {
-        let samples = store.sensorHistory(houseId: house.id, kind: kind, points: range.points)
-
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header(samples: samples)
                 rangePicker
                 chartCard(samples: samples)
+                if let errorText, kind == .temperature {
+                    CardSection {
+                        Text(errorText)
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 forecastCard
                 probeList
             }
@@ -38,16 +46,20 @@ struct SensorHistoryView: View {
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(house.id.uuidString)-\(kind.rawValue)-\(range.rawValue)") {
-            await store.refreshSensorHistory(houseId: house.id, kind: kind, points: range.points)
+            await loadHistory()
         }
     }
 
     // MARK: Header
 
     private func header(samples: [SensorSample]) -> some View {
-        let latest = samples.last?.value ?? 0
+        let latest = samples.last?.value
         let band = kind.targetBand
         let state: SensorState = {
+            if isLoading || errorText != nil || latest == nil {
+                return .warning
+            }
+            guard let latest else { return .warning }
             guard let band else { return .ok }
             if latest > band.high * 1.08 { return .critical }
             if latest > band.high || latest < band.low { return .warning }
@@ -57,7 +69,7 @@ struct SensorHistoryView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(house.name) · Live").font(AppFont.caption).foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(String(format: "%.1f", latest))
+                    Text(displayLatestValue(latest))
                         .font(AppFont.bigNum)
                     Text(kind.unit)
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
@@ -107,42 +119,94 @@ struct SensorHistoryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionHeader(title: "History — \(range.rawValue)", trailing: house.name)
                     .padding(.horizontal, -6)
-                Chart {
-                    if let band = kind.targetBand {
-                        RectangleMark(
-                            xStart: .value("start", samples.first?.timestamp ?? Date()),
-                            xEnd: .value("end", samples.last?.timestamp ?? Date()),
-                            yStart: .value("lo", band.low),
-                            yEnd: .value("hi", band.high)
-                        )
-                        .foregroundStyle(Color.farmGreen.opacity(0.12))
+                if isLoading {
+                    ProgressView("Loading \(kind.title.lowercased()) history...")
+                        .frame(maxWidth: .infinity, minHeight: 200)
+                } else if samples.isEmpty {
+                    Text("No \(kind.title.lowercased()) history available from endpoint for this range.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 200)
+                } else {
+                    Chart {
+                        if let band = kind.targetBand {
+                            RectangleMark(
+                                xStart: .value("start", samples.first?.timestamp ?? Date()),
+                                xEnd: .value("end", samples.last?.timestamp ?? Date()),
+                                yStart: .value("lo", band.low),
+                                yEnd: .value("hi", band.high)
+                            )
+                            .foregroundStyle(Color.farmGreen.opacity(0.12))
+                        }
+                        ForEach(samples) { s in
+                            AreaMark(x: .value("t", s.timestamp), y: .value("v", s.value))
+                                .foregroundStyle(LinearGradient(
+                                    colors: [Color.farmGreen.opacity(0.35), .clear],
+                                    startPoint: .top, endPoint: .bottom))
+                            LineMark(x: .value("t", s.timestamp), y: .value("v", s.value))
+                                .foregroundStyle(Color.farmGreen)
+                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        }
                     }
-                    ForEach(samples) { s in
-                        AreaMark(x: .value("t", s.timestamp), y: .value("v", s.value))
-                            .foregroundStyle(LinearGradient(
-                                colors: [Color.farmGreen.opacity(0.35), .clear],
-                                startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("t", s.timestamp), y: .value("v", s.value))
-                            .foregroundStyle(Color.farmGreen)
-                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                    }
+                    .frame(height: 200)
+                    .chartYAxis { AxisMarks(position: .leading) }
                 }
-                .frame(height: 200)
-                .chartYAxis { AxisMarks(position: .leading) }
             }
         }
+    }
+
+    private func loadHistory() async {
+        isLoading = true
+        errorText = nil
+        defer { isLoading = false }
+
+        await store.refreshSensorHistory(houseId: house.id, kind: kind, points: range.points)
+        samples = store.sensorHistory(houseId: house.id, kind: kind, points: range.points)
+
+        if samples.isEmpty {
+            errorText = store.lastError
+        }
+    }
+
+    private func displayLatestValue(_ value: Double?) -> String {
+        if isLoading { return "Loading..." }
+        if value == nil { return "—" }
+        guard let value else { return "0.0" }
+        return String(format: "%.1f", value)
     }
 
     // MARK: Forecast card
 
     private var forecastCard: some View {
-        AICard(
-            label: "Short-term forecast",
-            title: forecastTitle,
-            message: forecastBody,
-            severity: .ai,
-            severityText: nil
-        )
+        Group {
+            if isLoading {
+                CardSection {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Preparing forecast...")
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else if samples.isEmpty {
+                CardSection {
+                    Text(errorText ?? "Forecast unavailable because no history data is available for this sensor.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                AICard(
+                    label: "Short-term forecast",
+                    title: forecastTitle,
+                    message: forecastBody,
+                    severity: .ai,
+                    severityText: nil
+                )
+            }
+        }
+        .opacity(isLoading ? 0.75 : 1.0)
     }
 
     private var forecastTitle: String {
@@ -171,21 +235,38 @@ struct SensorHistoryView: View {
 
     private var probeList: some View {
         CardSection {
-            VStack(spacing: 0) {
-                ForEach(0..<4, id: \.self) { i in
-                    ValueRow(
-                        systemImage: kind.systemImage,
-                        iconColor: .farmGreen,
-                        title: "Probe \(i + 1) · \(probeLocation(i))",
-                        value: probeReading(i),
-                        showsChevron: false
-                    )
-                    if i < 3 {
-                        Divider().overlay(Color.appSeparator).padding(.vertical, 10)
+            if isLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading probe readings...")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
+            } else if samples.isEmpty {
+                Text("Probe readings unavailable until \(kind.title.lowercased()) history is loaded.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(0..<4, id: \.self) { i in
+                        ValueRow(
+                            systemImage: kind.systemImage,
+                            iconColor: .farmGreen,
+                            title: "Probe \(i + 1) · \(probeLocation(i))",
+                            value: probeReading(i),
+                            showsChevron: false
+                        )
+                        if i < 3 {
+                            Divider().overlay(Color.appSeparator).padding(.vertical, 10)
+                        }
                     }
                 }
             }
         }
+        .opacity(isLoading ? 0.75 : 1.0)
     }
 
     private func probeLocation(_ i: Int) -> String {

@@ -200,6 +200,11 @@ final class MockDataStore {
             }
             return Array(liveSamples.suffix(points))
         }
+        // Temperature history is now parity-driven from Rotem CommandID 35.
+        // Avoid synthetic fallback so UI reflects true backend availability.
+        if kind == .temperature {
+            return []
+        }
         var rng = SeededRNG(seed: UInt64(truncatingIfNeeded: houseId.hashValue &+ kind.hashValue))
         let now = Date()
         let center: Double
@@ -339,19 +344,54 @@ final class MockDataStore {
         defer { isLoading = false }
         do {
             log("reloadSelectedFarmData() farmBackendID=\(selectedFarmBackendID)")
+            let client = apiClient
             let apiHouses = try await apiClient.fetchHouses(farmID: selectedFarmBackendID)
+            async let dashboardFetch = try? await apiClient.fetchFarmMonitoringDashboard(farmID: selectedFarmBackendID)
+            async let sensorFetch = try? await apiClient.fetchFarmHouseSensorData(farmID: selectedFarmBackendID)
+            async let snapshotFetch = try? await apiClient.fetchFarmMonitoringSnapshot(farmID: selectedFarmBackendID)
+            let dashboardCards = (await dashboardFetch)?.houses ?? []
+            let dashboardByHouseID = Dictionary(uniqueKeysWithValues: dashboardCards.map { ($0.houseID, $0) })
+            let webParitySensorByHouseNumber = await sensorFetch ?? [:]
+            let farmSnapshot = await snapshotFetch
+            let snapshotByHouseID = Dictionary(uniqueKeysWithValues: (farmSnapshot?.houses ?? []).map { ($0.houseID, $0) })
+
+            let activeHouses = apiHouses.filter(\.isActive)
+            let snapshotHouses = houses
             var mappedHouses: [House] = []
             var mappedAlarms: [Alarm] = []
-
-            for apiHouse in apiHouses where apiHouse.isActive {
-                let monitoring = try? await apiClient.fetchLatestMonitoring(houseID: apiHouse.id)
+            for apiHouse in activeHouses {
                 let houseID = Self.stableUUID(prefix: "house", intID: apiHouse.id)
-                let fallbackSnapshot = houses.first(where: { $0.backendId == apiHouse.id })?.snapshot
-                let resolvedTemp = monitoring?.averageTemperature ?? fallbackSnapshot?.tempC ?? 0
-                let resolvedHumidity = monitoring?.humidity ?? fallbackSnapshot?.humidity ?? 0
-                let resolvedStatic = monitoring?.staticPressure ?? fallbackSnapshot?.staticPressurePa ?? 0
-                let resolvedAirflow = monitoring?.airflowPercentage ?? fallbackSnapshot?.airflowPct ?? 0
-                let resolvedWater = monitoring?.waterConsumption ?? fallbackSnapshot?.waterLphr ?? 0
+                let fallbackSnapshot = snapshotHouses.first(where: { $0.backendId == apiHouse.id })?.snapshot
+                let dashboardCard = dashboardByHouseID[apiHouse.id]
+                let webParityMonitoring = webParitySensorByHouseNumber[apiHouse.houseNumber]
+                let aggregated = snapshotByHouseID[apiHouse.id]
+                let resolvedTemp = aggregated?.averageTemperature
+                    ?? webParityMonitoring?.averageTemperature
+                    ?? dashboardCard?.averageTemperature
+                    ?? fallbackSnapshot?.tempC
+                    ?? .nan
+                let resolvedHumidity = aggregated?.humidity
+                    ?? webParityMonitoring?.humidity
+                    ?? fallbackSnapshot?.humidity
+                    ?? .nan
+                let resolvedStatic = aggregated?.staticPressure
+                    ?? webParityMonitoring?.staticPressure
+                    ?? fallbackSnapshot?.staticPressurePa
+                    ?? .nan
+                let resolvedAirflow = aggregated?.airflowPercentage
+                    ?? webParityMonitoring?.airflowPercentage
+                    ?? fallbackSnapshot?.airflowPct
+                    ?? .nan
+                let resolvedWater = aggregated?.waterConsumption
+                    ?? webParityMonitoring?.waterConsumption
+                    ?? dashboardCard?.waterConsumption
+                    ?? fallbackSnapshot?.waterLphr
+                    ?? .nan
+                let resolvedFeed = aggregated?.feedConsumption
+                    ?? webParityMonitoring?.feedConsumption
+                    ?? dashboardCard?.feedConsumption
+                    ?? fallbackSnapshot?.feedLbs
+                    ?? .nan
                 let snapshot = HouseSnapshot(
                     tempC: resolvedTemp,
                     humidity: resolvedHumidity,
@@ -360,6 +400,7 @@ final class MockDataStore {
                     staticPressurePa: resolvedStatic,
                     airflowPct: resolvedAirflow,
                     waterLphr: resolvedWater,
+                    feedLbs: resolvedFeed,
                     feedCyclesDone: fallbackSnapshot?.feedCyclesDone ?? 0,
                     feedCyclesPlanned: fallbackSnapshot?.feedCyclesPlanned ?? 0,
                     tempFill: Self.clamp01(resolvedTemp / 35),
@@ -378,31 +419,30 @@ final class MockDataStore {
                         name: "House \(apiHouse.houseNumber)",
                         type: .tunnel,
                         birdCount: 0,
-                        flockDay: apiHouse.currentDay,
+                        flockDay: aggregated?.currentDay ?? apiHouse.currentDay,
                         state: state,
                         pillText: state == .ok ? "All OK" : (state == .warning ? "Check conditions" : "Needs attention"),
                         snapshot: snapshot
                     )
                 )
-
-                let alerts = (try? await apiClient.fetchWaterAlerts(houseID: apiHouse.id)) ?? []
-                let houseAlerts = alerts.map { alert in
-                    Alarm(
-                        id: Self.stableUUID(prefix: "alert", intID: alert.id),
-                        backendId: alert.id,
-                        severity: Self.mapSeverity(alert.severity, acknowledged: alert.isAcknowledged),
-                        title: alert.message,
-                        meta: "House \(alert.houseNumber ?? apiHouse.houseNumber)",
-                        houseName: "House \(alert.houseNumber ?? apiHouse.houseNumber)",
-                        occurredAt: alert.createdAt ?? Date(),
-                        sparkline: [],
-                        threshold: nil,
-                        peakValue: alert.increasePercentage,
-                        recommendation: nil,
-                        isAcknowledged: alert.isAcknowledged
+                if let alert = farmSnapshot?.alertsByHouseID[apiHouse.id], alert.activeCount > 0 {
+                    mappedAlarms.append(
+                        Alarm(
+                            id: Self.stableUUID(prefix: "snapshot-alert", intID: apiHouse.id),
+                            backendId: nil,
+                            severity: Self.mapSeverity(alert.highestSeverity, acknowledged: false),
+                            title: alert.latestMessage ?? "Water alert",
+                            meta: "House \(apiHouse.houseNumber)",
+                            houseName: "House \(apiHouse.houseNumber)",
+                            occurredAt: Date(),
+                            sparkline: [],
+                            threshold: nil,
+                            peakValue: nil,
+                            recommendation: nil,
+                            isAcknowledged: false
+                        )
                     )
                 }
-                mappedAlarms.append(contentsOf: houseAlerts)
             }
 
             houses = mappedHouses
@@ -453,80 +493,111 @@ final class MockDataStore {
             }
             do {
                 let apiFlocks = try await apiClient.fetchFlocks(farmID: selectedFarmBackendID)
-                var rows: [Flock] = []
-                for apiFlock in apiFlocks {
-                    let metrics = Self.metricsFromStatus(apiFlock.status)
-                    let totalDays = Self.totalDays(arrival: apiFlock.arrivalDate, expectedHarvest: apiFlock.expectedHarvestDate)
-                    let currentDay = max(0, apiFlock.currentAgeDays)
-                    let mortalityRate = apiFlock.mortalityRate ?? 0
-                    let livability = max(0, 100 - mortalityRate)
-                    let performance = (try? await apiClient.fetchFlockPerformance(flockID: apiFlock.id)) ?? []
-                    let sortedPerf = performance.sorted { (lhs, rhs) in
-                        (lhs.flockAgeDays ?? 0) < (rhs.flockAgeDays ?? 0)
+                let flockList = Array(apiFlocks)
+                let perfBatchSize = 4
+                var indexedFlocks: [(Int, Flock)] = []
+                var fStart = 0
+                while fStart < flockList.count {
+                    let fEnd = min(fStart + perfBatchSize, flockList.count)
+                    let batch = Array(flockList[fStart..<fEnd])
+                    await withTaskGroup(of: (Int, Flock).self) { group in
+                        for (offset, apiFlock) in batch.enumerated() {
+                            let globalIndex = fStart + offset
+                            group.addTask { @MainActor in
+                                let metrics = Self.metricsFromStatus(apiFlock.status)
+                                let totalDays = Self.totalDays(arrival: apiFlock.arrivalDate, expectedHarvest: apiFlock.expectedHarvestDate)
+                                let currentDay = max(0, apiFlock.currentAgeDays)
+                                let mortalityRate = apiFlock.mortalityRate ?? 0
+                                let livability = max(0, 100 - mortalityRate)
+                                let performance = (try? await client.fetchFlockPerformance(flockID: apiFlock.id)) ?? []
+                                let sortedPerf = performance.sorted { (lhs, rhs) in
+                                    (lhs.flockAgeDays ?? 0) < (rhs.flockAgeDays ?? 0)
+                                }
+                                let actualWeightCurve = Self.actualWeightCurve(from: sortedPerf, totalDays: max(totalDays, 42))
+                                let latestPerf = sortedPerf.last
+                                let avgWeightKg = (latestPerf?.averageWeightGrams ?? Self.estimateWeightKg(day: currentDay) * 1000) / 1000
+                                let targetWeightKg = Self.estimateWeightKg(day: currentDay + 1)
+                                let fcr = latestPerf?.feedConversionRatio ?? metrics.fcr
+                                let dailyGain = Self.estimateDailyGain(from: sortedPerf, fallbackDay: currentDay, fallbackWeightKg: avgWeightKg)
+                                let logEntries = Self.buildFlockLogs(from: sortedPerf)
+                                let flock = Flock(
+                                    id: Self.stableUUID(prefix: "flock", intID: apiFlock.id),
+                                    farmId: selectedFarm.id,
+                                    name: "Flock \(apiFlock.batchNumber)",
+                                    breed: apiFlock.breedName,
+                                    placedOn: apiFlock.arrivalDate ?? Date(),
+                                    targetCatchOn: apiFlock.expectedHarvestDate ?? Date().addingTimeInterval(40 * 86_400),
+                                    currentDay: currentDay,
+                                    totalDays: totalDays,
+                                    birdsPlaced: apiFlock.initialChickenCount,
+                                    birdsRemaining: apiFlock.currentChickenCount,
+                                    avgWeightKg: avgWeightKg,
+                                    targetWeightKg: targetWeightKg,
+                                    fcr: fcr,
+                                    targetFcr: 1.45,
+                                    livabilityPct: livability,
+                                    dailyGainG: dailyGain,
+                                    waterFeedRatio: metrics.waterFeedRatio,
+                                    epef: Self.epef(day: max(currentDay, 1), livability: livability, weightKg: avgWeightKg, fcr: fcr),
+                                    state: metrics.state,
+                                    statePillText: metrics.pill,
+                                    isActive: apiFlock.isActive,
+                                    actualWeightCurve: actualWeightCurve,
+                                    targetWeightCurve: Self.targetWeightCurve(totalDays: max(totalDays, 42)),
+                                    log: logEntries
+                                )
+                                return (globalIndex, flock)
+                            }
+                        }
+                        for await pair in group {
+                            indexedFlocks.append(pair)
+                        }
                     }
-                    let actualWeightCurve = Self.actualWeightCurve(from: sortedPerf, totalDays: max(totalDays, 42))
-                    let latestPerf = sortedPerf.last
-                    let avgWeightKg = (latestPerf?.averageWeightGrams ?? Self.estimateWeightKg(day: currentDay) * 1000) / 1000
-                    let targetWeightKg = Self.estimateWeightKg(day: currentDay + 1)
-                    let fcr = latestPerf?.feedConversionRatio ?? metrics.fcr
-                    let dailyGain = Self.estimateDailyGain(from: sortedPerf, fallbackDay: currentDay, fallbackWeightKg: avgWeightKg)
-                    let logEntries = Self.buildFlockLogs(from: sortedPerf)
-                    rows.append(
-                        Flock(
-                            id: Self.stableUUID(prefix: "flock", intID: apiFlock.id),
-                            farmId: selectedFarm.id,
-                            name: "Flock \(apiFlock.batchNumber)",
-                            breed: apiFlock.breedName,
-                            placedOn: apiFlock.arrivalDate ?? Date(),
-                            targetCatchOn: apiFlock.expectedHarvestDate ?? Date().addingTimeInterval(40 * 86_400),
-                            currentDay: currentDay,
-                            totalDays: totalDays,
-                            birdsPlaced: apiFlock.initialChickenCount,
-                            birdsRemaining: apiFlock.currentChickenCount,
-                            avgWeightKg: avgWeightKg,
-                            targetWeightKg: targetWeightKg,
-                            fcr: fcr,
-                            targetFcr: 1.45,
-                            livabilityPct: livability,
-                            dailyGainG: dailyGain,
-                            waterFeedRatio: metrics.waterFeedRatio,
-                            epef: Self.epef(day: max(currentDay, 1), livability: livability, weightKg: avgWeightKg, fcr: fcr),
-                            state: metrics.state,
-                            statePillText: metrics.pill,
-                            isActive: apiFlock.isActive,
-                            actualWeightCurve: actualWeightCurve,
-                            targetWeightCurve: Self.targetWeightCurve(totalDays: max(totalDays, 42)),
-                            log: logEntries
-                        )
-                    )
+                    fStart = fEnd
                 }
-                flocks = rows.sorted { $0.placedOn > $1.placedOn }
+                indexedFlocks.sort { $0.0 < $1.0 }
+                flocks = indexedFlocks.map { $0.1 }.sorted { $0.placedOn > $1.placedOn }
             } catch {
                 flocks = []
             }
             // Load task center, program library, and workers from live APIs.
             var loadedTasks: [FarmTask] = []
-            for house in mappedHouses {
-                guard let houseBackendID = house.backendId else { continue }
-                let apiTasks = (try? await apiClient.fetchTasks(houseID: houseBackendID)) ?? []
-                loadedTasks.append(contentsOf: apiTasks.map { task in
-                    let status: TaskStatus = task.isCompleted ? .done : .pending
-                    let dueAt = Calendar.current.date(
-                        byAdding: .day,
-                        value: max(task.dayOffset - house.flockDay, 0),
-                        to: Date()
-                    ) ?? Date()
-                    return FarmTask(
-                        id: Self.stableUUID(prefix: "task", intID: task.id),
-                        backendId: task.id,
-                        title: task.taskName,
-                        houseId: house.id,
-                        assigneeName: task.completedBy.isEmpty ? "Unassigned" : task.completedBy,
-                        dueAt: dueAt,
-                        status: status,
-                        notes: task.notes.isEmpty ? task.description : task.notes
-                    )
-                })
+            let taskFetchBatchSize = 6
+            let housesForTasks = mappedHouses
+            var taskBatchStart = 0
+            while taskBatchStart < housesForTasks.count {
+                let taskBatchEnd = min(taskBatchStart + taskFetchBatchSize, housesForTasks.count)
+                let taskBatch = Array(housesForTasks[taskBatchStart..<taskBatchEnd])
+                await withTaskGroup(of: [FarmTask].self) { group in
+                    for house in taskBatch {
+                        group.addTask { @MainActor in
+                            guard let houseBackendID = house.backendId else { return [] }
+                            let apiTasks = (try? await client.fetchTasks(houseID: houseBackendID)) ?? []
+                            return apiTasks.map { task in
+                                let status: TaskStatus = task.isCompleted ? .done : .pending
+                                let dueAt = Calendar.current.date(
+                                    byAdding: .day,
+                                    value: max(task.dayOffset - house.flockDay, 0),
+                                    to: Date()
+                                ) ?? Date()
+                                return FarmTask(
+                                    id: Self.stableUUID(prefix: "task", intID: task.id),
+                                    backendId: task.id,
+                                    title: task.taskName,
+                                    houseId: house.id,
+                                    assigneeName: task.completedBy.isEmpty ? "Unassigned" : task.completedBy,
+                                    dueAt: dueAt,
+                                    status: status,
+                                    notes: task.notes.isEmpty ? task.description : task.notes
+                                )
+                            }
+                        }
+                    }
+                    for await chunk in group {
+                        loadedTasks.append(contentsOf: chunk)
+                    }
+                }
+                taskBatchStart = taskBatchEnd
             }
             tasks = loadedTasks.sorted(by: { $0.dueAt < $1.dueAt })
 
@@ -623,24 +694,35 @@ final class MockDataStore {
         else { return }
         do {
             log("refreshSensorHistory() house=\(houseId.uuidString) kind=\(kind.rawValue) points=\(points)")
-            let history = try await apiClient.fetchHouseMonitoringHistory(houseID: backendID, limit: max(points, 24))
-            let mapped: [SensorSample] = history.compactMap { point in
-                let value: Double?
-                switch kind {
-                case .temperature: value = point.averageTemperature
-                case .humidity: value = point.humidity
-                case .co2: value = nil
-                case .ammonia: value = nil
-                case .staticPressure: value = point.staticPressure
-                case .airflow: value = point.airflowPercentage
+            let mapped: [SensorSample]
+            if kind == .temperature {
+                let history = try await apiClient.fetchRotemTemperatureHistory(houseID: backendID)
+                mapped = history.compactMap { point in
+                    let date = point.date ?? Date()
+                    let value = point.avgValue ?? point.maxValue ?? point.minValue
+                    guard let value else { return nil }
+                    return SensorSample(id: UUID(), timestamp: date, value: value, probeName: nil)
                 }
-                guard let resolvedValue = value else { return nil }
-                return SensorSample(
-                    id: UUID(),
-                    timestamp: point.timestamp,
-                    value: resolvedValue,
-                    probeName: nil
-                )
+            } else {
+                let history = try await apiClient.fetchHouseMonitoringHistory(houseID: backendID, limit: max(points, 24))
+                mapped = history.compactMap { point in
+                    let value: Double?
+                    switch kind {
+                    case .temperature: value = point.averageTemperature
+                    case .humidity: value = point.humidity
+                    case .co2: value = nil
+                    case .ammonia: value = nil
+                    case .staticPressure: value = point.staticPressure
+                    case .airflow: value = point.airflowPercentage
+                    }
+                    guard let resolvedValue = value else { return nil }
+                    return SensorSample(
+                        id: UUID(),
+                        timestamp: point.timestamp,
+                        value: resolvedValue,
+                        probeName: nil
+                    )
+                }
             }
             if !mapped.isEmpty {
                 var houseSamples = liveSensorHistoryByHouse[houseId] ?? [:]
@@ -684,12 +766,54 @@ final class MockDataStore {
         }
     }
 
+    func fetchFeedHistory(houseId: UUID) async -> [DailyResourcePoint] {
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
+        do {
+            let rows = try await apiClient.fetchRotemFeedHistory(houseID: backendID)
+            return rows.map { row in
+                DailyResourcePoint(
+                    day: row.growthDay,
+                    date: row.date ?? Date(),
+                    value: row.dailyFeedTotal,
+                    target: nil,
+                    isAnomaly: false
+                )
+            }.sorted(by: { $0.day < $1.day })
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    func fetchWaterHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
+        do {
+            let rows = try await apiClient.fetchRotemWaterHistory(houseID: backendID, days: days)
+            return rows.enumerated().map { index, row in
+                DailyResourcePoint(
+                    day: row.growthDay ?? (index + 1),
+                    date: row.date ?? Date(),
+                    value: row.consumptionAvg,
+                    target: nil,
+                    isAnomaly: false
+                )
+            }.sorted(by: { $0.date < $1.date })
+        } catch {
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
     func fetchHeaterHistory(houseId: UUID) async -> [DailyResourcePoint] {
         guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
         do {
             return try await apiClient.fetchHouseHeaterHistory(houseID: backendID)
         } catch {
-            lastError = error.localizedDescription
+            if let urlError = error as? URLError, urlError.code == .timedOut {
+                lastError = "Heater history request timed out. Please try again."
+            } else {
+                lastError = error.localizedDescription
+            }
             return []
         }
     }
@@ -888,6 +1012,9 @@ final class MockDataStore {
     }
 
     private static func stateForSnapshot(_ snapshot: HouseSnapshot) -> SensorState {
+        if snapshot.tempC.isNaN || snapshot.humidity.isNaN || snapshot.staticPressurePa.isNaN || snapshot.airflowPct.isNaN {
+            return .warning
+        }
         if snapshot.staticPressurePa > 35 || snapshot.humidity > 75 {
             return .critical
         }
@@ -1024,7 +1151,7 @@ final class MockDataStore {
 
     private func log(_ message: String) {
         guard verboseLogging else { return }
-        print("[MockDataStore] \(message)")
+        print("[FarmDataStore] \(message)")
     }
 }
 

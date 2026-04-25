@@ -28,6 +28,7 @@ class MonitoringApiService {
    */
   async getHouseLatestMonitoring(houseId: number): Promise<HouseMonitoringSnapshot> {
     const response = await api.get(`/houses/${houseId}/monitoring/latest/`, {
+      params: { mode: 'cached' },
       headers: this.getAuthHeaders()
     });
     return response.data;
@@ -76,7 +77,7 @@ class MonitoringApiService {
     houseId: number,
     options?: { dodReferenceDate?: string | null; cacheBust?: string | number }
   ): Promise<HouseMonitoringKpis> {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { mode: 'cached' };
     if (options?.dodReferenceDate) {
       params.dod_reference_date = options.dodReferenceDate;
     }
@@ -85,7 +86,7 @@ class MonitoringApiService {
     }
     const response = await api.get(`/houses/${houseId}/monitoring/kpis/`, {
       headers: this.getAuthHeaders(),
-      ...(Object.keys(params).length > 0 ? { params } : {}),
+      params,
     });
     return response.data;
   }
@@ -95,6 +96,7 @@ class MonitoringApiService {
    */
   async getFarmHousesMonitoring(farmId: number): Promise<FarmHousesMonitoringResponse> {
     const response = await api.get(`/farms/${farmId}/houses/monitoring/all/`, {
+      params: { mode: 'cached' },
       headers: this.getAuthHeaders()
     });
     return response.data;
@@ -105,6 +107,7 @@ class MonitoringApiService {
    */
   async getFarmMonitoringDashboard(farmId: number): Promise<MonitoringDashboardData> {
     const response = await api.get(`/farms/${farmId}/houses/monitoring/dashboard/`, {
+      params: { mode: 'cached' },
       headers: this.getAuthHeaders()
     });
     return response.data;
@@ -160,11 +163,13 @@ class MonitoringApiService {
     houseId: number,
     cacheBust?: string | number
   ): Promise<{ heater_history: Record<string, unknown> }> {
-    const params =
-      cacheBust != null ? { _: String(cacheBust) } : undefined;
+    const params: Record<string, string> = { mode: 'cached' };
+    if (cacheBust != null) {
+      params._ = String(cacheBust);
+    }
     const response = await api.get(`/houses/${houseId}/heater-history/`, {
       headers: this.getAuthHeaders(),
-      ...(params ? { params } : {}),
+      params,
     });
     return response.data;
   }

@@ -38,7 +38,7 @@ struct HeaterDetailView: View {
         .background(Color.appBackground)
         .navigationTitle("Heater")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .task(id: house.id) {
             await loadHeaterData()
         }
     }
@@ -47,12 +47,6 @@ struct HeaterDetailView: View {
         isLoading = true
         errorText = nil
         defer { isLoading = false }
-
-        // Ensure farm context has latest house mapping before per-house fetches.
-        if store.housesForCurrentFarm.isEmpty {
-            await store.reloadSelectedFarmData()
-        }
-        await store.refreshRotemDataForCurrentFarm()
 
         let history = await store.fetchHeaterHistory(houseId: house.id)
         daily = Array(history.suffix(14))

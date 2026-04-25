@@ -98,6 +98,7 @@ struct HouseSnapshot: Hashable {
     var staticPressurePa: Double
     var airflowPct: Double
     var waterLphr: Double
+    var feedLbs: Double
     var feedCyclesDone: Int
     var feedCyclesPlanned: Int
     /// For progress bars: fraction of alarm threshold consumed, clamped [0,1]

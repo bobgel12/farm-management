@@ -129,6 +129,22 @@ struct APIRotemWaterHistoryPoint {
     let consumptionAvg: Double
 }
 
+struct APIRotemTemperatureHistoryPoint {
+    let date: Date?
+    let growthDay: Int
+    let minValue: Double?
+    let avgValue: Double?
+    let maxValue: Double?
+}
+
+struct APIRotemFeedHistoryPoint {
+    let date: Date?
+    let growthDay: Int
+    let dailyFeedTotal: Double
+    let feedPerBird: Double?
+    let changePercent: Double?
+}
+
 struct APIFarmHouseMeta {
     let houseID: Int
     let houseNumber: Int
@@ -147,6 +163,33 @@ struct APIFarmHouseMonitoringCard {
     let growthDay: Int?
     let houseCurrentDay: Int?
     let activeAlarmsCount: Int
+}
+
+struct APIFarmMonitoringSnapshotHouse {
+    let houseID: Int
+    let houseNumber: Int
+    let currentDay: Int?
+    let averageTemperature: Double?
+    let humidity: Double?
+    let staticPressure: Double?
+    let airflowPercentage: Double?
+    let waterConsumption: Double?
+    let feedConsumption: Double?
+    let isConnected: Bool
+    let alarmStatus: String
+}
+
+struct APIFarmMonitoringSnapshotAlert {
+    let houseID: Int
+    let activeCount: Int
+    let highestSeverity: String
+    let latestMessage: String?
+}
+
+struct APIFarmMonitoringSnapshotResult {
+    let houses: [APIFarmMonitoringSnapshotHouse]
+    let alertsByHouseID: [Int: APIFarmMonitoringSnapshotAlert]
+    let freshness: APIFreshnessMeta?
 }
 
 struct APIFarmMonitoringDashboardResult {
@@ -354,7 +397,7 @@ actor APIClient {
 
     func fetchFarmMonitoringDashboard(farmID: Int) async throws -> APIFarmMonitoringDashboardResult {
         let data = try await request(
-            path: "/api/farms/\(farmID)/houses/monitoring/dashboard/",
+            path: "/api/farms/\(farmID)/houses/monitoring/dashboard/?mode=cached",
             method: "GET",
             payload: nil,
             requiresAuth: true
@@ -393,6 +436,111 @@ actor APIClient {
             houses: cards,
             freshness: envelope.meta
         )
+    }
+
+    func fetchFarmMonitoringSnapshot(farmID: Int) async throws -> APIFarmMonitoringSnapshotResult {
+        let data = try await request(
+            path: "/api/farms/\(farmID)/houses/monitoring/snapshot/?mode=cached",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true
+        )
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIClientError.decoding
+        }
+        let envelope = decodeEnvelope(root)
+        let payload = envelope.payload
+        guard let houses = payload["houses"] as? [[String: Any]] else {
+            throw APIClientError.decoding
+        }
+        let mappedHouses = houses.compactMap { item -> APIFarmMonitoringSnapshotHouse? in
+            guard
+                let houseID = item["house_id"] as? Int,
+                let houseNumber = item["house_number"] as? Int
+            else { return nil }
+            return APIFarmMonitoringSnapshotHouse(
+                houseID: houseID,
+                houseNumber: houseNumber,
+                currentDay: item["current_day"] as? Int,
+                averageTemperature: item["average_temperature"] as? Double,
+                humidity: item["humidity"] as? Double,
+                staticPressure: item["static_pressure"] as? Double,
+                airflowPercentage: item["airflow_percentage"] as? Double,
+                waterConsumption: item["water_consumption"] as? Double,
+                feedConsumption: item["feed_consumption"] as? Double,
+                isConnected: (item["is_connected"] as? Bool) ?? true,
+                alarmStatus: (item["alarm_status"] as? String) ?? "normal"
+            )
+        }
+
+        var alertsByHouseID: [Int: APIFarmMonitoringSnapshotAlert] = [:]
+        if let alertsRaw = payload["alerts_by_house"] as? [String: Any] {
+            for (houseIDRaw, alertRaw) in alertsRaw {
+                guard
+                    let houseID = Int(houseIDRaw),
+                    let alert = alertRaw as? [String: Any]
+                else { continue }
+                alertsByHouseID[houseID] = APIFarmMonitoringSnapshotAlert(
+                    houseID: houseID,
+                    activeCount: (alert["active_count"] as? Int) ?? 0,
+                    highestSeverity: (alert["highest_severity"] as? String) ?? "normal",
+                    latestMessage: alert["latest_message"] as? String
+                )
+            }
+        }
+        return APIFarmMonitoringSnapshotResult(
+            houses: mappedHouses,
+            alertsByHouseID: alertsByHouseID,
+            freshness: envelope.meta
+        )
+    }
+
+    /// Web parity endpoint used by frontend dashboard cards.
+    /// Returns monitoring by house number for a farm.
+    func fetchFarmHouseSensorData(farmID: Int) async throws -> [Int: APIMonitoring] {
+        let data = try await request(
+            path: "/api/farms/\(farmID)/house-sensor-data/",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true
+        )
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let houses = json["houses"] as? [String: Any]
+        else {
+            throw APIClientError.decoding
+        }
+
+        func sensorCurrent(_ sensors: [String: Any], _ key: String) -> Double? {
+            guard let sensor = sensors[key] as? [String: Any] else { return nil }
+            if let value = sensor["current"] as? Double { return value }
+            if let value = sensor["current"] as? Int { return Double(value) }
+            if let value = sensor["current"] as? String { return Double(value) }
+            return nil
+        }
+
+        var result: [Int: APIMonitoring] = [:]
+        for (houseNumberKey, rawValue) in houses {
+            guard
+                let houseNumber = Int(houseNumberKey),
+                let housePayload = rawValue as? [String: Any],
+                let sensors = housePayload["sensors"] as? [String: Any]
+            else {
+                continue
+            }
+            let canonical = housePayload["canonical"] as? [String: Any]
+
+            let monitoring = APIMonitoring(
+                averageTemperature: (canonical?["temperature"] as? Double) ?? sensorCurrent(sensors, "temperature"),
+                humidity: (canonical?["humidity"] as? Double) ?? sensorCurrent(sensors, "humidity"),
+                staticPressure: (canonical?["static_pressure"] as? Double) ?? sensorCurrent(sensors, "static_pressure"),
+                waterConsumption: (canonical?["water_consumption"] as? Double) ?? sensorCurrent(sensors, "water_consumption") ?? sensorCurrent(sensors, "water"),
+                feedConsumption: (canonical?["feed_consumption"] as? Double) ?? sensorCurrent(sensors, "feed_consumption"),
+                airflowPercentage: (canonical?["airflow_percentage"] as? Double) ?? sensorCurrent(sensors, "airflow_percentage") ?? sensorCurrent(sensors, "airflow") ?? sensorCurrent(sensors, "ventilation_level")
+            )
+            result[houseNumber] = monitoring
+        }
+        return result
     }
 
     func refreshFarmMonitoringNow(farmID: Int) async throws -> APIFreshnessMeta? {
@@ -435,7 +583,7 @@ actor APIClient {
 
     func fetchLatestMonitoring(houseID: Int) async throws -> APIMonitoring? {
         do {
-            let data = try await request(path: "/api/houses/\(houseID)/monitoring/latest/", method: "GET", payload: nil, requiresAuth: true)
+            let data = try await request(path: "/api/houses/\(houseID)/monitoring/latest/?mode=cached", method: "GET", payload: nil, requiresAuth: true)
             guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
@@ -698,7 +846,7 @@ actor APIClient {
 
     func fetchHouseMonitoringKpis(houseID: Int) async throws -> APIHouseMonitoringKpis {
         let data = try await request(
-            path: "/api/houses/\(houseID)/monitoring/kpis/",
+            path: "/api/houses/\(houseID)/monitoring/kpis/?mode=cached",
             method: "GET",
             payload: nil,
             requiresAuth: true
@@ -751,9 +899,68 @@ actor APIClient {
         }
     }
 
+    /// Direct RotemNet temperature history (CommandID 35 via backend facade).
+    func fetchRotemTemperatureHistory(houseID: Int) async throws -> [APIRotemTemperatureHistoryPoint] {
+        let data = try await request(
+            path: "/api/rotem/daily-summaries/temperature-history/?house_id=\(houseID)",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true
+        )
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rows = json["temperature_history"] as? [[String: Any]]
+        else {
+            throw APIClientError.decoding
+        }
+        return rows.compactMap { row in
+            guard let growthDay = row["growth_day"] as? Int else { return nil }
+            let date = (row["date"] as? String).flatMap(parseISODate)
+            return APIRotemTemperatureHistoryPoint(
+                date: date,
+                growthDay: growthDay,
+                minValue: row["min_value"] as? Double,
+                avgValue: row["avg_value"] as? Double,
+                maxValue: row["max_value"] as? Double
+            )
+        }
+        .sorted(by: { $0.growthDay < $1.growthDay })
+    }
+
+    /// Direct RotemNet feed history (CommandID 41 via backend facade).
+    func fetchRotemFeedHistory(houseID: Int) async throws -> [APIRotemFeedHistoryPoint] {
+        let data = try await request(
+            path: "/api/rotem/daily-summaries/feed-history/?house_id=\(houseID)",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true
+        )
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rows = json["feed_history"] as? [[String: Any]]
+        else {
+            throw APIClientError.decoding
+        }
+        return rows.compactMap { row in
+            guard
+                let growthDay = row["growth_day"] as? Int,
+                let total = row["daily_feed_total"] as? Double
+            else { return nil }
+            let date = (row["date"] as? String).flatMap(parseISODate)
+            return APIRotemFeedHistoryPoint(
+                date: date,
+                growthDay: growthDay,
+                dailyFeedTotal: total,
+                feedPerBird: row["feed_per_bird"] as? Double,
+                changePercent: row["change_percent"] as? Double
+            )
+        }
+        .sorted(by: { $0.growthDay < $1.growthDay })
+    }
+
     func fetchHouseHeaterHistory(houseID: Int) async throws -> [DailyResourcePoint] {
         let data = try await request(
-            path: "/api/houses/\(houseID)/heater-history/",
+            path: "/api/houses/\(houseID)/heater-history/?mode=cached",
             method: "GET",
             payload: nil,
             requiresAuth: true
@@ -905,6 +1112,8 @@ actor APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        // Prevent views from appearing frozen when upstream endpoints stall.
+        request.timeoutInterval = 12
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if requiresAuth {
             guard let token else { throw APIClientError.unauthorized }

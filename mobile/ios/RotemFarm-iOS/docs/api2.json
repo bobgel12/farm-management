@@ -1,0 +1,1573 @@
+curl 'https://rotemnetweb.com/Host6_V1/Services/AllServices.svc/GetComparisonDisplayFields' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json;charset=UTF-8' \
+  -b 'ASP.NET_SessionId=<REDACTED_SESSION_ID>' \
+  -H 'Origin: https://rotemnetweb.com' \
+  -H 'Referer: https://rotemnetweb.com/Host6_V1/rotemWebApp/Main.html' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+  -H 'connectionId;' \
+  -H 'contextId: 88ba1540-83c6-f1b5-0a74-844bffcf0d63' \
+  -H 'farmConnectionToken: <REDACTED_FARM_CONNECTION_TOKEN>' \
+  -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'userLanguage: ENGLISH' \
+  -H 'userToken: <REDACTED_USER_TOKEN>' \
+  --data-raw '{}'
+
+  Response:
+  {
+  "reponseObj": [
+    {
+      "FieldName": "House_Connection_Status",
+      "TableName": "General",
+      "DisplayFieldName": "HouseConnectionStatus",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_House_Connection_Status"
+    },
+    {
+      "FieldName": "Siren",
+      "TableName": "General",
+      "DisplayFieldName": "Alarm",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Siren"
+    },
+    {
+      "FieldName": "Time",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Time"
+    },
+    {
+      "FieldName": "Growth_Day",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Growth_Day"
+    },
+    {
+      "FieldName": "Average_Temperature",
+      "TableName": "General",
+      "DisplayFieldName": "Temperature_Current",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Average_Temperature"
+    },
+    {
+      "FieldName": "TemperatureOffset",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_TemperatureOffset"
+    },
+    {
+      "FieldName": "Static_Pressure",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Static_Pressure"
+    },
+    {
+      "FieldName": "CO2",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_CO2"
+    },
+    {
+      "FieldName": "Inside_Humidity",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Humidity",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Inside_Humidity"
+    },
+    {
+      "FieldName": "Tunnel_Temperature",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Temperature"
+    },
+    {
+      "FieldName": "Outside_Temperature",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Outside_Temperature"
+    },
+    {
+      "FieldName": "Vent_Mode",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "VentMode",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Vent_Mode"
+    },
+    {
+      "FieldName": "House_Mode",
+      "TableName": "General",
+      "DisplayFieldName": "HouseMode",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_House_Mode"
+    },
+    {
+      "FieldName": "Vent_Level",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "VentLevel",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Vent_Level"
+    },
+    {
+      "FieldName": "Current_Level_CFM",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Current_Level_CFM"
+    },
+    {
+      "FieldName": "Max_Vent_Level",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Max_Vent_Level"
+    },
+    {
+      "FieldName": "Min_Vent_Level",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Min_Vent_Level"
+    },
+    {
+      "FieldName": "CycleStatus",
+      "TableName": "General",
+      "DisplayFieldName": "Vent_Cycle",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_CycleStatus"
+    },
+    {
+      "FieldName": "CycleTime",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_CycleTime"
+    },
+    {
+      "FieldName": "Set_Temperature",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Set_Temperature"
+    },
+    {
+      "FieldName": "Target_Pressure",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Target_Pressure"
+    },
+    {
+      "FieldName": "Humidity_Treatment",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "Humidity",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Humidity_Treatment"
+    },
+    {
+      "FieldName": "CO2_Treatment",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_CO2_Treatment"
+    },
+    {
+      "FieldName": "Daily_Feed",
+      "TableName": "Consumption",
+      "DisplayFieldName": "Feed_Daily",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Daily_Feed"
+    },
+    {
+      "FieldName": "Daily_Water",
+      "TableName": "Consumption",
+      "DisplayFieldName": "Water_Daily",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Daily_Water"
+    },
+    {
+      "FieldName": "Water_Per_Hour",
+      "TableName": "General",
+      "DisplayFieldName": "Water_Per_Hour",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Water_Per_Hour"
+    },
+    {
+      "FieldName": "Average_Weight",
+      "TableName": "AvgWeight",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "BirdWeight",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Average_Weight"
+    },
+    {
+      "FieldName": "Number_Of_Weights",
+      "TableName": "AvgWeight",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Number_Of_Weights"
+    },
+    {
+      "FieldName": "CycleNext",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_CycleNext"
+    },
+    {
+      "FieldName": "Temperature_Curve",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Curve"
+    },
+    {
+      "FieldName": "Cool_Pad_Flush",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "CoolPad",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Cool_Pad_Flush"
+    },
+    {
+      "FieldName": "Nipple_Flush",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Nipple_Flush"
+    },
+    {
+      "FieldName": "CFM_Percentage",
+      "TableName": "General",
+      "DisplayFieldName": "Vent_Level_Percents",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_CFM_Percentage"
+    },
+    {
+      "FieldName": "Current_Birds_Count_In_House",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Current_Birds_Count_In_House"
+    },
+    {
+      "FieldName": "Birds_Livability",
+      "TableName": "General",
+      "DisplayFieldName": "Livablity_Percents",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Birds_Livability"
+    },
+    {
+      "FieldName": "Feed_Consumption",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Feed_Consumption"
+    },
+    {
+      "FieldName": "Feed_Consumption_Rate",
+      "TableName": "General",
+      "DisplayFieldName": "FCR_Current",
+      "DisplayGroupName": "First",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Feed_Consumption_Rate"
+    },
+    {
+      "FieldName": "Temperature_Sensor_1",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||1"
+    },
+    {
+      "FieldName": "Temperature_Sensor_2",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||2"
+    },
+    {
+      "FieldName": "Temperature_Sensor_3",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||3"
+    },
+    {
+      "FieldName": "Temperature_Sensor_4",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||4"
+    },
+    {
+      "FieldName": "Temperature_Sensor_5",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||5"
+    },
+    {
+      "FieldName": "Temperature_Sensor_6",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||6"
+    },
+    {
+      "FieldName": "Temperature_Sensor_7",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||7"
+    },
+    {
+      "FieldName": "Temperature_Sensor_8",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||8"
+    },
+    {
+      "FieldName": "Temperature_Sensor_9",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||9"
+    },
+    {
+      "FieldName": "Temperature_Sensor_10",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||10"
+    },
+    {
+      "FieldName": "Temperature_Sensor_11",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||11"
+    },
+    {
+      "FieldName": "Temperature_Sensor_12",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||12"
+    },
+    {
+      "FieldName": "Temperature_Sensor_13",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||13"
+    },
+    {
+      "FieldName": "Temperature_Sensor_14",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||14"
+    },
+    {
+      "FieldName": "Temperature_Sensor_15",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||15"
+    },
+    {
+      "FieldName": "Temperature_Sensor_16",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||16"
+    },
+    {
+      "FieldName": "Temperature_Sensor_17",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||17"
+    },
+    {
+      "FieldName": "Temperature_Sensor_18",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||18"
+    },
+    {
+      "FieldName": "Temperature_Sensor_19",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||19"
+    },
+    {
+      "FieldName": "Temperature_Sensor_20",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||20"
+    },
+    {
+      "FieldName": "Temperature_Sensor_21",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||21"
+    },
+    {
+      "FieldName": "Temperature_Sensor_22",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||22"
+    },
+    {
+      "FieldName": "Temperature_Sensor_23",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||23"
+    },
+    {
+      "FieldName": "Temperature_Sensor_24",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||24"
+    },
+    {
+      "FieldName": "Temperature_Sensor_25",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||25"
+    },
+    {
+      "FieldName": "Temperature_Sensor_26",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||26"
+    },
+    {
+      "FieldName": "Temperature_Sensor_27",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||27"
+    },
+    {
+      "FieldName": "Temperature_Sensor_28",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||28"
+    },
+    {
+      "FieldName": "Temperature_Sensor_29",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||29"
+    },
+    {
+      "FieldName": "Temperature_Sensor_30",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||30"
+    },
+    {
+      "FieldName": "Temperature_Sensor_31",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||31"
+    },
+    {
+      "FieldName": "Temperature_Sensor_32",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||32"
+    },
+    {
+      "FieldName": "Temperature_Sensor_33",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||33"
+    },
+    {
+      "FieldName": "Temperature_Sensor_34",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||34"
+    },
+    {
+      "FieldName": "Temperature_Sensor_35",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||35"
+    },
+    {
+      "FieldName": "Temperature_Sensor_36",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Temperature_Sensor_X||36"
+    },
+    {
+      "FieldName": "Attic_Temperature",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Attic_Temperature"
+    },
+    {
+      "FieldName": "Feed_Area_Temperature",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Feed_Area_Temperature"
+    },
+    {
+      "FieldName": "Egg_Room_Temperature",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Egg_Room_Temperature"
+    },
+    {
+      "FieldName": "Ammonia",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Ammonia"
+    },
+    {
+      "FieldName": "Wind_Chill_Temperature",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Wind_Chill_Temperature"
+    },
+    {
+      "FieldName": "Humidity_1",
+      "TableName": "General",
+      "DisplayFieldName": "Humidity_Current",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Humidity",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Humidity_1"
+    },
+    {
+      "FieldName": "Humidity_2",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Humidity",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Humidity_2"
+    },
+    {
+      "FieldName": "Outside_Humidity",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Humidity",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Outside_Humidity"
+    },
+    {
+      "FieldName": "Egg_Room_Humidity",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Humidity",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Egg_Room_Humidity"
+    },
+    {
+      "FieldName": "Emergency_Temperature_1",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Emergency_Temperature_X||1"
+    },
+    {
+      "FieldName": "Emergency_Temperature_2",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Emergency_Temperature_X||2"
+    },
+    {
+      "FieldName": "Circuit_Breaker_Temp",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "Temperature",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Circuit_Breaker_Temp"
+    },
+    {
+      "FieldName": "Silo_1",
+      "TableName": "FeedInv",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Silo_X||1"
+    },
+    {
+      "FieldName": "Silo_2",
+      "TableName": "FeedInv",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Silo_X||2"
+    },
+    {
+      "FieldName": "Silo_3",
+      "TableName": "FeedInv",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Silo_X||3"
+    },
+    {
+      "FieldName": "Silo_4",
+      "TableName": "FeedInv",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Silo_X||4"
+    },
+    {
+      "FieldName": "Rsw2Silo",
+      "TableName": "Silo1",
+      "DisplayFieldName": "Silo_1",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Rsw2Silo"
+    },
+    {
+      "FieldName": "Rsw2Silo",
+      "TableName": "Silo2",
+      "DisplayFieldName": "Silo_2",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Rsw2Silo"
+    },
+    {
+      "FieldName": "Wind_Speed",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Wind_Speed"
+    },
+    {
+      "FieldName": "Wind_Direction",
+      "TableName": "TempSensor",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Wind_Direction"
+    },
+    {
+      "FieldName": "WodPressure",
+      "TableName": "General",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_WodPressure"
+    },
+    {
+      "FieldName": "WOD_Pressue",
+      "TableName": "Consumption",
+      "DisplayFieldName": "WodPressure",
+      "DisplayGroupName": "Second",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_WOD_Pressue"
+    },
+    {
+      "FieldName": "Heaters",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Heaters"
+    },
+    {
+      "FieldName": "Heaters_High",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Heaters_High"
+    },
+    {
+      "FieldName": "Radiant_Low",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Radiant_Low"
+    },
+    {
+      "FieldName": "Radiant_High",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Radiant_High"
+    },
+    {
+      "FieldName": "Tunnel_Fans",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Fans"
+    },
+    {
+      "FieldName": "Exh_Fans",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Exh_Fans"
+    },
+    {
+      "FieldName": "Stir_Fans",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Stir_Fans"
+    },
+    {
+      "FieldName": "Cooling",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "FALSE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Cooling"
+    },
+    {
+      "FieldName": "Cooling_Pad",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "CoolPad",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Cooling_Pad"
+    },
+    {
+      "FieldName": "Foggers",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Foggers"
+    },
+    {
+      "FieldName": "Nest_1",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Nest_X||1"
+    },
+    {
+      "FieldName": "Nest_2",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Nest_X||2"
+    },
+    {
+      "FieldName": "Nest_3",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Nest_X||3"
+    },
+    {
+      "FieldName": "Nest_4",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Nest_X||4"
+    },
+    {
+      "FieldName": "Attic",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Attic"
+    },
+    {
+      "FieldName": "Air_Vent_1_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Air_Vent_X_Position||1"
+    },
+    {
+      "FieldName": "Air_Vent_2_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Air_Vent_X_Position||2"
+    },
+    {
+      "FieldName": "Air_Vent_3_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Air_Vent_X_Position||3"
+    },
+    {
+      "FieldName": "Air_Vent_4_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Air_Vent_X_Position||4"
+    },
+    {
+      "FieldName": "Tunnel_Curtain_1_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Curtain_X_Position||1"
+    },
+    {
+      "FieldName": "Tunnel_Curtain_2_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Curtain_X_Position||2"
+    },
+    {
+      "FieldName": "Tunnel_Curtain_3_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Curtain_X_Position||3"
+    },
+    {
+      "FieldName": "Tunnel_Curtain_4_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Curtain_X_Position||4"
+    },
+    {
+      "FieldName": "Tunnel_Curtain_5_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Curtain_X_Position||5"
+    },
+    {
+      "FieldName": "Tunnel_Curtain_6_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Tunnel_Curtain_X_Position||6"
+    },
+    {
+      "FieldName": "Curtain_1_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Curtain_X_Position||1"
+    },
+    {
+      "FieldName": "Curtain_2_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Curtain_X_Position||2"
+    },
+    {
+      "FieldName": "Curtain_3_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Curtain_X_Position||3"
+    },
+    {
+      "FieldName": "Curtain_4_Position",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Curtain_X_Position||4"
+    },
+    {
+      "FieldName": "ZoneInlet1",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_ZoneInletX||1"
+    },
+    {
+      "FieldName": "ZoneInlet2",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_ZoneInletX||2"
+    },
+    {
+      "FieldName": "ZoneInlet3",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_ZoneInletX||3"
+    },
+    {
+      "FieldName": "ZoneInlet4",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_ZoneInletX||4"
+    },
+    {
+      "FieldName": "Light",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "TRUE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Light"
+    },
+    {
+      "FieldName": "Light1",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||1"
+    },
+    {
+      "FieldName": "Light2",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||2"
+    },
+    {
+      "FieldName": "Light3",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||3"
+    },
+    {
+      "FieldName": "Light4",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||4"
+    },
+    {
+      "FieldName": "Light5",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||5"
+    },
+    {
+      "FieldName": "Light6",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||6"
+    },
+    {
+      "FieldName": "Light7",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||7"
+    },
+    {
+      "FieldName": "Light8",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||8"
+    },
+    {
+      "FieldName": "Light9",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||9"
+    },
+    {
+      "FieldName": "Light10",
+      "TableName": "AnalogOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "LightDimmer",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_LightX||10"
+    },
+    {
+      "FieldName": "Water",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Water"
+    },
+    {
+      "FieldName": "Feeding",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Feeding"
+    },
+    {
+      "FieldName": "Auger",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Auger"
+    },
+    {
+      "FieldName": "Extra_System_1",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Extra_System_X||1"
+    },
+    {
+      "FieldName": "Extra_System_2",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Extra_System_X||2"
+    },
+    {
+      "FieldName": "Extra_System_3",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Extra_System_X||3"
+    },
+    {
+      "FieldName": "Extra_System_4",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Extra_System_X||4"
+    },
+    {
+      "FieldName": "Water_Main",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Water_Main"
+    },
+    {
+      "FieldName": "Water_Bypass",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Water_Bypass"
+    },
+    {
+      "FieldName": "Water_Line",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Water_Line"
+    },
+    {
+      "FieldName": "Water_On_Demand",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Water_On_Demand"
+    },
+    {
+      "FieldName": "Valve",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Valve"
+    },
+    {
+      "FieldName": "Egg_Room_Heater",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Egg_Room_Heater"
+    },
+    {
+      "FieldName": "Egg_Room_Fans",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Egg_Room_Fans"
+    },
+    {
+      "FieldName": "Egg_Room_Cool",
+      "TableName": "DigitalOut",
+      "DisplayFieldName": "",
+      "DisplayGroupName": "Third",
+      "DisplayTemplateName": "",
+      "IsSelected": "FALSE",
+      "IsEditable": "TRUE",
+      "CaptionLanguageKey": "AP_Comparison_Screen_Egg_Room_Cool"
+    }
+  ],
+  "ErrorObj": null,
+  "exceptionMessage": null,
+  "isInSession": true,
+  "isAuthorize": true,
+  "isSucceed": true,
+  "contextId": "88ba1540-83c6-f1b5-0a74-844bffcf0d63"
+}

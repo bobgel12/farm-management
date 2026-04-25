@@ -31,13 +31,7 @@ struct FeedDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await store.refreshRotemDataForCurrentFarm()
-            let history = await store.fetchMonitoringHistory(
-                houseId: house.id,
-                limit: 500,
-                startDate: Calendar.current.date(byAdding: .day, value: -14, to: Date()),
-                endDate: Date()
-            )
-            daily = buildDailyFeed(history: history)
+            daily = await store.fetchFeedHistory(houseId: house.id)
         }
     }
 
@@ -95,17 +89,6 @@ struct FeedDetailView: View {
         }
     }
 
-}
-
-extension FeedDetailView {
-    private func buildDailyFeed(history: [APIHouseMonitoringPoint]) -> [DailyResourcePoint] {
-        let grouped = Dictionary(grouping: history) { Calendar.current.startOfDay(for: $0.timestamp) }
-        let sortedDays = grouped.keys.sorted().suffix(14)
-        return sortedDays.enumerated().map { idx, day in
-            let total = grouped[day]?.compactMap(\.feedConsumption).reduce(0, +) ?? 0
-            return DailyResourcePoint(day: idx + 1, date: day, value: total, target: nil, isAnomaly: false)
-        }
-    }
 }
 
 #Preview {

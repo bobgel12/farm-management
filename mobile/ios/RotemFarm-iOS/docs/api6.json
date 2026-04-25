@@ -1,0 +1,2008 @@
+curl 'https://rotemnetweb.com/Host6_V1/Services/AllServices.svc/RNBL_GetCommandData' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json;charset=UTF-8' \
+  -b 'ASP.NET_SessionId=<REDACTED_SESSION_ID>' \
+  -H 'Origin: https://rotemnetweb.com' \
+  -H 'Referer: https://rotemnetweb.com/Host6_V1/Main.html' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36' \
+  -H 'connectionId;' \
+  -H 'contextId: 8e567c3a-3421-f3ee-d5d5-bc8ddd968ab3' \
+  -H 'farmConnectionToken: <REDACTED_FARM_CONNECTION_TOKEN>' \
+  -H 'sec-ch-ua: "Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'userLanguage: ENGLISH' \
+  -H 'userToken: <REDACTED_USER_TOKEN>' \
+  --data-raw '{"prmGetCommandDataParams":{"CommandID":"0","IsSetPointCommand":false,"HouseNumber":"1","RoomNumber":-1,"ClientLanguageIndex":1,"IsIgnoreCache":false,"PageNumber":-1,"IsLoadPageFromCache":false}}'
+
+  Response:
+  {
+  "reponseObj": {
+    "HouseNumber": 1,
+    "MenuID": 0,
+    "dsData": {
+      "General": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Alarm",
+          "ParameterDisplayName": "Alarm",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Growth_Day",
+          "ParameterDisplayName": "Growth Day",
+          "ParameterValue": "21",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Time",
+          "ParameterDisplayName": "Time",
+          "ParameterValue": "12:23",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Time"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Temperature_Curve",
+          "ParameterDisplayName": "Temperature Curve On/Off",
+          "ParameterValue": "LangKey_On",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "House_Mode",
+          "ParameterDisplayName": "House Mode",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Siren",
+          "ParameterDisplayName": "Siren",
+          "ParameterValue": "False",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "IsFeeding",
+          "ParameterDisplayName": "Feeding",
+          "ParameterValue": "False",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Vent_Mode",
+          "ParameterDisplayName": "Vent Mode",
+          "ParameterValue": "1",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Vent_Level",
+          "ParameterDisplayName": "Vent Level",
+          "ParameterValue": "17",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Min_Vent_Level",
+          "ParameterDisplayName": "Min",
+          "ParameterValue": "6",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Max_Vent_Level",
+          "ParameterDisplayName": "Max",
+          "ParameterValue": "25",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Set_Temperature",
+          "ParameterDisplayName": "Set Temperature",
+          "ParameterValue": "27.65",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TemperatureOffset",
+          "ParameterDisplayName": "Offset",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Target_Pressure",
+          "ParameterDisplayName": "Target Pressure",
+          "ParameterValue": "24.9",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Pressure"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Humidity_Treatment",
+          "ParameterDisplayName": "Humidity Treatment",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "CO2_Treatment",
+          "ParameterDisplayName": "CO2 Treatment",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Cool_Pad_Flush",
+          "ParameterDisplayName": "Cool Pad Flush",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Nipple_Flush",
+          "ParameterDisplayName": "Nipple Flush",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Cycle",
+          "ParameterDisplayName": "Cycle",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "CycleStatus",
+          "ParameterDisplayName": "Cycle Status",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "CycleTime",
+          "ParameterDisplayName": "Cycle Time",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "CycleNext",
+          "ParameterDisplayName": "Cycle Next",
+          "ParameterValue": "LangKey_NextOff",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Feed_Consumption",
+          "ParameterDisplayName": "Daily Consumption",
+          "ParameterValue": "36",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Feed_Consumption_Rate",
+          "ParameterDisplayName": "FCR",
+          "ParameterValue": "LangKey_NA",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Current_Level_CFM",
+          "ParameterDisplayName": "CFM",
+          "ParameterValue": "115532",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Capacity"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "CFM_Percentage",
+          "ParameterDisplayName": "% CFM",
+          "ParameterValue": "17",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Current_Birds_Count_In_House",
+          "ParameterDisplayName": "Birds",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Birds_Livability",
+          "ParameterDisplayName": "Livability",
+          "ParameterValue": "100",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Pressure"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "House_Connection_Status",
+          "ParameterDisplayName": "House Connection Status",
+          "ParameterValue": "1",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Average_Temperature",
+          "ParameterDisplayName": "Average Temperature",
+          "ParameterValue": "29.71",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Outside_Temperature",
+          "ParameterDisplayName": "Outside Temperature",
+          "ParameterValue": "27.33",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Inside_Humidity",
+          "ParameterDisplayName": "Inside Humidity",
+          "ParameterValue": "64",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Humidity_1",
+          "ParameterDisplayName": "Humidity Sensor 1",
+          "ParameterValue": "64",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Humidity_2",
+          "ParameterDisplayName": "Humidity Sensor 2",
+          "ParameterValue": "",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Outside_Humidity",
+          "ParameterDisplayName": "Outside Humidity",
+          "ParameterValue": "",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "CO2",
+          "ParameterDisplayName": "CO2",
+          "ParameterValue": "",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Static_Pressure",
+          "ParameterDisplayName": "Static Pressure",
+          "ParameterValue": "24",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Pressure"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TotalDailyMaleMortality",
+          "ParameterDisplayName": "Total Daily Male Mortality",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TotalDailyFemaleMortality",
+          "ParameterDisplayName": "Total Daily Female Mortality",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TotalDailyMaleCult",
+          "ParameterDisplayName": "Total Daily Male Cult",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TotalDailyFemaleCult",
+          "ParameterDisplayName": "Total Daily Female Cult",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TotalDailyMaleMoved",
+          "ParameterDisplayName": "Total Daily Male Moved",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "TotalDailyFemaleMoved",
+          "ParameterDisplayName": "Total Daily Female Moved",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        }
+      ],
+      "TempSensor": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Tunnel_Temperature",
+          "ParameterDisplayName": "Tunnel",
+          "ParameterValue": "29.73",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Wind_Chill_Temperature",
+          "ParameterDisplayName": "W.Chill",
+          "ParameterValue": "29.73",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Attic_Temperature",
+          "ParameterDisplayName": "Attic",
+          "ParameterValue": "- - -",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_1",
+          "ParameterDisplayName": "Temp. 1",
+          "ParameterValue": "29.17",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_2",
+          "ParameterDisplayName": "Temp. 2",
+          "ParameterValue": "30.11",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_3",
+          "ParameterDisplayName": "Temp. 3",
+          "ParameterValue": "29.54",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_4",
+          "ParameterDisplayName": "Temp. 4",
+          "ParameterValue": "29.54",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_5",
+          "ParameterDisplayName": "Temp. 5",
+          "ParameterValue": "30.11",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_6",
+          "ParameterDisplayName": "Temp. 6",
+          "ParameterValue": "29.92",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_7",
+          "ParameterDisplayName": "Temp. 7",
+          "ParameterValue": "29.82",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_8",
+          "ParameterDisplayName": "Temp. 8",
+          "ParameterValue": "29.45",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_9",
+          "ParameterDisplayName": "Temp. 9",
+          "ParameterValue": "27.33",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Ammonia",
+          "ParameterDisplayName": "Ammonia",
+          "ParameterValue": "LangKey_ParametersOnly_3||$LangKey_Off||/||- - -",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Wind_Speed",
+          "ParameterDisplayName": "Wind Speed",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Wind_Direction",
+          "ParameterDisplayName": "Wind Direction",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        }
+      ],
+      "Consumption": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "WOD_Pressue",
+          "ParameterDisplayName": "W.O.D. Pressure",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Pressure"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Daily_Water",
+          "ParameterDisplayName": "Daily Water",
+          "ParameterValue": "989",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Volume"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Daily_Feed",
+          "ParameterDisplayName": "Daily Feed",
+          "ParameterValue": "37",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Daily_WaterFeedRate",
+          "ParameterDisplayName": "Water/Feed Rate",
+          "ParameterValue": "N/A",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_WaterFeedRate"
+        }
+      ],
+      "AvgWeight": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Average_Weight",
+          "ParameterDisplayName": "Average Weight",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Number_Of_Weights",
+          "ParameterDisplayName": "Number Of Weights",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        }
+      ],
+      "FeedInv": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_1",
+          "ParameterDisplayName": "1",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_2",
+          "ParameterDisplayName": "2",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_3",
+          "ParameterDisplayName": "3",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_4",
+          "ParameterDisplayName": "4",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        }
+      ],
+      "DigitalOut": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Heaters",
+          "ParameterDisplayName": "Heaters",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": "8",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Tunnel_Fans",
+          "ParameterDisplayName": "Tunnel Fans",
+          "ParameterValue": "2",
+          "ParameterData": "12",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Exh_Fans",
+          "ParameterDisplayName": "Exh Fans",
+          "ParameterValue": "1",
+          "ParameterData": "4",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Stir_Fans",
+          "ParameterDisplayName": "Stir Fans",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": "2",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Cooling_Pad",
+          "ParameterDisplayName": "Cooling Pad",
+          "ParameterValue": "LangKey_Off",
+          "ParameterData": "1",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Light",
+          "ParameterDisplayName": "Light",
+          "ParameterValue": "2",
+          "ParameterData": "8",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Feeding",
+          "ParameterDisplayName": "Feeding",
+          "ParameterValue": "2",
+          "ParameterData": "2",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Auger",
+          "ParameterDisplayName": "Auger",
+          "ParameterValue": "2",
+          "ParameterData": "2",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "IsDeviceActive": null
+        }
+      ],
+      "AnalogOut": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Air_Vent_1_Position",
+          "ParameterDisplayName": "Air Vent 1 Position (%)",
+          "ParameterValue": "38",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent",
+          "ParameterCategory": "PP_Vent",
+          "ParameterPosition": "1"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Tunnel_Curtain_1_Position",
+          "ParameterDisplayName": "Tunnel Curtain 1 Position (%)",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent",
+          "ParameterCategory": "TunnelCurtain",
+          "ParameterPosition": "1"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Light1",
+          "ParameterDisplayName": "Light Dimmer 1",
+          "ParameterValue": "35",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Percent",
+          "ParameterCategory": "LightDimmer",
+          "ParameterPosition": "1"
+        }
+      ],
+      "HistoryTemp": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last24HourTemperature_AVG",
+          "ParameterDisplayName": "Last 24 Hour - Avarage Temperature",
+          "ParameterValue": "29.5;29.2;28.8;28.3;28.2;28;27.9;28.3;28.2;28.2;27.9;28.2;27.8;27.8;28.1;28.7;28.9;29.5;30.1;30.7;31;30.1;30.5;30.3",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last24HourTemperature_TARGET",
+          "ParameterDisplayName": "Last 24 Hour - Target Temperature",
+          "ParameterValue": "27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.9;27.9;27.9;27.9",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        }
+      ],
+      "HistoryWeight": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last10DayAvgBirdWeight_AVG",
+          "ParameterDisplayName": "Avg. Birds Weight",
+          "ParameterValue": "0;0;0;0;0;0;0;0;0;0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last10DayAvgBirdWeight_TARGET",
+          "ParameterDisplayName": "Target Birds Weight",
+          "ParameterValue": "0;0;0;0;0;0;0;0;0;0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        }
+      ],
+      "Silo1": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Rsw2DailyFeed1",
+          "ParameterDisplayName": "Daily Feed",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Rsw2Auger1",
+          "ParameterDisplayName": "Auger",
+          "ParameterValue": null,
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number"
+        }
+      ],
+      "Silo2": [],
+      "IrrigationChartArray": [],
+      "SelectedHouseUnits": [],
+      "Errors": [],
+      "eRNBLResult": [
+        {
+          "Value": 20
+        }
+      ],
+      "MDT": [
+        {
+          "FieldName": "Growth_Day",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Time",
+          "DataType": "DT_Time",
+          "UnitType": "UT_Time",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Temperature_Curve",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "House_Mode",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Siren",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Vent_Mode",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Vent_Level",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Set_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "TemperatureOffset",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature_Diff",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Target_Pressure",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Pressure",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Humidity_Treatment",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Humidity_Treatment_Percents",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Percent",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "CO2_Treatment",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Cool_Pad_Flush",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Nipple_Flush",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "CycleStatus",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "CycleTime",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "CycleNext",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Feed_Consumption",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Feed_Consumption_Rate",
+          "DataType": "DT_Float",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Current_Level_CFM",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Capacity",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "CFM_Percentage",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Percent",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Current_Birds_Count_In_House",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Birds_Livability",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Percent",
+          "DisplayFormat": "N2"
+        },
+        {
+          "FieldName": "Average_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Current",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Outside_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Inside_Humidity",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Percent",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Static_Pressure",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Pressure",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Pressure",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Pressure",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Average_Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N3"
+        },
+        {
+          "FieldName": "Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Animal_Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Number_Of_Weights",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Daily_Water",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Volume",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Daily_WaterFeedRate",
+          "DataType": "DT_Number",
+          "UnitType": "UT_WaterFeedRate",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Daily_Feed",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Feed_Daily",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Tunnel_Fans",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Exh_Fans",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Stir_Fans",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Number",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Silo_1",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Silo_2",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Silo_3",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Silo_4",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Rsw2Silo",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Tunnel_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Wind_Chill_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Attic_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_0",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_1",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_2",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_3",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_4",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_5",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_6",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_7",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_8",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_9",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_10",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_11",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_12",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_13",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_14",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_15",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_16",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_17",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_18",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_19",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_20",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_21",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_22",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_23",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_24",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_25",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_26",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_27",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_28",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_29",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_30",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_31",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_32",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_33",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_34",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_35",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Temperature_Sensor_36",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Emergency_Temperature_1",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Emergency_Temperature_2",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Feed_Area_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Egg_Room_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Work_Room_Temperature",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Ammonia",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Temperature",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "WodPressure",
+          "DataType": "DT_Float",
+          "UnitType": "UT_Pressure",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "WOD_Pressue",
+          "DataType": "DT_Float",
+          "UnitType": "UT_Pressure",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Wind_Speed",
+          "DataType": "DT_Number",
+          "UnitType": "UT_WindSpeed",
+          "DisplayFormat": "N1"
+        },
+        {
+          "FieldName": "Scale_1_Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Scale_2_Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Female_Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        },
+        {
+          "FieldName": "Male_Weight",
+          "DataType": "DT_Number",
+          "UnitType": "UT_Weight",
+          "DisplayFormat": "N0"
+        }
+      ],
+      "General_View": [
+        {
+          "Alarm": "",
+          "Growth_Day": "21",
+          "Time": "12:23",
+          "Temperature_Curve": "On",
+          "House_Mode": "0",
+          "Siren": "False",
+          "IsFeeding": "False",
+          "Vent_Mode": "1",
+          "Vent_Level": "17",
+          "Min_Vent_Level": "6",
+          "Max_Vent_Level": "25",
+          "Set_Temperature_Sign": "C°",
+          "Set_Temperature": "27.7",
+          "TemperatureOffset": "0.0",
+          "Target_Pressure_Sign": "Pa",
+          "Target_Pressure": "24",
+          "Humidity_Treatment": "Off",
+          "CO2_Treatment": "Off",
+          "Cool_Pad_Flush": "Off",
+          "Nipple_Flush": "Off",
+          "Cycle": "Off",
+          "CycleStatus": "Off",
+          "CycleTime": "0",
+          "CycleNext": "On In",
+          "Feed_Consumption_Sign": "KG",
+          "Feed_Consumption": "36",
+          "Feed_Consumption_Rate": "N/A",
+          "Current_Level_CFM_Sign": "M3/H",
+          "Current_Level_CFM": "115,532",
+          "CFM_Percentage_Sign": "%",
+          "CFM_Percentage": "17",
+          "Current_Birds_Count_In_House": "0",
+          "Birds_Livability_Sign": "%",
+          "Birds_Livability": "100.00",
+          "House_Connection_Status": "1",
+          "Average_Temperature_Sign": "C°",
+          "Average_Temperature": "29.7",
+          "Outside_Temperature_Sign": "C°",
+          "Outside_Temperature": "27.3",
+          "Inside_Humidity_Sign": "%",
+          "Inside_Humidity": "64",
+          "Humidity_1": "64",
+          "Humidity_2": "",
+          "Outside_Humidity": "",
+          "CO2": "",
+          "Static_Pressure_Sign": "Pa",
+          "Static_Pressure": "24",
+          "TotalDailyMaleMortality": "",
+          "TotalDailyFemaleMortality": "",
+          "TotalDailyMaleCult": "",
+          "TotalDailyFemaleCult": "",
+          "TotalDailyMaleMoved": "",
+          "TotalDailyFemaleMoved": ""
+        }
+      ],
+      "Consumption_View": [
+        {
+          "WOD_Pressue_Sign": "Pa",
+          "WOD_Pressue": "0",
+          "Daily_Water": "989",
+          "Daily_Feed_Sign": "KG",
+          "Daily_Feed": "37",
+          "Daily_WaterFeedRate": "N/A"
+        }
+      ],
+      "General_DisplayValues": [
+        {
+          "Alarm": "Alarm",
+          "Growth_Day": "Growth Day",
+          "Time": "Time",
+          "Temperature_Curve": "Temperature Curve On/Off",
+          "House_Mode": "House Mode",
+          "Siren": "Siren",
+          "IsFeeding": "Feeding",
+          "Vent_Mode": "Vent Mode",
+          "Vent_Level": "Vent Level",
+          "Min_Vent_Level": "Min",
+          "Max_Vent_Level": "Maximum",
+          "Set_Temperature_Sign": "C°",
+          "Set_Temperature": "Set Temperature",
+          "TemperatureOffset": "Offset",
+          "Target_Pressure_Sign": "Pa",
+          "Target_Pressure": "Target Pressure",
+          "Humidity_Treatment": "Humidity Treatment",
+          "CO2_Treatment": "CO2 Treatment",
+          "Cool_Pad_Flush": "Cool Pad Flush",
+          "Nipple_Flush": "Nipple Flush",
+          "Cycle": "Cycle",
+          "CycleStatus": "Cycle Status",
+          "CycleTime": "Cycle Time",
+          "CycleNext": "Cycle Next",
+          "Feed_Consumption_Sign": "KG",
+          "Feed_Consumption": "Daily Consumption",
+          "Feed_Consumption_Rate": "FCR",
+          "Current_Level_CFM_Sign": "M3/H",
+          "Current_Level_CFM": "CFM",
+          "CFM_Percentage_Sign": "%",
+          "CFM_Percentage": "% CFM",
+          "Current_Birds_Count_In_House": "Birds",
+          "Birds_Livability_Sign": "%",
+          "Birds_Livability": "Livability",
+          "House_Connection_Status": "House Connection Status",
+          "Average_Temperature_Sign": "C°",
+          "Average_Temperature": "Average Temperature",
+          "Outside_Temperature_Sign": "C°",
+          "Outside_Temperature": "Outside Temperature",
+          "Inside_Humidity_Sign": "%",
+          "Inside_Humidity": "Inside Humidity",
+          "Humidity_1": "Humidity Sensor 1",
+          "Humidity_2": "Humidity Sensor 2",
+          "Outside_Humidity": "Outside Humidity",
+          "CO2": "CO2",
+          "Static_Pressure_Sign": "Pa",
+          "Static_Pressure": "Static Pressure",
+          "TotalDailyMaleMortality": "Total Daily Male Mortality",
+          "TotalDailyFemaleMortality": "Total Daily Female Mortality",
+          "TotalDailyMaleCult": "Total Daily Male Cult",
+          "TotalDailyFemaleCult": "Total Daily Female Cult",
+          "TotalDailyMaleMoved": "Total Daily Male Moved",
+          "TotalDailyFemaleMoved": "Total Daily Female Moved"
+        }
+      ],
+      "AvgWeight_View": [
+        {
+          "Average_Weight_Sign": "KG",
+          "Average_Weight": "0.000",
+          "Number_Of_Weights": "0"
+        }
+      ],
+      "TempSensor_View": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Tunnel_Temperature",
+          "ParameterDisplayName": "Tunnel",
+          "ParameterValue": "29.7",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Wind_Chill_Temperature",
+          "ParameterDisplayName": "W.Chill",
+          "ParameterValue": "29.7",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Attic_Temperature",
+          "ParameterDisplayName": "Attic",
+          "ParameterValue": "- - -",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_1",
+          "ParameterDisplayName": "Temp. 1",
+          "ParameterValue": "29.2",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_2",
+          "ParameterDisplayName": "Temp. 2",
+          "ParameterValue": "30.1",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_3",
+          "ParameterDisplayName": "Temp. 3",
+          "ParameterValue": "29.5",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_4",
+          "ParameterDisplayName": "Temp. 4",
+          "ParameterValue": "29.5",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_5",
+          "ParameterDisplayName": "Temp. 5",
+          "ParameterValue": "30.1",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_6",
+          "ParameterDisplayName": "Temp. 6",
+          "ParameterValue": "29.9",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_7",
+          "ParameterDisplayName": "Temp. 7",
+          "ParameterValue": "29.8",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_8",
+          "ParameterDisplayName": "Temp. 8",
+          "ParameterValue": "29.5",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "1",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Temperature_Sensor_9",
+          "ParameterDisplayName": "Temp. 9",
+          "ParameterValue": "27.3",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature",
+          "Icon": "",
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Ammonia",
+          "ParameterDisplayName": "Ammonia",
+          "ParameterValue": "Off / - - -",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Wind_Speed",
+          "ParameterDisplayName": "Wind Speed",
+          "ParameterValue": "0.0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": "0",
+          "ParameterKeyName": "Wind_Direction",
+          "ParameterDisplayName": "Wind Direction",
+          "ParameterValue": "0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Number",
+          "Icon": null,
+          "UnitOfMeasurement": null
+        }
+      ],
+      "FeedInv_View": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_1",
+          "ParameterDisplayName": "1",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_2",
+          "ParameterDisplayName": "2",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_3",
+          "ParameterDisplayName": "3",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Silo_4",
+          "ParameterDisplayName": "4",
+          "ParameterValue": "0",
+          "ParameterData": "0",
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        }
+      ],
+      "HistoryTemp_View": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last24HourTemperature_AVG",
+          "ParameterDisplayName": "Last 24 Hour - Avarage Temperature",
+          "ParameterValue": "29.5;29.2;28.8;28.3;28.2;28;27.9;28.3;28.2;28.2;27.9;28.2;27.8;27.8;28.1;28.7;28.9;29.5;30.1;30.7;31;30.1;30.5;30.3",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last24HourTemperature_TARGET",
+          "ParameterDisplayName": "Last 24 Hour - Target Temperature",
+          "ParameterValue": "27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.7;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.8;27.9;27.9;27.9;27.9",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Temperature"
+        }
+      ],
+      "HistoryWeight_View": [
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last10DayAvgBirdWeight_AVG",
+          "ParameterDisplayName": "Avg. Birds Weight",
+          "ParameterValue": "0;0;0;0;0;0;0;0;0;0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        },
+        {
+          "Value": null,
+          "ParameterRoomNumber": null,
+          "ParameterKeyName": "Last10DayAvgBirdWeight_TARGET",
+          "ParameterDisplayName": "Target Birds Weight",
+          "ParameterValue": "0;0;0;0;0;0;0;0;0;0",
+          "ParameterData": null,
+          "ParameterTitle": null,
+          "ParameterUnitType": "UT_Weight"
+        }
+      ],
+      "IrrigationChartArray_View": [],
+      "DicAnalogSensors": [
+        {
+          "Key": "Light Dimmer",
+          "Data": [
+            {
+              "Category": "Light Dimmer",
+              "PositionNumber": 1,
+              "Value": "35",
+              "Value_Sign": "%"
+            }
+          ]
+        },
+        {
+          "Key": "Tunnel Curtain",
+          "Data": [
+            {
+              "Category": "Tunnel Curtain",
+              "PositionNumber": 1,
+              "Value": "0",
+              "Value_Sign": "%"
+            }
+          ]
+        },
+        {
+          "Key": "Vent",
+          "Data": [
+            {
+              "Category": "Vent",
+              "PositionNumber": 1,
+              "Value": "38",
+              "Value_Sign": "%"
+            }
+          ]
+        }
+      ],
+      "Silo1_View": [
+        {
+          "Rsw2DailyFeed1": "",
+          "Rsw2Auger1": ""
+        }
+      ],
+      "Silo2_View": [
+        {}
+      ]
+    },
+    "RequestID": "54e07f1a-2639-411c-805b-bbc42a6e59d5",
+    "IsSetPointCommand": false,
+    "IsDataSentViaService": false,
+    "Controllers": null,
+    "PagingInfo": null
+  },
+  "ErrorObj": {
+    "ErrorCode": 0,
+    "ErrorMessage": ""
+  },
+  "exceptionMessage": null,
+  "isInSession": true,
+  "isAuthorize": true,
+  "isSucceed": true,
+  "contextId": "8e567c3a-3421-f3ee-d5d5-bc8ddd968ab3"
+}

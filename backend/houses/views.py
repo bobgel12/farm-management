@@ -161,6 +161,127 @@ def _extract_comparison_item(response_obj: dict, category: str, house_number: in
     return bucket.get(f'House{house_number}')
 
 
+def _snapshot_fallback_for_house(house: House):
+    snapshot = house.get_latest_snapshot()
+    if not snapshot:
+        return None
+    return {
+        'house_id': house.id,
+        'house_number': house.house_number,
+        'current_day': house.age_days,
+        'status': house.status,
+        'active_alarms_count': 0,
+        'timestamp': snapshot.timestamp.isoformat() if snapshot.timestamp else timezone.now().isoformat(),
+        'source_timestamp': snapshot.timestamp.isoformat() if snapshot.timestamp else timezone.now().isoformat(),
+        'average_temperature': snapshot.average_temperature,
+        'humidity': snapshot.humidity,
+        'static_pressure': snapshot.static_pressure,
+        'airflow_percentage': snapshot.airflow_percentage,
+        'water_consumption': snapshot.water_consumption,
+        'feed_consumption': snapshot.feed_consumption,
+        'is_connected': snapshot.is_connected if snapshot.connection_status is not None else True,
+        'alarm_status': snapshot.alarm_status or 'normal',
+    }
+
+
+def _severity_rank(value: str) -> int:
+    order = {'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
+    return order.get((value or '').lower(), 0)
+
+
+def _build_alerts_by_house(houses):
+    house_ids = [h.id for h in houses]
+    if not house_ids:
+        return {}
+    now = timezone.now()
+    qs = WaterConsumptionAlert.objects.filter(
+        house_id__in=house_ids,
+        is_resolved=False,
+    ).filter(
+        Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now)
+    ).values('house_id', 'severity', 'message', 'created_at')
+    grouped = defaultdict(list)
+    for row in qs:
+        grouped[row['house_id']].append(row)
+
+    alerts_by_house = {}
+    for house in houses:
+        rows = grouped.get(house.id, [])
+        highest = max(rows, key=lambda r: _severity_rank(r.get('severity') or ''), default=None)
+        alerts_by_house[house.id] = {
+            'active_count': len(rows),
+            'highest_severity': (highest or {}).get('severity') or 'normal',
+            'latest_message': (highest or {}).get('message'),
+            'latest_created_at': ((highest or {}).get('created_at').isoformat() if (highest or {}).get('created_at') else None),
+        }
+    return alerts_by_house
+
+
+def _compose_monitoring_snapshot_payload(farm: Farm, houses, dashboard_payload, houses_payload):
+    houses_payload_rows = []
+    if isinstance(houses_payload, dict):
+        houses_payload_rows = houses_payload.get('houses') or []
+    houses_by_number = {
+        int(row.get('house_number')): row
+        for row in houses_payload_rows
+        if isinstance(row, dict) and row.get('house_number') is not None
+    }
+
+    dashboard_rows = []
+    if isinstance(dashboard_payload, dict):
+        dashboard_rows = dashboard_payload.get('houses') or []
+    dashboard_by_number = {
+        int(row.get('house_number')): row
+        for row in dashboard_rows
+        if isinstance(row, dict) and row.get('house_number') is not None
+    }
+
+    alerts_by_house = _build_alerts_by_house(houses)
+    rows = []
+    for house in houses:
+        dashboard_row = dashboard_by_number.get(house.house_number, {})
+        houses_row = houses_by_number.get(house.house_number, {})
+        fallback_row = _snapshot_fallback_for_house(house) or {}
+        alert_meta = alerts_by_house.get(house.id, {'active_count': 0, 'highest_severity': 'normal'})
+        rows.append({
+            'house_id': house.id,
+            'house_number': house.house_number,
+            'current_day': dashboard_row.get('current_day', house.age_days),
+            'status': dashboard_row.get('status', house.status),
+            'timestamp': dashboard_row.get('timestamp') or houses_row.get('timestamp') or fallback_row.get('timestamp'),
+            'source_timestamp': dashboard_row.get('source_timestamp') or houses_row.get('source_timestamp') or fallback_row.get('source_timestamp'),
+            'average_temperature': dashboard_row.get('average_temperature') or houses_row.get('average_temperature') or fallback_row.get('average_temperature'),
+            'humidity': dashboard_row.get('humidity') or houses_row.get('humidity') or fallback_row.get('humidity'),
+            'static_pressure': dashboard_row.get('static_pressure') or houses_row.get('static_pressure') or fallback_row.get('static_pressure'),
+            'airflow_percentage': dashboard_row.get('airflow_percentage') or houses_row.get('airflow_percentage') or fallback_row.get('airflow_percentage'),
+            'water_consumption': dashboard_row.get('water_consumption') or houses_row.get('water_consumption') or fallback_row.get('water_consumption'),
+            'feed_consumption': dashboard_row.get('feed_consumption') or houses_row.get('feed_consumption') or fallback_row.get('feed_consumption'),
+            'is_connected': bool(dashboard_row.get('is_connected', fallback_row.get('is_connected', True))),
+            'alarm_status': dashboard_row.get('alarm_status') or fallback_row.get('alarm_status') or 'normal',
+            'active_alarms_count': int(alert_meta.get('active_count') or 0),
+        })
+
+    connected = len([r for r in rows if r.get('is_connected')])
+    snapshot = {
+        'farm_id': farm.id,
+        'farm_name': farm.name,
+        'total_houses': len(houses),
+        'houses': rows,
+        'alerts_by_house': {str(k): v for k, v in alerts_by_house.items()},
+        'alerts_summary': {
+            'total_active': sum((v.get('active_count') or 0) for v in alerts_by_house.values()),
+            'critical': len([v for v in alerts_by_house.values() if (v.get('highest_severity') or '').lower() == 'critical']),
+            'warning': len([v for v in alerts_by_house.values() if (v.get('highest_severity') or '').lower() == 'warning']),
+            'normal': len([v for v in alerts_by_house.values() if (v.get('active_count') or 0) == 0]),
+        },
+        'connection_summary': {
+            'connected': connected,
+            'disconnected': max(len(houses) - connected, 0),
+        },
+    }
+    return snapshot
+
+
 def _scoped_farms_queryset(request):
     farms = Farm.objects.all()
     org_ids = user_accessible_organization_ids(request)
@@ -375,15 +496,6 @@ def house_monitoring_latest(request, house_id):
             refresh_state=cache.refresh_state,
             stale_seconds=MAX_STALE_SECONDS,
         )
-        if mode == 'cached_then_live' and _should_refresh(meta):
-            upsert_farm_monitoring_cache(house.farm)
-            cache.refresh_from_db()
-            meta = build_meta(
-                fetched_at=cache.fetched_at,
-                source_timestamp=cache.source_timestamp,
-                refresh_state=cache.refresh_state,
-                stale_seconds=MAX_STALE_SECONDS,
-            )
         return Response(wrap_cached_response(cache.latest_payload, meta))
 
     scraper, err = _house_rotem_scraper_or_error(house)
@@ -430,10 +542,6 @@ def house_monitoring_history(request, house_id):
     cache = HouseMonitoringCache.objects.filter(house=house).first()
     if mode != 'live' and cache and cache.history_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-        if mode == 'cached_then_live' and _should_refresh(meta):
-            upsert_farm_monitoring_cache(house.farm)
-            cache.refresh_from_db()
-            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.history_payload, meta))
 
     scraper, err = _house_rotem_scraper_or_error(house)
@@ -563,10 +671,6 @@ def house_monitoring_kpis(request, house_id):
     cache = HouseMonitoringCache.objects.filter(house=house).first()
     if mode != 'live' and cache and cache.kpis_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-        if mode == 'cached_then_live' and _should_refresh(meta):
-            upsert_farm_monitoring_cache(house.farm)
-            cache.refresh_from_db()
-            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.kpis_payload, meta))
 
     scraper, err = _house_rotem_scraper_or_error(house)
@@ -693,10 +797,6 @@ def farm_houses_monitoring_all(request, farm_id):
     cache = FarmMonitoringCache.objects.filter(farm=farm).first()
     if mode != 'live' and cache and cache.houses_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-        if mode == 'cached_then_live' and _should_refresh(meta):
-            upsert_farm_monitoring_cache(farm)
-            cache.refresh_from_db()
-            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.houses_payload, meta))
 
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
@@ -768,11 +868,24 @@ def farm_houses_monitoring_dashboard(request, farm_id):
     cache = FarmMonitoringCache.objects.filter(farm=farm).first()
     if mode != 'live' and cache and cache.dashboard_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-        if mode == 'cached_then_live' and _should_refresh(meta):
-            upsert_farm_monitoring_cache(farm)
-            cache.refresh_from_db()
-            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-        return Response(wrap_cached_response(cache.dashboard_payload, meta))
+        payload = cache.dashboard_payload
+        if isinstance(payload, dict) and not payload.get('houses'):
+            houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
+            fallback_houses = []
+            for house in houses:
+                row = _snapshot_fallback_for_house(house)
+                if row:
+                    fallback_houses.append(row)
+            if fallback_houses:
+                payload = {
+                    'farm_id': farm_id,
+                    'farm_name': farm.name,
+                    'total_houses': len(houses),
+                    'houses': fallback_houses,
+                    'alerts_summary': {'total_active': 0, 'critical': 0, 'warning': 0, 'normal': len(fallback_houses)},
+                    'connection_summary': {'connected': len(fallback_houses), 'disconnected': 0},
+                }
+        return Response(wrap_cached_response(payload, meta))
 
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
     dashboard_data = {
@@ -849,6 +962,114 @@ def farm_houses_monitoring_dashboard(request, farm_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def farm_houses_monitoring_snapshot(request, farm_id):
+    """Get one cached-first monitoring snapshot for all houses in a farm."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    mode = _cache_mode(request)
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
+
+    if mode != 'live' and cache and (cache.dashboard_payload or cache.houses_payload):
+        snapshot = _compose_monitoring_snapshot_payload(
+            farm=farm,
+            houses=houses,
+            dashboard_payload=cache.dashboard_payload or {},
+            houses_payload=cache.houses_payload or {},
+        )
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        return Response(wrap_cached_response(snapshot, meta))
+
+    if not houses:
+        snapshot = {
+            'farm_id': farm.id,
+            'farm_name': farm.name,
+            'total_houses': 0,
+            'houses': [],
+            'alerts_by_house': {},
+            'alerts_summary': {'total_active': 0, 'critical': 0, 'warning': 0, 'normal': 0},
+            'connection_summary': {'connected': 0, 'disconnected': 0},
+        }
+        return Response(wrap_cached_response(snapshot, build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)))
+
+    dashboard_payload = {}
+    houses_payload = {}
+    if mode != 'cached':
+        scraper, err = _house_rotem_scraper_or_error(houses[0])
+        if not err:
+            site_payload = scraper.get_site_controllers_info() or {}
+            live_rows = []
+            dashboard_rows = []
+            for house in houses:
+                live = _extract_live_house_from_site_controllers(site_payload, house.house_number)
+                if not live:
+                    continue
+                live_rows.append({
+                    'house_id': house.id,
+                    'house_number': house.house_number,
+                    'timestamp': live.get('timestamp'),
+                    'source_timestamp': live.get('source_timestamp'),
+                    'average_temperature': live.get('average_temperature'),
+                    'humidity': live.get('humidity'),
+                    'static_pressure': live.get('static_pressure'),
+                    'airflow_percentage': live.get('airflow_percentage'),
+                    'water_consumption': live.get('water_consumption'),
+                    'feed_consumption': live.get('feed_consumption'),
+                    'is_connected': bool(live.get('is_connected')),
+                    'alarm_status': live.get('alarm_status') or 'normal',
+                })
+                dashboard_rows.append({
+                    'house_id': house.id,
+                    'house_number': house.house_number,
+                    'current_day': house.age_days,
+                    'status': house.status,
+                    'timestamp': live.get('timestamp'),
+                    'source_timestamp': live.get('source_timestamp'),
+                    'average_temperature': live.get('average_temperature'),
+                    'humidity': live.get('humidity'),
+                    'static_pressure': live.get('static_pressure'),
+                    'airflow_percentage': live.get('airflow_percentage'),
+                    'water_consumption': live.get('water_consumption'),
+                    'feed_consumption': live.get('feed_consumption'),
+                    'is_connected': bool(live.get('is_connected')),
+                    'alarm_status': live.get('alarm_status') or 'normal',
+                    'active_alarms_count': 0,
+                })
+            houses_payload = {'houses': live_rows}
+            dashboard_payload = {'houses': dashboard_rows}
+
+    if not dashboard_payload and cache and cache.dashboard_payload:
+        dashboard_payload = cache.dashboard_payload
+    if not houses_payload and cache and cache.houses_payload:
+        houses_payload = cache.houses_payload
+
+    snapshot = _compose_monitoring_snapshot_payload(
+        farm=farm,
+        houses=houses,
+        dashboard_payload=dashboard_payload,
+        houses_payload=houses_payload,
+    )
+    refresh_state = 'fresh' if (dashboard_payload or houses_payload) else 'failed'
+    source_ts = timezone.now()
+    if cache and cache.source_timestamp:
+        source_ts = cache.source_timestamp
+    elif snapshot.get('houses'):
+        source_raw = snapshot['houses'][0].get('source_timestamp')
+        if isinstance(source_raw, str):
+            try:
+                source_ts = datetime.fromisoformat(source_raw.replace('Z', '+00:00'))
+            except ValueError:
+                source_ts = timezone.now()
+    meta = build_meta(
+        fetched_at=timezone.now(),
+        source_timestamp=source_ts,
+        refresh_state=refresh_state,
+        stale_seconds=MAX_STALE_SECONDS,
+    )
+    return Response(wrap_cached_response(snapshot, meta))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def house_details(request, house_id):
     """Get comprehensive house details including monitoring, devices, flock, tasks, and feed"""
     house = get_object_or_404(House, id=house_id)
@@ -914,10 +1135,6 @@ def house_heater_history(request, house_id):
     cache = HouseMonitoringCache.objects.filter(house=house).first()
     if mode != 'live' and cache and cache.heater_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-        if mode == 'cached_then_live' and _should_refresh(meta):
-            upsert_farm_monitoring_cache(house.farm)
-            cache.refresh_from_db()
-            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.heater_payload, meta))
 
     scraper, err = _house_rotem_scraper_or_error(house)
@@ -1019,10 +1236,6 @@ def houses_comparison(request):
         cache = FarmMonitoringCache.objects.filter(farm=scoped_farm).first()
         if cache and cache.comparison_payload:
             meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
-            if mode == 'cached_then_live' and _should_refresh(meta):
-                upsert_farm_monitoring_cache(scoped_farm)
-                cache.refresh_from_db()
-                meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
             return Response(wrap_cached_response(cache.comparison_payload, meta))
 
     house_ids = request.query_params.getlist('house_ids')

@@ -22,6 +22,41 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _safe_float(value):
+    if value is None:
+        return None
+    try:
+        if isinstance(value, str):
+            value = value.strip().replace(",", "")
+            if value in {"", "- - -", "N/A", "---", "null"}:
+                return None
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_rotem_history_rows(raw_command_data):
+    """Normalize dsData.Data rows from RNBL_GetCommandData history commands."""
+    response_obj = raw_command_data.get('reponseObj', raw_command_data) if isinstance(raw_command_data, dict) else {}
+    ds_data = response_obj.get('dsData', {}) if isinstance(response_obj, dict) else {}
+    return ds_data.get('Data', []) if isinstance(ds_data, dict) else []
+
+
+def _rotem_history_command_payload(house, command_id: str):
+    from .scraper import RotemScraper
+
+    if not house.farm or not house.farm.rotem_username or not house.farm.rotem_password:
+        return None, "Farm Rotem credentials are not configured."
+
+    scraper = RotemScraper(username=house.farm.rotem_username, password=house.farm.rotem_password)
+    if not scraper.login():
+        return None, "Failed to authenticate with Rotem API"
+
+    raw = scraper.get_command_data(house_number=house.house_number, command_id=command_id) or {}
+    rows = _parse_rotem_history_rows(raw)
+    return rows, None
+
+
 def _scoped_rotem_farms(request):
     farms = Farm.objects.filter(is_active=True, integration_type='rotem')
     org_ids = user_accessible_organization_ids(request)
@@ -866,3 +901,95 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['get'], url_path='temperature-history')
+    def temperature_history(self, request):
+        """Get temperature history for a specific house using CommandID 35."""
+        house_id = request.query_params.get('house_id')
+        if not house_id:
+            return Response({'error': 'house_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            house = House.objects.get(pk=house_id)
+            rows, err = _rotem_history_command_payload(house, command_id="35")
+            if err:
+                return Response({'error': err}, status=status.HTTP_401_UNAUTHORIZED)
+            history = []
+            for row in rows or []:
+                if not isinstance(row, dict):
+                    continue
+                growth_day = row.get('QueueRecord_GrowthDay') or row.get('HistoryRecord_GrowthDay')
+                if growth_day is None:
+                    continue
+                try:
+                    growth_day = int(growth_day)
+                except (ValueError, TypeError):
+                    continue
+                if growth_day < 0:
+                    continue
+                history.append({
+                    'growth_day': growth_day,
+                    'min_value': _safe_float(row.get('QueueRecord_MinimumValue')),
+                    'avg_value': _safe_float(row.get('QueueRecord_AverageValue')),
+                    'max_value': _safe_float(row.get('QueueRecord_MaximumValue')),
+                    'date': (house.batch_start_date + timedelta(days=growth_day)).isoformat() if house.batch_start_date else None,
+                })
+            history.sort(key=lambda x: x['growth_day'])
+            return Response({
+                'house_id': int(house_id),
+                'house_number': house.house_number,
+                'temperature_history': history,
+                'total_days': len(history),
+            })
+        except House.DoesNotExist:
+            return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error("temperature_history failed: %s", e, exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='feed-history')
+    def feed_history(self, request):
+        """Get feed history for a specific house using CommandID 41."""
+        house_id = request.query_params.get('house_id')
+        if not house_id:
+            return Response({'error': 'house_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            house = House.objects.get(pk=house_id)
+            rows, err = _rotem_history_command_payload(house, command_id="41")
+            if err:
+                return Response({'error': err}, status=status.HTTP_401_UNAUTHORIZED)
+            history = []
+            for row in rows or []:
+                if not isinstance(row, dict):
+                    continue
+                growth_day = row.get('HistoryRecord_GrowthDay')
+                if growth_day is None:
+                    continue
+                try:
+                    growth_day = int(growth_day)
+                except (ValueError, TypeError):
+                    continue
+                if growth_day < 0:
+                    continue
+                history.append({
+                    'growth_day': growth_day,
+                    'daily_feed_total': _safe_float(
+                        row.get('HistoryRecord_DailyFeed')
+                        or row.get('HistoryRecord_TotalFeed')
+                        or row.get('DailyFeed')
+                    ),
+                    'change_percent': _safe_float(row.get('HistoryRecord_ChangeFeed')),
+                    'feed_per_bird': _safe_float(row.get('HistoryRecord_FeedPerBird')),
+                    'date': (house.batch_start_date + timedelta(days=growth_day)).isoformat() if house.batch_start_date else None,
+                })
+            history.sort(key=lambda x: x['growth_day'])
+            return Response({
+                'house_id': int(house_id),
+                'house_number': house.house_number,
+                'feed_history': history,
+                'total_days': len(history),
+            })
+        except House.DoesNotExist:
+            return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error("feed_history failed: %s", e, exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

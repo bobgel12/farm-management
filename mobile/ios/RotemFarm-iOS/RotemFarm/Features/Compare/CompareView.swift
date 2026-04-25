@@ -110,9 +110,9 @@ struct CompareView: View {
         }
         .background(Color.appBackground)
         .navigationTitle("Compare")
-        .task { await loadSeries() }
-        .task(id: metric) { await loadSeries() }
-        .task(id: store.currentFarmId) { await loadSeries() }
+        .task(id: "\(store.currentFarmId.uuidString)-\(metric.rawValue)") {
+            await loadSeries()
+        }
     }
 
     private func loadSeries() async {
@@ -124,7 +124,6 @@ struct CompareView: View {
             await store.reloadSelectedFarmData()
         }
 
-        await store.refreshRotemDataForCurrentFarm()
         let houses = store.housesForCurrentFarm
         guard !houses.isEmpty else {
             series = []
@@ -172,63 +171,27 @@ struct CompareView: View {
 
     private func pointsForHouse(houseID: UUID, metric: CompareMetric) async -> [DailyResourcePoint] {
         switch metric {
-        case .water, .feed:
-            return dailyPoints(
-                history: await store.fetchMonitoringHistory(
-                    houseId: houseID,
-                    limit: 500,
-                    startDate: Calendar.current.date(byAdding: .day, value: -7, to: Date()),
-                    endDate: Date()
-                ),
-                metric: metric
-            )
+        case .water:
+            return normalizeLastDays(await store.fetchWaterHistory(houseId: houseID, days: 5), days: 5)
+        case .feed:
+            return normalizeLastDays(await store.fetchFeedHistory(houseId: houseID), days: 5)
         case .heater:
-            return Array((await store.fetchHeaterHistory(houseId: houseID)).suffix(7))
+            return normalizeLastDays(Array((await store.fetchHeaterHistory(houseId: houseID)).suffix(7)), days: 5)
         }
     }
 
-    private func dailyPoints(history: [APIHouseMonitoringPoint], metric: CompareMetric) -> [DailyResourcePoint] {
-        let grouped = Dictionary(grouping: history) { Calendar.current.startOfDay(for: $0.timestamp) }
+    private func normalizeLastDays(_ points: [DailyResourcePoint], days: Int) -> [DailyResourcePoint] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let days: [Date] = (0..<5).compactMap { offset in
-            calendar.date(byAdding: .day, value: -(4 - offset), to: today)
+        let expectedDays: [Date] = (0..<days).compactMap { offset in
+            calendar.date(byAdding: .day, value: -(days - 1 - offset), to: today)
         }
-        return days.enumerated().map { idx, day in
-            let total: Double = {
-                switch metric {
-                case .water:
-                    return dailyConsumption(from: grouped[day] ?? [], keyPath: \.waterConsumption)
-                case .feed:
-                    return dailyConsumption(from: grouped[day] ?? [], keyPath: \.feedConsumption)
-                case .heater:
-                    return 0
-                }
-            }()
-            return DailyResourcePoint(day: idx + 1, date: day, value: total, target: nil, isAnomaly: false)
+
+        let byDay = Dictionary(grouping: points) { calendar.startOfDay(for: $0.date) }
+        return expectedDays.enumerated().map { idx, day in
+            let value = byDay[day]?.last?.value ?? 0
+            return DailyResourcePoint(day: idx + 1, date: day, value: value, target: nil, isAnomaly: false)
         }
-    }
-
-    /// Rotem monitoring counters are cumulative; use in-day deltas, not sum of snapshots.
-    private func dailyConsumption(
-        from points: [APIHouseMonitoringPoint],
-        keyPath: KeyPath<APIHouseMonitoringPoint, Double?>
-    ) -> Double {
-        let values = points
-            .sorted(by: { $0.timestamp < $1.timestamp })
-            .compactMap { $0[keyPath: keyPath] }
-
-        guard !values.isEmpty else { return 0 }
-        guard values.count > 1 else { return max(values[0], 0) }
-
-        var total = 0.0
-        var previous = values[0]
-        for value in values.dropFirst() {
-            // Counter reset/noise should not create negative consumption.
-            total += max(value - previous, 0)
-            previous = value
-        }
-        return total
     }
 }
 

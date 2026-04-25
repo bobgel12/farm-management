@@ -472,6 +472,12 @@ def get_house_sensor_data(request, farm_id):
                             'unit': 'L',
                             'status': 'Normal'
                         }
+                        # Canonical alias for iOS/web parity
+                        sensor_data['water_consumption'] = {
+                            'current': param_value,
+                            'unit': 'L',
+                            'status': 'Normal'
+                        }
                     elif param_name == 'Daily_Feed':
                         sensor_data['feed_consumption'] = {
                             'current': param_value,
@@ -548,6 +554,12 @@ def get_house_sensor_data(request, farm_id):
                     'cfm': safe_float_convert(vent_reading.get('CFM', 0)),
                     'status': vent_reading.get('Status', 'Normal')
                 }
+                # Canonical alias expected by clients
+                sensor_data['airflow_percentage'] = {
+                    'current': safe_float_convert(vent_reading.get('ParameterValue', 0)),
+                    'unit': '%',
+                    'status': vent_reading.get('Status', 'Normal')
+                }
 
                 # Extract livability data
                 livability_data = ds_data.get('Livability', [])
@@ -616,6 +628,15 @@ def get_house_sensor_data(request, farm_id):
             processed_data[house_number] = {
                 'house_number': house_number,
                 'sensors': sensor_data,
+                'canonical': {
+                    'temperature': (sensor_data.get('temperature') or {}).get('current'),
+                    'humidity': (sensor_data.get('humidity') or {}).get('current'),
+                    'static_pressure': (sensor_data.get('static_pressure') or {}).get('current'),
+                    'airflow_percentage': (sensor_data.get('airflow_percentage') or {}).get('current'),
+                    'water_consumption': (sensor_data.get('water_consumption') or sensor_data.get('water') or {}).get('current'),
+                    'feed_consumption': (sensor_data.get('feed_consumption') or {}).get('current'),
+                    'growth_day': (sensor_data.get('growth_day') or {}).get('current'),
+                },
                 'last_updated': timezone.now().isoformat(),
                 'status': 'active' if sensor_data else 'inactive'
             }

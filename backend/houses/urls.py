@@ -16,6 +16,7 @@ urlpatterns = [
     path('houses/<int:house_id>/monitoring/kpis/', views.house_monitoring_kpis, name='house-monitoring-kpis'),
     path('farms/<int:farm_id>/houses/monitoring/all/', views.farm_houses_monitoring_all, name='farm-houses-monitoring-all'),
     path('farms/<int:farm_id>/houses/monitoring/dashboard/', views.farm_houses_monitoring_dashboard, name='farm-houses-monitoring-dashboard'),
+    path('farms/<int:farm_id>/houses/monitoring/snapshot/', views.farm_houses_monitoring_snapshot, name='farm-houses-monitoring-snapshot'),
     path('farms/<int:farm_id>/houses/monitoring/refresh/', views.farm_monitoring_refresh, name='farm-monitoring-refresh'),
     
     # Comparison endpoint

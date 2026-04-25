@@ -191,14 +191,14 @@ struct DashboardView: View {
                                             .foregroundStyle(.primary)
                                         Spacer()
                                         PillBadge(
-                                            text: house.pillText,
-                                            style: house.state == .critical ? .critical : (house.state == .warning ? .warning : .ok)
+                                            text: statusText(for: house),
+                                            style: statusStyle(for: house)
                                         )
                                     }
-                                    environmentMetricRow("Temp", String(format: "%.1f °C", house.snapshot.tempC))
-                                    environmentMetricRow("Humidity", String(format: "%.0f %%", house.snapshot.humidity))
-                                    environmentMetricRow("Airflow", String(format: "%.0f %%", house.snapshot.airflowPct))
-                                    environmentMetricRow("Static", String(format: "%.0f Pa", house.snapshot.staticPressurePa))
+                                    environmentMetricRow("Temp", metricText(house.snapshot.tempC, format: "%.1f", unit: "°C"))
+                                    environmentMetricRow("Humidity", metricText(house.snapshot.humidity, format: "%.0f", unit: "%"))
+                                    environmentMetricRow("Water", metricText(house.snapshot.waterLphr, format: "%.0f", unit: "L"))
+                                    environmentMetricRow("Feed", metricText(house.snapshot.feedLbs, format: "%.0f", unit: "LB"))
                                 }
                             }
                         }
@@ -219,6 +219,41 @@ struct DashboardView: View {
                 .font(AppFont.caption)
                 .foregroundStyle(.primary)
         }
+    }
+
+    private func metricText(_ value: Double, format: String, unit: String) -> String {
+        if value.isNaN {
+            if store.isLoading {
+                return "Loading..."
+            }
+            if store.lastError != nil {
+                return "Error"
+            }
+            return "—"
+        }
+        return String(format: "\(format) %@", value, unit)
+    }
+
+    private func statusText(for house: House) -> String {
+        let s = house.snapshot
+        if s.tempC.isNaN || s.humidity.isNaN || s.waterLphr.isNaN || s.feedLbs.isNaN {
+            if store.isLoading {
+                return "Loading"
+            }
+            if store.lastError != nil {
+                return "Error"
+            }
+            return "No data"
+        }
+        return house.pillText
+    }
+
+    private func statusStyle(for house: House) -> PillBadge.Style {
+        let s = house.snapshot
+        if s.tempC.isNaN || s.humidity.isNaN || s.waterLphr.isNaN || s.feedLbs.isNaN {
+            return store.lastError != nil ? .critical : .warning
+        }
+        return house.state == .critical ? .critical : (house.state == .warning ? .warning : .ok)
     }
 
     // MARK: Alerts peek
