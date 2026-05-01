@@ -786,10 +786,20 @@ final class MockDataStore {
     }
 
     func fetchWaterHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
-        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else {
+            // #region agent log
+            FarmDebugLog.post(
+                hypothesisId: "D",
+                location: "MockDataStore.swift:fetchWaterHistory",
+                message: "no backendId",
+                data: ["mappedRows": 0]
+            )
+            // #endregion
+            return []
+        }
         do {
             let rows = try await apiClient.fetchRotemWaterHistory(houseID: backendID, days: days)
-            return rows.enumerated().map { index, row in
+            let mapped = rows.enumerated().map { index, row in
                 DailyResourcePoint(
                     day: row.growthDay ?? (index + 1),
                     date: row.date ?? Date(),
@@ -798,8 +808,36 @@ final class MockDataStore {
                     isAnomaly: false
                 )
             }.sorted(by: { $0.date < $1.date })
+            // #region agent log
+            let nilDates = rows.filter { $0.date == nil }.count
+            FarmDebugLog.post(
+                hypothesisId: "B",
+                location: "MockDataStore.swift:fetchWaterHistory",
+                message: "after map",
+                data: [
+                    "backendID": backendID,
+                    "apiRows": rows.count,
+                    "mappedRows": mapped.count,
+                    "nilDatesInApiRows": nilDates,
+                    "maxValue": mapped.map(\.value).max() ?? 0
+                ]
+            )
+            // #endregion
+            return mapped
         } catch {
             lastError = error.localizedDescription
+            // #region agent log
+            FarmDebugLog.post(
+                hypothesisId: "B",
+                location: "MockDataStore.swift:fetchWaterHistory",
+                message: "error",
+                data: [
+                    "backendID": backendID,
+                    "errorType": String(describing: type(of: error)),
+                    "errorBrief": String(error.localizedDescription.prefix(120))
+                ]
+            )
+            // #endregion
             return []
         }
     }

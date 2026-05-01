@@ -172,7 +172,28 @@ struct CompareView: View {
     private func pointsForHouse(houseID: UUID, metric: CompareMetric) async -> [DailyResourcePoint] {
         switch metric {
         case .water:
-            return normalizeLastDays(await store.fetchWaterHistory(houseId: houseID, days: 5), days: 5)
+            let raw = await store.fetchWaterHistory(houseId: houseID, days: 5)
+            let norm = normalizeLastDays(raw, days: 5)
+            // #region agent log
+            let cal = Calendar.current
+            let today = cal.startOfDay(for: Date())
+            let expectedFirst = cal.date(byAdding: .day, value: -4, to: today)
+            let rawKeys = Set(raw.map { cal.startOfDay(for: $0.date).timeIntervalSince1970 })
+            let normNonZero = norm.filter { $0.value > 0 }.count
+            FarmDebugLog.post(
+                hypothesisId: "C",
+                location: "CompareView.swift:pointsForHouse",
+                message: "water normalize",
+                data: [
+                    "rawCount": raw.count,
+                    "normCount": norm.count,
+                    "normNonZero": normNonZero,
+                    "expectedFirstDay": (expectedFirst ?? today).timeIntervalSince1970,
+                    "rawDistinctDayBuckets": rawKeys.count
+                ]
+            )
+            // #endregion
+            return norm
         case .feed:
             return normalizeLastDays(await store.fetchFeedHistory(houseId: houseID), days: 5)
         case .heater:
@@ -182,15 +203,29 @@ struct CompareView: View {
 
     private func normalizeLastDays(_ points: [DailyResourcePoint], days: Int) -> [DailyResourcePoint] {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let expectedDays: [Date] = (0..<days).compactMap { offset in
-            calendar.date(byAdding: .day, value: -(days - 1 - offset), to: today)
+        // Use the last N *distinct calendar days that have data* (most recent first in the chart).
+        // Mapping only onto "today..today-4" drops all values when API dates fall outside that wall-clock window
+        // (e.g. batch history not aligned with the last 5 calendar days).
+        let byDay: [Date: DailyResourcePoint] = Dictionary(
+            grouping: points,
+            by: { calendar.startOfDay(for: $0.date) }
+        ).mapValues { group in
+            group.sorted { $0.date < $1.date }.last!
         }
-
-        let byDay = Dictionary(grouping: points) { calendar.startOfDay(for: $0.date) }
-        return expectedDays.enumerated().map { idx, day in
-            let value = byDay[day]?.last?.value ?? 0
-            return DailyResourcePoint(day: idx + 1, date: day, value: value, target: nil, isAnomaly: false)
+        let sortedDayKeys = byDay.keys.sorted()
+        let tailDays = Array(sortedDayKeys.suffix(days))
+        if tailDays.isEmpty {
+            let today = calendar.startOfDay(for: Date())
+            let expectedDays: [Date] = (0..<days).compactMap { offset in
+                calendar.date(byAdding: .day, value: -(days - 1 - offset), to: today)
+            }
+            return expectedDays.enumerated().map { idx, day in
+                DailyResourcePoint(day: idx + 1, date: day, value: 0, target: nil, isAnomaly: false)
+            }
+        }
+        return tailDays.enumerated().map { idx, day in
+            let p = byDay[day]!
+            return DailyResourcePoint(day: idx + 1, date: day, value: p.value, target: nil, isAnomaly: false)
         }
     }
 }

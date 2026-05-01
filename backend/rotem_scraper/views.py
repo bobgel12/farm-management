@@ -711,7 +711,7 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     history_data = response_obj['WaterHistory']
                 elif 'ConsumptionHistory' in response_obj:
                     history_data = response_obj['ConsumptionHistory']
-                elif 'History' in response_obj and 'Water' in response_obj['History']:
+                elif isinstance(response_obj.get('History'), dict) and 'Water' in response_obj['History']:
                     history_data = response_obj['History']['Water']
                 elif 'dsData' in response_obj:
                     # Check if dsData contains consumption data

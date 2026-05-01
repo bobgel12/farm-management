@@ -884,19 +884,45 @@ actor APIClient {
         else {
             throw APIClientError.decoding
         }
-        return rows.compactMap { row in
-            let consumption = (row["consumption_avg"] as? Double)
-                ?? (row["consumption"] as? Double)
-                ?? (row["water_consumption"] as? Double)
-            guard let consumption else { return nil }
+        var result: [APIRotemWaterHistoryPoint] = []
+        result.reserveCapacity(rows.count)
+        var skippedNilConsumption = 0
+        var maxParsed: Double = 0
+        var firstConsumptionDebug = "nil"
+        if let first = rows.first, let v = first["consumption_avg"] ?? first["consumption"] {
+            firstConsumptionDebug = "\(Swift.type(of: v))|\(String(describing: v))"
+        }
+        for row in rows {
+            let consumption = jsonDouble(from: row, keys: ["consumption_avg", "consumption", "water_consumption"])
+            if consumption == nil { skippedNilConsumption += 1 }
+            guard let consumption else { continue }
+            maxParsed = max(maxParsed, consumption)
             let date = (row["date"] as? String).flatMap(parseISODate)
             let growthDay = row["growth_day"] as? Int
-            return APIRotemWaterHistoryPoint(
-                date: date,
-                growthDay: growthDay,
-                consumptionAvg: consumption
+            result.append(
+                APIRotemWaterHistoryPoint(
+                    date: date,
+                    growthDay: growthDay,
+                    consumptionAvg: consumption
+                )
             )
         }
+        // #region agent log
+        FarmDebugLog.post(
+            hypothesisId: "A",
+            location: "APIClient.swift:fetchRotemWaterHistory",
+            message: "water_history parse",
+            data: [
+                "houseID": houseID,
+                "rawRows": rows.count,
+                "parsedRows": result.count,
+                "skippedNilConsumption": skippedNilConsumption,
+                "firstConsumptionField": firstConsumptionDebug,
+                "maxParsedConsumption": maxParsed
+            ]
+        )
+        // #endregion
+        return result
     }
 
     /// Direct RotemNet temperature history (CommandID 35 via backend facade).
@@ -1067,6 +1093,18 @@ actor APIClient {
         )
     }
 
+    /// JSON numbers may decode as `Double`, `Int`, or `NSNumber`.
+    private func jsonDouble(from row: [String: Any], keys: [String]) -> Double? {
+        for key in keys {
+            guard let raw = row[key] else { continue }
+            if let d = raw as? Double { return d }
+            if let i = raw as? Int { return Double(i) }
+            if let n = raw as? NSNumber { return n.doubleValue }
+            if let s = raw as? String, let d = Double(s.replacingOccurrences(of: ",", with: "")) { return d }
+        }
+        return nil
+    }
+
     private func parseISODate(_ value: String) -> Date? {
         if let date = Self.isoFormatterWithFractional.date(from: value) {
             return date
@@ -1161,3 +1199,31 @@ actor APIClient {
         return String(text.prefix(maxChars)) + "..."
     }
 }
+
+// #region agent log
+/// Sends one JSON payload to the Cursor debug ingest (iOS Simulator → host).
+enum FarmDebugLog {
+    private static let endpoint = URL(string: "http://127.0.0.1:7446/ingest/1f94348e-18e7-4829-95a8-c88970a05b9d")!
+    private static let sessionId = "ed7eeb"
+
+    static func post(hypothesisId: String, location: String, message: String, data: [String: Any]) {
+        Task.detached {
+            var payload: [String: Any] = [
+                "sessionId": sessionId,
+                "timestamp": Int(Date().timeIntervalSince1970 * 1000),
+                "hypothesisId": hypothesisId,
+                "location": location,
+                "message": message,
+                "data": data
+            ]
+            guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+            var req = URLRequest(url: endpoint)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue(sessionId, forHTTPHeaderField: "X-Debug-Session-Id")
+            req.httpBody = body
+            _ = try? await URLSession.shared.data(for: req)
+        }
+    }
+}
+// #endregion
