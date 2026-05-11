@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
@@ -17,6 +17,7 @@ from farms.views import user_accessible_organization_ids
 from houses.models import House
 from django.utils import timezone
 from datetime import timedelta
+import datetime as _dt
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,218 @@ def _rotem_history_command_payload(house, command_id: str):
     raw = scraper.get_command_data(house_number=house.house_number, command_id=command_id) or {}
     rows = _parse_rotem_history_rows(raw)
     return rows, None
+
+
+def _parse_water_history_raw(raw_water_data, house) -> list:
+    """
+    Parse a raw Rotem CommandID 40 response into a sorted list of dicts with
+    keys: growth_day, date (ISO string), consumption_avg.
+
+    Shared by the per-house water_history action and the farm-level
+    farm_water_compare view so that parsing logic lives in one place.
+    """
+    if not raw_water_data:
+        return []
+
+    water_history = []
+    response_obj = raw_water_data.get('reponseObj', raw_water_data) if isinstance(raw_water_data, dict) else {}
+
+    history_data = None
+    if 'WaterHistory' in response_obj:
+        history_data = response_obj['WaterHistory']
+    elif 'ConsumptionHistory' in response_obj:
+        history_data = response_obj['ConsumptionHistory']
+    elif isinstance(response_obj.get('History'), dict) and 'Water' in response_obj['History']:
+        history_data = response_obj['History']['Water']
+    elif 'dsData' in response_obj:
+        ds_data = response_obj['dsData']
+        if isinstance(ds_data, dict):
+            if 'Consumption' in ds_data:
+                for item in ds_data['Consumption']:
+                    if isinstance(item, dict):
+                        pn = (item.get('ParameterKeyName') or item.get('ParameterName') or '').lower()
+                        pd = (item.get('ParameterDisplayName') or '').lower()
+                        if any(k in pn or k in pd for k in ['water', 'consumption']):
+                            pd_list = item.get('ParameterData')
+                            if isinstance(pd_list, list):
+                                history_data = pd_list
+                                break
+            if not history_data:
+                for section in ['History', 'Daily', 'ConsumptionHistory', 'WaterHistory']:
+                    sec = ds_data.get(section)
+                    if isinstance(sec, list):
+                        for item in sec:
+                            if isinstance(item, dict):
+                                pn = (item.get('ParameterKeyName') or item.get('ParameterName') or '').lower()
+                                if 'water' in pn:
+                                    history_data = sec
+                                    break
+                        if history_data:
+                            break
+                    elif isinstance(sec, dict) and 'Water' in sec:
+                        history_data = sec['Water']
+                        break
+
+    if history_data:
+        if isinstance(history_data, list):
+            for entry in history_data:
+                if isinstance(entry, dict):
+                    date_str = entry.get('Date') or entry.get('date') or entry.get('RecordDate')
+                    consumption = entry.get('Consumption') or entry.get('consumption') or entry.get('Value') or entry.get('value')
+                    if date_str and consumption is not None:
+                        water_history.append({
+                            'date': date_str,
+                            'consumption_avg': float(consumption),
+                        })
+        elif isinstance(history_data, dict):
+            for date_str, value in history_data.items():
+                if value is not None:
+                    water_history.append({
+                        'date': date_str,
+                        'consumption_avg': float(value) if isinstance(value, (int, float)) else 0,
+                    })
+
+    # CommandID 40 / dsData.Data format (primary real-world format)
+    if not water_history and isinstance(response_obj.get('dsData'), dict):
+        for record in response_obj['dsData'].get('Data', []):
+            if not isinstance(record, dict):
+                continue
+            growth_day = record.get('HistoryRecord_GrowthDay')
+            if growth_day is None:
+                continue
+            try:
+                growth_day = int(growth_day)
+            except (ValueError, TypeError):
+                continue
+            if growth_day < 0:
+                continue
+            raw_val = record.get('HistoryRecord_TotalDrink') or record.get('HistoryRecord_TotalWater')
+            if raw_val is None:
+                continue
+            try:
+                consumption_float = float(str(raw_val).replace(',', ''))
+            except (ValueError, TypeError):
+                continue
+            water_history.append({
+                'growth_day': growth_day,
+                'date': None,
+                'consumption_avg': consumption_float,
+            })
+
+    # Assign real dates
+    batch_start = house.batch_start_date
+    if water_history:
+        if batch_start:
+            for rec in water_history:
+                gd = rec.get('growth_day')
+                if gd is not None and gd >= 0:
+                    rec['date'] = (batch_start + timedelta(days=gd)).isoformat()
+        else:
+            # Relative fallback: assume max growth_day = today
+            valid_gds = [int(r['growth_day']) for r in water_history if r.get('growth_day') is not None and r['growth_day'] >= 0]
+            if valid_gds:
+                max_gd = max(valid_gds)
+                today = _dt.date.today()
+                for rec in water_history:
+                    gd = rec.get('growth_day')
+                    if gd is not None and int(gd) >= 0:
+                        rec['date'] = (today - timedelta(days=(max_gd - int(gd)))).isoformat()
+
+    # Remove records still missing a usable date
+    water_history = [r for r in water_history if r.get('date') and not str(r['date']).startswith('Day ')]
+
+    if water_history:
+        water_history.sort(key=lambda x: x.get('growth_day', 0) if x.get('growth_day') is not None else x.get('date', ''))
+
+    return water_history
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_water_compare(request, farm_id):
+    """
+    Return water-consumption history for all active houses in one farm.
+
+    Single Rotem login per request; results are cached in
+    HouseMonitoringCache.water_history_payload (1-hour TTL).
+    iOS calls this endpoint once instead of N per-house requests.
+
+    Query params:
+        days (int, 1-30, default 5): how many tail days to return per house
+    """
+    from houses.models import HouseMonitoringCache
+    from houses.services.monitoring_cache_service import wrap_cached_response, build_meta
+    from .scraper import RotemScraper
+
+    farm = get_object_or_404(Farm, id=farm_id, is_active=True)
+    days = min(max(int(request.query_params.get('days', 5)), 1), 30)
+    stale_threshold_seconds = 3600  # 1 hour
+
+    houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
+    if not houses:
+        return Response({'houses': {}, 'farm_id': farm_id, 'days': days})
+
+    now = timezone.now()
+    result: dict[int, list] = {}
+    stale_houses = []
+
+    # --- Fast path: serve from cache where fresh ---
+    cache_by_house = {
+        c.house_id: c
+        for c in HouseMonitoringCache.objects.filter(house__in=houses)
+    }
+    for house in houses:
+        cache = cache_by_house.get(house.id)
+        if (
+            cache
+            and cache.water_history_payload
+            and cache.water_history_fetched_at
+            and (now - cache.water_history_fetched_at).total_seconds() < stale_threshold_seconds
+        ):
+            result[house.id] = cache.water_history_payload
+        else:
+            stale_houses.append(house)
+
+    # --- Slow path: one Rotem login, fetch stale houses sequentially ---
+    if stale_houses:
+        if not farm.rotem_username or not farm.rotem_password:
+            # No credentials: return whatever we have from cache
+            for house in stale_houses:
+                result[house.id] = cache_by_house.get(house.id, None) and cache_by_house[house.id].water_history_payload or []
+        else:
+            scraper = RotemScraper(username=farm.rotem_username, password=farm.rotem_password)
+            if scraper.login():
+                for house in stale_houses:
+                    try:
+                        raw = scraper.get_water_history(house_number=house.house_number) or {}
+                        history = _parse_water_history_raw(raw, house)
+                        result[house.id] = history
+                        # Update cache
+                        HouseMonitoringCache.objects.update_or_create(
+                            house=house,
+                            defaults={
+                                'water_history_payload': history,
+                                'water_history_fetched_at': now,
+                            },
+                        )
+                    except Exception as exc:
+                        logger.warning("farm_water_compare: house=%s scrape_err=%s", house.id, exc)
+                        result[house.id] = cache_by_house.get(house.id, None) and cache_by_house[house.id].water_history_payload or []
+            else:
+                logger.error("farm_water_compare: Rotem login failed for farm=%s", farm_id)
+                for house in stale_houses:
+                    result[house.id] = cache_by_house.get(house.id, None) and cache_by_house[house.id].water_history_payload or []
+
+    # Trim to requested days
+    for hid, rows in result.items():
+        if len(rows) > days:
+            result[hid] = rows[-days:]
+
+    return Response({
+        'farm_id': farm_id,
+        'days': days,
+        'houses': result,
+    })
 
 
 def _scoped_rotem_farms(request):

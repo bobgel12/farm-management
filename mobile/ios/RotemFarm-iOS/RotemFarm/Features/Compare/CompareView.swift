@@ -134,6 +134,14 @@ struct CompareView: View {
         }
         expectedHouseNames = houses.map(\.name).sorted()
         loadingHouseNames = Set(expectedHouseNames)
+
+        // Water: one farm-level request (single Rotem login) instead of N parallel per-house
+        // requests that trigger rate-limiting. Prefetch before the task group so each house
+        // reads from the in-memory cache.
+        if metric == .water, let farmBackendID = store.farms.first(where: { $0.id == store.currentFarmId })?.backendId {
+            await store.preloadWaterCompare(farmBackendID: farmBackendID, days: 5)
+        }
+
         let colors: [Color] = [.farmGreen, .stateInfo, .stateWarning, .aiEnd, .stateOK, Color(red: 166/255, green: 90/255, blue: 40/255)]
         await withTaskGroup(of: (Int, String, [DailyResourcePoint], Double, SensorState).self) { group in
             for (idx, house) in houses.enumerated() {
