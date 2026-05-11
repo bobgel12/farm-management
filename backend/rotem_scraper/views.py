@@ -859,12 +859,20 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     from datetime import timedelta
                     for record in water_history:
                         if 'growth_day' in record and record['growth_day'] >= 0:
-                            # Calculate actual date from batch_start_date + growth_day
                             actual_date = house.batch_start_date + timedelta(days=int(record['growth_day']))
                             record['date'] = actual_date.isoformat()
-                        elif 'date' in record and record['date'].startswith('Day '):
-                            # If we couldn't calculate date, keep the day format
-                            pass
+                elif water_history:
+                    # No batch_start_date: derive relative dates so iOS can chart them.
+                    # Assume the highest growth_day corresponds to today.
+                    import datetime as _dt
+                    valid_gds = [int(r['growth_day']) for r in water_history if 'growth_day' in r and r['growth_day'] >= 0]
+                    if valid_gds:
+                        max_gd = max(valid_gds)
+                        today = _dt.date.today()
+                        for record in water_history:
+                            gd = record.get('growth_day')
+                            if gd is not None and int(gd) >= 0:
+                                record['date'] = (today - timedelta(days=(max_gd - int(gd)))).isoformat()
                 
                 # Sort by growth_day or date
                 if water_history:
@@ -982,6 +990,13 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     'date': (house.batch_start_date + timedelta(days=growth_day)).isoformat() if house.batch_start_date else None,
                 })
             history.sort(key=lambda x: x['growth_day'])
+            # Derive relative dates when batch_start_date is absent.
+            if history and not house.batch_start_date:
+                import datetime as _dt
+                max_gd = history[-1]['growth_day']
+                today = _dt.date.today()
+                for rec in history:
+                    rec['date'] = (today - timedelta(days=(max_gd - rec['growth_day']))).isoformat()
             return Response({
                 'house_id': int(house_id),
                 'house_number': house.house_number,

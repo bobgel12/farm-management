@@ -1074,10 +1074,8 @@ actor APIClient {
             throw APIClientError.decoding
         }
         return rows.compactMap { row in
-            guard
-                let growthDay = row["growth_day"] as? Int,
-                let total = row["daily_feed_total"] as? Double
-            else { return nil }
+            guard let growthDay = row["growth_day"] as? Int else { return nil }
+            let total = (row["daily_feed_total"] as? Double) ?? 0.0
             let date = (row["date"] as? String).flatMap(parseISODate)
             return APIRotemFeedHistoryPoint(
                 date: date,

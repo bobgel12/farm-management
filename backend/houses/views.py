@@ -1143,19 +1143,38 @@ def house_heater_history(request, house_id):
 
     parsed = scraper.get_heater_history(house_number=house.house_number) or {}
     records = parsed.get('records', []) if isinstance(parsed, dict) else []
+
+    # Pre-compute max growth_day for relative-date fallback when batch_start_date is None.
+    valid_growth_days = []
+    for r in records:
+        gd = r.get('growth_day')
+        if gd is not None:
+            try:
+                valid_growth_days.append(int(gd))
+            except (TypeError, ValueError):
+                pass
+    max_growth_day = max(valid_growth_days) if valid_growth_days else 0
+    today = timezone.localdate()
+
     daily = []
     for r in records:
         growth_day = r.get('growth_day')
         if growth_day is None:
             continue
+        try:
+            growth_day = int(growth_day)
+        except (TypeError, ValueError):
+            continue
         dt = None
         if house.batch_start_date:
             try:
-                dt = house.batch_start_date + timedelta(days=int(growth_day))
+                dt = house.batch_start_date + timedelta(days=growth_day)
             except (TypeError, ValueError):
                 dt = None
+        if dt is None and growth_day >= 0:
+            dt = today - timedelta(days=(max_growth_day - growth_day))
         daily.append({
-            'growth_day': int(growth_day),
+            'growth_day': growth_day,
             'date': dt.isoformat() if dt else None,
             'total_hours': _safe_float(r.get('total_runtime_hours')) or 0.0,
             'total_minutes': int(r.get('total_runtime_minutes') or 0),
