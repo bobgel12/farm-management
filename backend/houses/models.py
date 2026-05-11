@@ -234,6 +234,7 @@ class FarmMonitoringCache(models.Model):
     dashboard_payload = models.JSONField(default=dict)
     comparison_payload = models.JSONField(default=dict)
     houses_payload = models.JSONField(default=dict)
+    house_statuses = models.JSONField(default=dict, blank=True)
     source_timestamp = models.DateTimeField(null=True, blank=True)
     fetched_at = models.DateTimeField(auto_now=True, db_index=True)
     refresh_state = models.CharField(max_length=16, choices=REFRESH_STATE_CHOICES, default="idle")

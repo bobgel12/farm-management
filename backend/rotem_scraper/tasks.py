@@ -295,14 +295,13 @@ def calculate_daily_flock_performance(self):
     """
     try:
         from rotem_scraper.flock_performance_calculator import calculate_all_flock_performance
-        from django.utils import timezone
 
         logger.info("Starting daily flock performance calculation task")
 
         results = calculate_all_flock_performance()
 
         summary = (
-            f"✅ Daily flock performance calculation complete. "
+            f"Daily flock performance calculation complete. "
             f"Success: {results['success']}, Failed: {results['failed']}"
         )
 
@@ -316,5 +315,83 @@ def calculate_daily_flock_performance(self):
 
     except Exception as exc:
         logger.error(f"Daily flock performance calculation failed: {str(exc)}", exc_info=True)
-        # Retry in 5 minutes if failed
         raise self.retry(exc=exc, countdown=300)
+
+
+@shared_task(bind=True, max_retries=2, acks_late=True, task_reject_on_worker_lost=True)
+def sync_farm_monitoring(self, farm_id: int):
+    """
+    Single canonical task: full scrape + atomic cache update for one farm.
+    Replaces the overlapping scrape_rotem_data + sync_farm_data tasks.
+
+    Includes Redis lock (in the service layer), circuit breaker, per-house
+    retry on partial failure, and atomic DB commit.
+    """
+    from farms.models import Farm
+    from houses.services.monitoring_cache_service import upsert_farm_monitoring_cache
+
+    try:
+        farm = Farm.objects.get(id=farm_id)
+    except Farm.DoesNotExist:
+        logger.error("sync_farm_monitoring: farm_id=%s not found", farm_id)
+        return
+
+    try:
+        result = upsert_farm_monitoring_cache(farm)
+    except Exception as exc:
+        logger.error("sync_farm_monitoring: farm=%s unexpected_error=%s", farm_id, exc, exc_info=True)
+        _update_integration_health(farm, "error")
+        raise self.retry(exc=exc, countdown=60)
+
+    _update_integration_health(farm, result.status)
+    logger.info("sync_farm_monitoring farm=%s status=%s houses=%s", farm_id, result.status, result.houses_processed)
+    return {"status": result.status, "houses_processed": result.houses_processed}
+
+
+@shared_task
+def sync_all_farms_monitoring():
+    """
+    Fan-out orchestrator: dispatches a sync_farm_monitoring task for each active
+    Rotem-integrated farm. This single beat-schedule entry replaces the two
+    overlapping 5-minute tasks (scrape_rotem_data + sync_farm_data).
+    """
+    from farms.models import Farm
+
+    farm_ids = list(
+        Farm.objects.filter(
+            is_active=True,
+            has_system_integration=True,
+            integration_type="rotem",
+        ).values_list("id", flat=True)
+    )
+    for farm_id in farm_ids:
+        sync_farm_monitoring.apply_async(args=[farm_id])
+    logger.info("sync_all_farms_monitoring dispatched farm_count=%s", len(farm_ids))
+    return {"dispatched": len(farm_ids)}
+
+
+def _update_integration_health(farm, result_status: str):
+    """Update IntegrationHealth consecutive_failures counter based on task result."""
+    try:
+        from integrations.models import IntegrationHealth
+        health, _ = IntegrationHealth.objects.get_or_create(
+            farm=farm,
+            integration_type="rotem",
+            defaults={"is_healthy": True, "consecutive_failures": 0},
+        )
+        if result_status == "success":
+            health.consecutive_failures = 0
+            health.is_healthy = True
+            health.last_successful_sync = timezone.now()
+        elif result_status == "skipped":
+            pass  # lock contention — not a failure
+        elif result_status != "circuit_open":
+            health.consecutive_failures = (health.consecutive_failures or 0) + 1
+            health.is_healthy = False
+        health.last_attempted_sync = timezone.now()
+        health.save(update_fields=[
+            "consecutive_failures", "is_healthy",
+            "last_attempted_sync", "last_successful_sync",
+        ])
+    except Exception as exc:
+        logger.warning("_update_integration_health failed farm=%s err=%s", getattr(farm, "id", "?"), exc)
