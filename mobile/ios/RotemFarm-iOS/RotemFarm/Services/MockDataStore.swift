@@ -775,46 +775,8 @@ final class MockDataStore {
         }
     }
 
-    // Prefetched water compare data keyed by backend farm ID → backend house ID → points.
-    // Populated by preloadWaterCompare before the compare task group runs.
-    private var waterComparePrefetch: [Int: [Int: [DailyResourcePoint]]] = [:]
-
-    /// Load water history for every house in the farm with a single Rotem login.
-    /// Call this once before fetching per-house water points in a task group.
-    func preloadWaterCompare(farmBackendID: Int, days: Int = 5) async {
-        do {
-            let raw = try await apiClient.fetchFarmWaterCompare(farmID: farmBackendID, days: days)
-            var mapped: [Int: [DailyResourcePoint]] = [:]
-            for (houseID, rows) in raw {
-                let points = rows.enumerated().map { index, row in
-                    DailyResourcePoint(
-                        day: row.growthDay ?? (index + 1),
-                        date: row.date ?? Date(),
-                        value: row.consumptionAvg,
-                        target: nil,
-                        isAnomaly: false
-                    )
-                }.sorted(by: { $0.date < $1.date })
-                mapped[houseID] = points
-            }
-            waterComparePrefetch[farmBackendID] = mapped
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
     func fetchWaterHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
-        guard let house = houses.first(where: { $0.id == houseId }),
-              let backendID = house.backendId else { return [] }
-
-        // Use prefetched data when available (loaded by preloadWaterCompare).
-        if let farmBackendID = farms.first(where: { $0.id == house.farmId })?.backendId,
-           let prefetched = waterComparePrefetch[farmBackendID]?[backendID],
-           !prefetched.isEmpty {
-            return prefetched
-        }
-
-        // Fallback: per-house request (used by non-compare screens like WaterDetailView).
+        guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
         do {
             let rows = try await apiClient.fetchRotemWaterHistory(houseID: backendID, days: days)
             return rows.enumerated().map { index, row in

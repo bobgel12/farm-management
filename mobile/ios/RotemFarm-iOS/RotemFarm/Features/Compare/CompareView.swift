@@ -134,44 +134,31 @@ struct CompareView: View {
         }
         expectedHouseNames = houses.map(\.name).sorted()
         loadingHouseNames = Set(expectedHouseNames)
-
-        // Water: one farm-level request (single Rotem login) instead of N parallel per-house
-        // requests that trigger rate-limiting. Prefetch before the task group so each house
-        // reads from the in-memory cache.
-        if metric == .water, let farmBackendID = store.farms.first(where: { $0.id == store.currentFarmId })?.backendId {
-            await store.preloadWaterCompare(farmBackendID: farmBackendID, days: 5)
-        }
+        isLoading = false  // show per-house spinners instead of a single full-screen spinner
 
         let colors: [Color] = [.farmGreen, .stateInfo, .stateWarning, .aiEnd, .stateOK, Color(red: 166/255, green: 90/255, blue: 40/255)]
-        await withTaskGroup(of: (Int, String, [DailyResourcePoint], Double, SensorState).self) { group in
-            for (idx, house) in houses.enumerated() {
-                group.addTask {
-                    let points = await pointsForHouse(houseID: house.id, metric: metric)
-                    let today = points.last?.value ?? 0
-                    let yesterday = points.dropLast().last?.value ?? 0
-                    let pct = yesterday > 0 ? ((today - yesterday) / yesterday * 100) : 0
-                    let state: SensorState = abs(pct) > 12 ? .critical : (abs(pct) > 5 ? .warning : .ok)
-                    return (idx, house.name, points, pct, state)
-                }
-            }
 
-            for await (idx, houseName, points, pct, state) in group {
-                series.append(
-                    CompareSeries(
-                        houseName: houseName,
-                        color: colors[idx % colors.count],
-                        points: points,
-                        todayDelta: (pct >= 0 ? "+" : "") + String(format: "%.0f%%", pct),
-                        todayDeltaState: state
-                    )
+        // Load each house sequentially so we never open more than one Rotem session at
+        // a time. The backend is cache-first so repeat loads are instant; on the first
+        // cold-cache load, results appear one-by-one as each house completes.
+        for (idx, house) in houses.enumerated() {
+            let points = await pointsForHouse(houseID: house.id, metric: metric)
+            let today = points.last?.value ?? 0
+            let yesterday = points.dropLast().last?.value ?? 0
+            let pct = yesterday > 0 ? ((today - yesterday) / yesterday * 100) : 0
+            let state: SensorState = abs(pct) > 12 ? .critical : (abs(pct) > 5 ? .warning : .ok)
+            series.append(
+                CompareSeries(
+                    houseName: house.name,
+                    color: colors[idx % colors.count],
+                    points: points,
+                    todayDelta: (pct >= 0 ? "+" : "") + String(format: "%.0f%%", pct),
+                    todayDeltaState: state
                 )
-                loadingHouseNames.remove(houseName)
-                // Keep stable order while still rendering incrementally.
-                series.sort(by: { $0.houseName < $1.houseName })
-            }
+            )
+            loadingHouseNames.remove(house.name)
+            series.sort(by: { $0.houseName < $1.houseName })
         }
-
-        isLoading = false
         if series.isEmpty, let lastError = store.lastError, !lastError.isEmpty {
             errorText = lastError
         }

@@ -508,8 +508,14 @@ def _upsert_farm_monitoring_cache_inner(farm: Farm, started: datetime) -> Upsert
             "growth_day": house.age_days,
             "bird_count": None,
             "livability": None,
-            "water_consumption": live.get("water_consumption"),
-            "feed_consumption": live.get("feed_consumption"),
+            # DicComparisonItems gives more reliable daily totals when present;
+            # fall back to site-controllers DailyWater/DailyFeed if absent.
+            "water_consumption": safe_float(
+                extract_comparison_item(response_obj, "Water_Daily", house.house_number)
+            ) or live.get("water_consumption"),
+            "feed_consumption": safe_float(
+                extract_comparison_item(response_obj, "Feed_Daily", house.house_number)
+            ) or live.get("feed_consumption"),
             "airflow_cfm": None,
             "airflow_percentage": live.get("airflow_percentage"),
             "connection_status": "connected" if is_connected else "disconnected",

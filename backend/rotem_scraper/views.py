@@ -799,21 +799,56 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='water-history')
     def water_history(self, request):
-        """Get water consumption history for a specific house directly from Rotem API"""
+        """Get water consumption history for a specific house.
+
+        Cache-first: serves HouseMonitoringCache.water_history_payload when
+        fresh (< 1 hour old), avoiding a live Rotem login for every request.
+        Falls back to a live CommandID 40 scrape only when the cache is cold.
+        """
         from .scraper import RotemScraper
         from .services.scraper_service import DjangoRotemScraperService
+        from houses.models import HouseMonitoringCache
         import json
-        
+
         house_id = request.query_params.get('house_id')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
-        days = request.query_params.get('days')  # Optional: only used if no start_date and no house start date
-        
+        days = request.query_params.get('days')
+
         if not house_id:
             return Response(
-                {'error': 'house_id parameter is required'}, 
+                {'error': 'house_id parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # --- Cache-first shortcut ---
+        try:
+            _house = House.objects.get(pk=house_id)
+            cache = HouseMonitoringCache.objects.filter(house=_house).first()
+            stale_threshold = 3600  # 1 hour
+            if (
+                cache
+                and cache.water_history_payload
+                and cache.water_history_fetched_at
+                and (timezone.now() - cache.water_history_fetched_at).total_seconds() < stale_threshold
+            ):
+                days_param = min(max(int(days or 5), 1), 30) if days else 5
+                history = list(cache.water_history_payload)
+                if len(history) > days_param:
+                    history = history[-days_param:]
+                return Response({
+                    'house_id': int(house_id),
+                    'house_number': _house.house_number,
+                    'farm_name': _house.farm.name if _house.farm else None,
+                    'water_history': history,
+                    'total_days': len(history),
+                    'average_consumption': sum(h.get('consumption_avg', 0) for h in history) / len(history) if history else 0,
+                    'source': 'cache',
+                })
+        except House.DoesNotExist:
+            return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            pass  # Cache miss — fall through to live scrape
         
         try:
             house = House.objects.get(pk=house_id)
@@ -1094,6 +1129,20 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     else:
                         water_history.sort(key=lambda x: x.get('date', ''))
                 
+                # Persist to cache so subsequent per-house requests are instant
+                if water_history:
+                    from houses.models import HouseMonitoringCache
+                    try:
+                        HouseMonitoringCache.objects.update_or_create(
+                            house=house,
+                            defaults={
+                                'water_history_payload': water_history,
+                                'water_history_fetched_at': timezone.now(),
+                            },
+                        )
+                    except Exception as _ce:
+                        logger.warning("water_history cache write failed house=%s err=%s", house_id, _ce)
+
                 return Response({
                     'house_id': int(house_id),
                     'house_number': house.house_number,
@@ -1101,7 +1150,7 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     'water_history': water_history,
                     'total_days': len(water_history),
                     'average_consumption': sum(h['consumption_avg'] for h in water_history) / len(water_history) if water_history else 0,
-                    'raw_api_response': raw_water_data,  # Include raw response for debugging
+                    'source': 'live',
                 })
                 
             except Exception as e:
