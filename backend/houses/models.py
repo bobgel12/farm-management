@@ -266,6 +266,8 @@ class HouseMonitoringCache(models.Model):
     history_payload = models.JSONField(default=dict)
     kpis_payload = models.JSONField(default=dict)
     heater_payload = models.JSONField(default=dict)
+    water_history_payload = models.JSONField(default=dict, blank=True)
+    water_history_fetched_at = models.DateTimeField(null=True, blank=True)
     source_timestamp = models.DateTimeField(null=True, blank=True)
     fetched_at = models.DateTimeField(auto_now=True, db_index=True)
     refresh_state = models.CharField(max_length=16, choices=REFRESH_STATE_CHOICES, default="idle")

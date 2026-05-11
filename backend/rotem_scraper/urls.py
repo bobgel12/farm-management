@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     RotemDataViewSet, MLPredictionViewSet, MLModelViewSet, RotemControllerViewSet,
     RotemFarmViewSet, RotemUserViewSet, RotemScrapeLogViewSet, RotemScraperViewSet,
-    RotemDailySummaryViewSet, trigger_daily_scrape
+    RotemDailySummaryViewSet, trigger_daily_scrape, farm_water_compare,
 )
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
@@ -48,6 +48,8 @@ def farm_detail(request, farm_id):
         return Response({'error': str(e)}, status=404)
 
 urlpatterns = [
+    # Farm-level water compare (one login, all houses) — used by iOS Compare screen
+    path('farms/<int:farm_id>/water-compare/', farm_water_compare, name='farm-water-compare'),
     # Simple test endpoint - put this BEFORE router to take precedence
     path('farms/<str:farm_id>/', farm_detail, name='farm-detail-test'),
     # Daily data collection trigger endpoint

@@ -975,6 +975,43 @@ actor APIClient {
         )
     }
 
+    /// Farm-level water compare: one Rotem login, all houses, cache-backed.
+    /// Returns a dict keyed by backend house ID → list of water history points.
+    func fetchFarmWaterCompare(farmID: Int, days: Int = 5) async throws -> [Int: [APIRotemWaterHistoryPoint]] {
+        let safeDays = min(max(days, 1), 30)
+        // This endpoint does one Rotem login + N sequential house fetches on the backend.
+        // Allow up to 60 s for an 8-house farm on a cold cache.
+        let data = try await request(
+            path: "/api/rotem/farms/\(farmID)/water-compare/?days=\(safeDays)",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true,
+            timeoutOverride: 60
+        )
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let housesRaw = json["houses"] as? [String: Any]
+        else {
+            throw APIClientError.decoding
+        }
+        var result: [Int: [APIRotemWaterHistoryPoint]] = [:]
+        for (houseIDStr, rowsAny) in housesRaw {
+            guard
+                let houseID = Int(houseIDStr),
+                let rows = rowsAny as? [[String: Any]]
+            else { continue }
+            var points: [APIRotemWaterHistoryPoint] = []
+            for row in rows {
+                let consumption = jsonDouble(from: row, keys: ["consumption_avg", "consumption", "water_consumption"]) ?? 0
+                let date = (row["date"] as? String).flatMap(parseISODate)
+                let growthDay = row["growth_day"] as? Int
+                points.append(APIRotemWaterHistoryPoint(date: date, growthDay: growthDay, consumptionAvg: consumption))
+            }
+            result[houseID] = points
+        }
+        return result
+    }
+
     /// Direct RotemNet water history (non-DB): sourced from scraper command stream.
     func fetchRotemWaterHistory(houseID: Int, days: Int = 5) async throws -> [APIRotemWaterHistoryPoint] {
         let safeDays = min(max(days, 1), 30)
@@ -1244,7 +1281,8 @@ actor APIClient {
         path: String,
         method: String,
         payload: [String: Any]?,
-        requiresAuth: Bool
+        requiresAuth: Bool,
+        timeoutOverride: TimeInterval? = nil
     ) async throws -> Data {
         guard let url = URL(string: path, relativeTo: baseURL) else {
             throw APIClientError.invalidURL
@@ -1255,7 +1293,7 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         // Prevent views from appearing frozen when upstream endpoints stall.
-        request.timeoutInterval = 12
+        request.timeoutInterval = timeoutOverride ?? 12
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if requiresAuth {
             guard let token else { throw APIClientError.unauthorized }
