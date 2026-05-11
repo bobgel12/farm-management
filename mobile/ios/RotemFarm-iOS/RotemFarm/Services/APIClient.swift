@@ -199,6 +199,39 @@ struct APIFarmMonitoringDashboardResult {
     let freshness: APIFreshnessMeta?
 }
 
+/// Unified iOS snapshot — all sensor fields from one cache-consistent response.
+struct APIFarmIOSSnapshotHouse {
+    let houseID: Int
+    let houseNumber: Int
+    let currentDay: Int?
+    let averageTemperature: Double?
+    let humidity: Double?
+    let staticPressure: Double?
+    let airflowPercentage: Double?
+    let waterConsumption: Double?
+    let feedConsumption: Double?
+    let isConnected: Bool
+    let alarmStatus: String
+    let dataStatus: String  // "ok" | "stale" | "failed" | "db_fallback"
+}
+
+struct APIFarmIOSSnapshotAlert {
+    let houseID: Int
+    let activeCount: Int
+    let highestSeverity: String
+    let latestMessage: String?
+}
+
+struct APIFarmIOSSnapshotResult {
+    let farmID: Int
+    let farmName: String
+    let houses: [APIFarmIOSSnapshotHouse]
+    let alertsByHouseID: [Int: APIFarmIOSSnapshotAlert]
+    let alertsSummaryTotalActive: Int
+    let freshness: APIFreshnessMeta?
+    let circuitOpen: Bool
+}
+
 struct APITask {
     let id: Int
     let houseID: Int?
@@ -492,6 +525,79 @@ actor APIClient {
             houses: mappedHouses,
             alertsByHouseID: alertsByHouseID,
             freshness: envelope.meta
+        )
+    }
+
+    /// Unified iOS snapshot: all sensor data for a farm in one cache-consistent response.
+    /// Replaces the three parallel fetchFarmMonitoringDashboard / fetchFarmHouseSensorData /
+    /// fetchFarmMonitoringSnapshot calls and eliminates cross-cycle data inconsistency.
+    func fetchFarmIOSSnapshot(farmID: Int) async throws -> APIFarmIOSSnapshotResult {
+        let data = try await request(
+            path: "/api/farms/\(farmID)/ios/snapshot/",
+            method: "GET",
+            payload: nil,
+            requiresAuth: true
+        )
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIClientError.decoding
+        }
+        let envelope = decodeEnvelope(root)
+        let payload = envelope.payload
+        let freshness = envelope.meta
+        let rawMeta = root["meta"] as? [String: Any]
+
+        let farmID = payload["farm_id"] as? Int ?? farmID
+        let farmName = payload["farm_name"] as? String ?? ""
+        let circuitOpen = (rawMeta?["circuit_open"] as? Bool) ?? false
+
+        let rawHouses = payload["houses"] as? [[String: Any]] ?? []
+        let mappedHouses: [APIFarmIOSSnapshotHouse] = rawHouses.compactMap { h in
+            guard let houseID = h["house_id"] as? Int else { return nil }
+            func dbl(_ key: String) -> Double? {
+                if let v = h[key] as? Double { return v }
+                if let v = h[key] as? Int { return Double(v) }
+                return nil
+            }
+            return APIFarmIOSSnapshotHouse(
+                houseID: houseID,
+                houseNumber: (h["house_number"] as? Int) ?? houseID,
+                currentDay: h["current_day"] as? Int,
+                averageTemperature: dbl("average_temperature"),
+                humidity: dbl("humidity"),
+                staticPressure: dbl("static_pressure"),
+                airflowPercentage: dbl("airflow_percentage"),
+                waterConsumption: dbl("water_consumption"),
+                feedConsumption: dbl("feed_consumption"),
+                isConnected: (h["is_connected"] as? Bool) ?? false,
+                alarmStatus: (h["alarm_status"] as? String) ?? "normal",
+                dataStatus: (h["data_status"] as? String) ?? "ok"
+            )
+        }
+
+        var alertsByHouseID: [Int: APIFarmIOSSnapshotAlert] = [:]
+        if let rawAlerts = payload["alerts_by_house"] as? [String: [String: Any]] {
+            for (houseIDStr, alertData) in rawAlerts {
+                guard let houseID = Int(houseIDStr) else { continue }
+                alertsByHouseID[houseID] = APIFarmIOSSnapshotAlert(
+                    houseID: houseID,
+                    activeCount: (alertData["active_count"] as? Int) ?? 0,
+                    highestSeverity: (alertData["highest_severity"] as? String) ?? "low",
+                    latestMessage: alertData["latest_message"] as? String
+                )
+            }
+        }
+
+        let alertsSummary = payload["alerts_summary"] as? [String: Any] ?? [:]
+        let alertsTotal = (alertsSummary["total_active"] as? Int) ?? 0
+
+        return APIFarmIOSSnapshotResult(
+            farmID: farmID,
+            farmName: farmName,
+            houses: mappedHouses,
+            alertsByHouseID: alertsByHouseID,
+            alertsSummaryTotalActive: alertsTotal,
+            freshness: freshness,
+            circuitOpen: circuitOpen
         )
     }
 

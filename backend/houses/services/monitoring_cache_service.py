@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from django.db import transaction
 from django.utils import timezone
 import logging
 
@@ -13,7 +14,24 @@ from rotem_scraper.scraper import RotemScraper
 
 
 MAX_STALE_SECONDS = 600
+CIRCUIT_OPEN_THRESHOLD = 5
 logger = logging.getLogger(__name__)
+
+# Module-level Redis client (lazy-initialised, None if Redis unavailable)
+_redis_client = None
+
+
+def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis as redis_lib
+            from django.conf import settings
+            _redis_client = redis_lib.from_url(settings.CELERY_BROKER_URL, socket_connect_timeout=2)
+        except Exception as exc:
+            logger.warning("redis_unavailable lock_disabled err=%s", exc)
+            _redis_client = False  # sentinel: don't retry
+    return _redis_client if _redis_client else None
 
 
 def safe_float(value):
@@ -91,6 +109,8 @@ def build_meta(
     source_timestamp: Optional[datetime],
     refresh_state: str,
     stale_seconds: int = MAX_STALE_SECONDS,
+    house_statuses: Optional[Dict] = None,
+    circuit_open: bool = False,
 ):
     now = timezone.now()
     source = source_timestamp or fetched_at
@@ -98,14 +118,18 @@ def build_meta(
     if source:
         age_seconds = max(int((now - source).total_seconds()), 0)
     is_stale = age_seconds is None or age_seconds > stale_seconds
-    return {
+    meta = {
         "source_timestamp": source.isoformat() if source else None,
         "fetched_at": fetched_at.isoformat() if fetched_at else None,
         "age_seconds": age_seconds,
         "is_stale": is_stale,
         "refresh_state": refresh_state,
         "can_refresh_now": True,
+        "circuit_open": circuit_open,
     }
+    if house_statuses is not None:
+        meta["house_statuses"] = house_statuses
+    return meta
 
 
 def wrap_cached_response(data: Any, meta: Dict[str, Any]):
@@ -291,30 +315,67 @@ def _build_house_heater_payload(house: House, scraper: RotemScraper):
     return {"heater_history": {"daily": daily}}
 
 
-def _upsert_house_payloads(house: House, scraper: RotemScraper, site_payload: dict):
-    live = extract_live_house(site_payload, house.house_number)
-    if not live:
-        return
-    source_ts = parse_source_timestamp(site_payload) or timezone.now()
+def _build_house_cache_payloads(house: House, scraper: RotemScraper, live: dict, source_ts: datetime) -> dict:
+    """Build all per-house cache payloads in memory (does NOT write to DB)."""
     history_payload = _build_house_history(house, scraper)
     kpis_payload = _build_house_kpis(house, scraper)
     heater_payload = _build_house_heater_payload(house, scraper)
-    HouseMonitoringCache.objects.update_or_create(
-        house=house,
-        defaults={
-            "latest_payload": live,
-            "history_payload": history_payload,
-            "kpis_payload": kpis_payload,
-            "heater_payload": heater_payload,
-            "source_timestamp": source_ts,
-            "refresh_state": "fresh",
-            "last_error": "",
-        },
-    )
+    return {
+        "latest_payload": live,
+        "history_payload": history_payload,
+        "kpis_payload": kpis_payload,
+        "heater_payload": heater_payload,
+        "source_timestamp": source_ts,
+        "refresh_state": "fresh",
+        "last_error": "",
+    }
+
+
+def _is_circuit_open(farm: Farm) -> bool:
+    try:
+        from integrations.models import IntegrationHealth
+        health = IntegrationHealth.objects.filter(farm=farm, integration_type="rotem").first()
+        return health is not None and health.consecutive_failures >= CIRCUIT_OPEN_THRESHOLD
+    except Exception:
+        return False
 
 
 def upsert_farm_monitoring_cache(farm: Farm) -> UpsertResult:
     started = timezone.now()
+
+    # --- Distributed lock (prevents concurrent scrapes for same farm) ---
+    lock = None
+    r = _get_redis()
+    if r:
+        try:
+            lock = r.lock(f"scrape_lock:farm:{farm.id}", timeout=240, blocking_timeout=5)
+            if not lock.acquire(blocking=True):
+                logger.info("scrape_lock_skipped farm=%s reason=lock_not_acquired", farm.id)
+                return UpsertResult(status="skipped", message="lock_not_acquired")
+        except Exception as exc:
+            logger.warning("scrape_lock_error farm=%s err=%s proceeding_without_lock", farm.id, exc)
+            lock = None
+
+    try:
+        return _upsert_farm_monitoring_cache_inner(farm, started)
+    finally:
+        if lock:
+            try:
+                lock.release()
+            except Exception:
+                pass
+
+
+def _upsert_farm_monitoring_cache_inner(farm: Farm, started: datetime) -> UpsertResult:
+    # --- Circuit breaker ---
+    if _is_circuit_open(farm):
+        logger.warning("circuit_open farm=%s serving_cache", farm.id)
+        FarmMonitoringCache.objects.filter(farm=farm).update(
+            refresh_state="failed", last_error="circuit_open"
+        )
+        return UpsertResult(status="circuit_open", message="circuit_open")
+
+    # --- Login ---
     scraper = _farm_scraper(farm)
     if not scraper:
         FarmMonitoringCache.objects.update_or_create(
@@ -331,65 +392,153 @@ def upsert_farm_monitoring_cache(farm: Farm) -> UpsertResult:
         )
         return UpsertResult(status="error", message="empty_site_controllers")
 
-    response_obj = site_payload.get("reponseObj", {}) if isinstance(site_payload, dict) else {}
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by("house_number"))
+
+    # --- Phase 1: Collect all house live data in memory ---
+    house_live: Dict[int, Optional[dict]] = {}  # house.id -> live dict or None
+    for house in houses:
+        house_live[house.id] = extract_live_house(site_payload, house.house_number)
+
+    failed_house_numbers = {
+        h.house_number for h in houses if house_live[h.id] is None
+    }
+
+    # --- Phase 2: Per-house retry for partial failures ---
+    if 0 < len(failed_house_numbers) <= 4:
+        logger.warning(
+            "scrape_partial_failure farm=%s failed_houses=%s retrying",
+            farm.id, sorted(failed_house_numbers),
+        )
+        retry_scraper = _farm_scraper(farm)
+        if retry_scraper:
+            retry_site = retry_scraper.get_site_controllers_info() or {}
+            for house in houses:
+                if house.house_number in failed_house_numbers:
+                    live = extract_live_house(retry_site, house.house_number)
+                    if live:
+                        house_live[house.id] = live
+                        failed_house_numbers.discard(house.house_number)
+            if failed_house_numbers:
+                logger.warning(
+                    "retry_still_failing farm=%s houses=%s",
+                    farm.id, sorted(failed_house_numbers),
+                )
+
+    # Load existing house_statuses to carry forward stale timestamps
+    existing_cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    prev_house_statuses: dict = (existing_cache.house_statuses or {}) if existing_cache else {}
+
+    # --- Build house_statuses and in-memory payloads ---
+    source_ts = parse_source_timestamp(site_payload) or timezone.now()
+    response_obj = site_payload.get("reponseObj", {}) if isinstance(site_payload, dict) else {}
+
     houses_all_payload = []
     dashboard_houses = []
     comparison_houses = []
+    house_cache_payloads: Dict[int, dict] = {}  # house.id -> HouseMonitoringCache defaults
+    house_statuses: Dict[str, dict] = {}
     alerts_summary = {"total_active": 0, "critical": 0, "warning": 0, "normal": 0}
     connection_summary = {"connected": 0, "disconnected": 0}
-    houses_upserted = 0
 
     for house in houses:
-        live = extract_live_house(site_payload, house.house_number)
-        if not live:
+        live = house_live[house.id]
+        hn = str(house.house_number)
+
+        if live is None:
+            # Mark as failed or stale (carry previous timestamp if available)
+            prev = prev_house_statuses.get(hn, {})
+            prev_ts = prev.get("source_timestamp")
+            prev_status = prev.get("status")
+            house_statuses[hn] = {
+                "status": "stale" if prev_status == "ok" else "failed",
+                "source_timestamp": prev_ts,
+                "error_msg": "no_live_data",
+            }
+            # Still include in dashboard/houses payloads using previous data if available
+            prev_latest = None
+            if existing_cache and isinstance(existing_cache.houses_payload, dict):
+                prev_houses = existing_cache.houses_payload.get("houses", [])
+                for ph in prev_houses:
+                    if isinstance(ph, dict) and ph.get("house_number") == house.house_number:
+                        prev_latest = ph
+                        break
+            if prev_latest:
+                houses_all_payload.append(prev_latest)
+                dashboard_houses.append({
+                    "house_id": house.id,
+                    "house_number": house.house_number,
+                    "current_day": house.age_days,
+                    "status": house.status,
+                    "active_alarms_count": 0,
+                    "timestamp": prev_latest.get("timestamp"),
+                    "source_timestamp": prev_latest.get("source_timestamp"),
+                    "average_temperature": prev_latest.get("average_temperature"),
+                    "humidity": prev_latest.get("humidity"),
+                    "static_pressure": prev_latest.get("static_pressure"),
+                    "airflow_percentage": prev_latest.get("airflow_percentage"),
+                    "water_consumption": prev_latest.get("water_consumption"),
+                    "feed_consumption": prev_latest.get("feed_consumption"),
+                    "is_connected": prev_latest.get("is_connected", False),
+                    "alarm_status": prev_latest.get("alarm_status", "normal"),
+                    "data_status": "stale",
+                })
             continue
-        houses_all_payload.append(
-            {
-                "house_id": house.id,
-                "house_number": house.house_number,
-                "timestamp": live.get("timestamp"),
-                "source_timestamp": live.get("source_timestamp"),
-                "average_temperature": live.get("average_temperature"),
-                "outside_temperature": None,
-                "humidity": live.get("humidity"),
-                "static_pressure": live.get("static_pressure"),
-                "target_temperature": None,
-                "ventilation_level": live.get("airflow_percentage"),
-                "growth_day": house.age_days,
-                "bird_count": None,
-                "livability": None,
-                "water_consumption": live.get("water_consumption"),
-                "feed_consumption": live.get("feed_consumption"),
-                "airflow_cfm": None,
-                "airflow_percentage": live.get("airflow_percentage"),
-                "connection_status": "connected" if live.get("is_connected") else "disconnected",
-                "alarm_status": live.get("alarm_status") or "normal",
-                "has_alarms": False,
-                "is_connected": bool(live.get("is_connected")),
-            }
-        )
+
+        # House has fresh live data
+        house_statuses[hn] = {
+            "status": "ok",
+            "source_timestamp": live.get("source_timestamp"),
+            "error_msg": None,
+        }
+
         alarm_status = live.get("alarm_status") or "normal"
-        dashboard_houses.append(
-            {
-                "house_id": house.id,
-                "house_number": house.house_number,
-                "current_day": house.age_days,
-                "status": house.status,
-                "active_alarms_count": 0,
-                "timestamp": live.get("timestamp"),
-                "source_timestamp": live.get("source_timestamp"),
-                "average_temperature": live.get("average_temperature"),
-                "humidity": live.get("humidity"),
-                "static_pressure": live.get("static_pressure"),
-                "airflow_percentage": live.get("airflow_percentage"),
-                "water_consumption": live.get("water_consumption"),
-                "feed_consumption": live.get("feed_consumption"),
-                "is_connected": bool(live.get("is_connected")),
-                "alarm_status": alarm_status,
-            }
-        )
-        if bool(live.get("is_connected")):
+        is_connected = bool(live.get("is_connected"))
+
+        houses_all_payload.append({
+            "house_id": house.id,
+            "house_number": house.house_number,
+            "timestamp": live.get("timestamp"),
+            "source_timestamp": live.get("source_timestamp"),
+            "average_temperature": live.get("average_temperature"),
+            "outside_temperature": None,
+            "humidity": live.get("humidity"),
+            "static_pressure": live.get("static_pressure"),
+            "target_temperature": None,
+            "ventilation_level": live.get("airflow_percentage"),
+            "growth_day": house.age_days,
+            "bird_count": None,
+            "livability": None,
+            "water_consumption": live.get("water_consumption"),
+            "feed_consumption": live.get("feed_consumption"),
+            "airflow_cfm": None,
+            "airflow_percentage": live.get("airflow_percentage"),
+            "connection_status": "connected" if is_connected else "disconnected",
+            "alarm_status": alarm_status,
+            "has_alarms": False,
+            "is_connected": is_connected,
+            "data_status": "ok",
+        })
+
+        dashboard_houses.append({
+            "house_id": house.id,
+            "house_number": house.house_number,
+            "current_day": house.age_days,
+            "status": house.status,
+            "active_alarms_count": 0,
+            "timestamp": live.get("timestamp"),
+            "source_timestamp": live.get("source_timestamp"),
+            "average_temperature": live.get("average_temperature"),
+            "humidity": live.get("humidity"),
+            "static_pressure": live.get("static_pressure"),
+            "airflow_percentage": live.get("airflow_percentage"),
+            "water_consumption": live.get("water_consumption"),
+            "feed_consumption": live.get("feed_consumption"),
+            "is_connected": is_connected,
+            "alarm_status": alarm_status,
+            "data_status": "ok",
+        })
+
+        if is_connected:
             connection_summary["connected"] += 1
         else:
             connection_summary["disconnected"] += 1
@@ -400,92 +549,118 @@ def upsert_farm_monitoring_cache(farm: Farm) -> UpsertResult:
         else:
             alerts_summary["normal"] += 1
 
-        comparison_houses.append(
-            {
-                "house_id": house.id,
-                "house_number": house.house_number,
-                "farm_id": house.farm.id,
-                "farm_name": house.farm.name,
-                "current_day": house.age_days,
-                "age_days": house.age_days,
-                "current_age_days": house.current_age_days,
-                "is_integrated": house.is_integrated,
-                "status": house.status,
-                "is_full_house": house.age_days is not None and house.age_days >= 0,
-                "last_update_time": live.get("source_timestamp") or timezone.now().isoformat(),
-                "average_temperature": live.get("average_temperature"),
-                "outside_temperature": safe_float(
-                    extract_comparison_item(response_obj, "Outside_Temperature", house.house_number)
-                ),
-                "tunnel_temperature": safe_float(
-                    extract_comparison_item(response_obj, "Tunnel_Temperature", house.house_number)
-                ),
-                "target_temperature": safe_float(
-                    extract_comparison_item(response_obj, "Set_Temperature", house.house_number)
-                ),
-                "static_pressure": live.get("static_pressure"),
-                "inside_humidity": live.get("humidity"),
-                "ventilation_mode": extract_comparison_item(response_obj, "Vent_Mode", house.house_number),
-                "ventilation_level": safe_float(
-                    extract_comparison_item(response_obj, "Vent_Level", house.house_number)
-                ),
-                "airflow_cfm": safe_float(
-                    str(extract_comparison_item(response_obj, "Current_Level_CFM", house.house_number) or "").replace(",", "")
-                ),
-                "airflow_percentage": live.get("airflow_percentage"),
-                "water_consumption": safe_float(
-                    extract_comparison_item(response_obj, "Water_Daily", house.house_number)
-                )
-                or live.get("water_consumption"),
-                "feed_consumption": safe_float(
-                    extract_comparison_item(response_obj, "Feed_Daily", house.house_number)
-                )
-                or live.get("feed_consumption"),
-                "bird_count": safe_float(
-                    extract_comparison_item(response_obj, "Current_Birds_Count_In_House", house.house_number)
-                ),
-                "is_connected": bool(live.get("is_connected")),
-                "has_alarms": False,
-                "alarm_status": live.get("alarm_status") or "normal",
-                "active_alarms_count": None,
+        comparison_houses.append({
+            "house_id": house.id,
+            "house_number": house.house_number,
+            "farm_id": house.farm.id,
+            "farm_name": house.farm.name,
+            "current_day": house.age_days,
+            "age_days": house.age_days,
+            "current_age_days": house.current_age_days,
+            "is_integrated": house.is_integrated,
+            "status": house.status,
+            "is_full_house": house.age_days is not None and house.age_days >= 0,
+            "last_update_time": live.get("source_timestamp") or timezone.now().isoformat(),
+            "average_temperature": live.get("average_temperature"),
+            "outside_temperature": safe_float(
+                extract_comparison_item(response_obj, "Outside_Temperature", house.house_number)
+            ),
+            "tunnel_temperature": safe_float(
+                extract_comparison_item(response_obj, "Tunnel_Temperature", house.house_number)
+            ),
+            "target_temperature": safe_float(
+                extract_comparison_item(response_obj, "Set_Temperature", house.house_number)
+            ),
+            "static_pressure": live.get("static_pressure"),
+            "inside_humidity": live.get("humidity"),
+            "ventilation_mode": extract_comparison_item(response_obj, "Vent_Mode", house.house_number),
+            "ventilation_level": safe_float(
+                extract_comparison_item(response_obj, "Vent_Level", house.house_number)
+            ),
+            "airflow_cfm": safe_float(
+                str(extract_comparison_item(response_obj, "Current_Level_CFM", house.house_number) or "").replace(",", "")
+            ),
+            "airflow_percentage": live.get("airflow_percentage"),
+            "water_consumption": safe_float(
+                extract_comparison_item(response_obj, "Water_Daily", house.house_number)
+            ) or live.get("water_consumption"),
+            "feed_consumption": safe_float(
+                extract_comparison_item(response_obj, "Feed_Daily", house.house_number)
+            ) or live.get("feed_consumption"),
+            "bird_count": safe_float(
+                extract_comparison_item(response_obj, "Current_Birds_Count_In_House", house.house_number)
+            ),
+            "is_connected": is_connected,
+            "has_alarms": False,
+            "alarm_status": alarm_status,
+            "active_alarms_count": None,
+        })
+
+        # Build per-house cache payloads in memory (expensive Rotem calls, outside the DB transaction)
+        try:
+            house_cache_payloads[house.id] = _build_house_cache_payloads(house, scraper, live, source_ts)
+        except Exception as exc:
+            logger.warning("house_payload_build_failed farm=%s house=%s err=%s", farm.id, house.house_number, exc)
+            house_cache_payloads[house.id] = {
+                "latest_payload": live,
+                "history_payload": {},
+                "kpis_payload": {},
+                "heater_payload": {},
+                "source_timestamp": source_ts,
+                "refresh_state": "fresh",
+                "last_error": str(exc),
             }
-        )
-        _upsert_house_payloads(house, scraper, site_payload)
-        houses_upserted += 1
 
     alerts_summary["total_active"] = alerts_summary["critical"] + alerts_summary["warning"]
-    source_ts = parse_source_timestamp(site_payload) or timezone.now()
-    FarmMonitoringCache.objects.update_or_create(
-        farm=farm,
-        defaults={
-            "dashboard_payload": {
-                "farm_id": farm.id,
-                "farm_name": farm.name,
-                "total_houses": len(houses),
-                "houses": dashboard_houses,
-                "alerts_summary": alerts_summary,
-                "connection_summary": connection_summary,
-            },
-            "comparison_payload": {"count": len(comparison_houses), "houses": comparison_houses},
-            "houses_payload": {
-                "farm_id": farm.id,
-                "farm_name": farm.name,
-                "houses_count": len(houses_all_payload),
-                "houses": houses_all_payload,
-            },
-            "source_timestamp": source_ts,
-            "refresh_state": "fresh",
-            "last_error": "",
+    houses_processed = sum(1 for h in houses if house_live[h.id] is not None)
+
+    # --- Phase 3: Atomic commit ---
+    farm_cache_defaults = {
+        "dashboard_payload": {
+            "farm_id": farm.id,
+            "farm_name": farm.name,
+            "total_houses": len(houses),
+            "houses": dashboard_houses,
+            "alerts_summary": alerts_summary,
+            "connection_summary": connection_summary,
         },
-    )
+        "comparison_payload": {"count": len(comparison_houses), "houses": comparison_houses},
+        "houses_payload": {
+            "farm_id": farm.id,
+            "farm_name": farm.name,
+            "houses_count": len(houses_all_payload),
+            "houses": houses_all_payload,
+        },
+        "house_statuses": house_statuses,
+        "source_timestamp": source_ts,
+        "refresh_state": "fresh",
+        "last_error": "",
+    }
+
+    with transaction.atomic():
+        # Lock the farm cache row to prevent concurrent writers
+        locked_cache = FarmMonitoringCache.objects.select_for_update().filter(farm=farm).first()
+        if locked_cache:
+            for k, v in farm_cache_defaults.items():
+                setattr(locked_cache, k, v)
+            locked_cache.save()
+        else:
+            FarmMonitoringCache.objects.create(farm=farm, **farm_cache_defaults)
+
+        # Write all per-house caches atomically
+        for house in houses:
+            if house.id in house_cache_payloads:
+                HouseMonitoringCache.objects.update_or_create(
+                    house=house,
+                    defaults=house_cache_payloads[house.id],
+                )
+
     elapsed_ms = int((timezone.now() - started).total_seconds() * 1000)
     logger.info(
-        "monitoring cache upsert farm=%s status=success houses=%s elapsed_ms=%s",
-        farm.id,
-        houses_upserted,
-        elapsed_ms,
+        "monitoring_cache_upsert farm=%s status=success houses_ok=%s houses_failed=%s elapsed_ms=%s",
+        farm.id, houses_processed, len(failed_house_numbers), elapsed_ms,
     )
-    return UpsertResult(status="success", farms_processed=1, houses_processed=houses_upserted)
+    return UpsertResult(status="success", farms_processed=1, houses_processed=houses_processed)
 
 
 def upsert_monitoring_cache_for_all_farms() -> UpsertResult:
@@ -510,11 +685,7 @@ def upsert_monitoring_cache_for_all_farms() -> UpsertResult:
     )
     elapsed_ms = int((timezone.now() - started).total_seconds() * 1000)
     logger.info(
-        "monitoring cache batch status=%s farms_processed=%s houses_processed=%s elapsed_ms=%s failures=%s",
-        result.status,
-        result.farms_processed,
-        result.houses_processed,
-        elapsed_ms,
-        len(failures),
+        "monitoring_cache_batch status=%s farms_processed=%s houses_processed=%s elapsed_ms=%s failures=%s",
+        result.status, result.farms_processed, result.houses_processed, elapsed_ms, len(failures),
     )
     return result

@@ -1954,3 +1954,123 @@ def sync_flock_from_rotem(request, house_id):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_ios_snapshot(request, farm_id):
+    """
+    Unified iOS snapshot: all monitoring data the iOS app needs in one
+    cache-consistent response. All fields come from the same scrape cycle,
+    eliminating the inconsistency caused by merging three separate endpoints.
+
+    Returns farm-level metadata, per-house freshness statuses, and a complete
+    houses array with every sensor field.
+    """
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+
+    now = timezone.now()
+    circuit_open = bool(
+        cache and cache.last_error == "circuit_open" and cache.refresh_state == "failed"
+    )
+
+    # Build per-house list from cache
+    houses_data = []
+    if cache and isinstance(cache.houses_payload, dict):
+        for h in cache.houses_payload.get("houses", []):
+            if isinstance(h, dict):
+                houses_data.append(h)
+
+    # For any active house missing from cache, fall back to latest DB snapshot
+    if cache:
+        cached_house_numbers = {h.get("house_number") for h in houses_data if isinstance(h, dict)}
+        db_houses = House.objects.filter(farm=farm, is_active=True).exclude(
+            house_number__in=cached_house_numbers
+        )
+        for house in db_houses:
+            snap = (
+                HouseMonitoringSnapshot.objects
+                .filter(house=house)
+                .order_by("-timestamp")
+                .first()
+            )
+            if snap:
+                houses_data.append({
+                    "house_id": house.id,
+                    "house_number": house.house_number,
+                    "timestamp": snap.timestamp.isoformat(),
+                    "source_timestamp": snap.timestamp.isoformat(),
+                    "average_temperature": float(snap.average_temperature) if snap.average_temperature is not None else None,
+                    "humidity": float(snap.humidity) if snap.humidity is not None else None,
+                    "static_pressure": float(snap.static_pressure) if snap.static_pressure is not None else None,
+                    "airflow_percentage": float(snap.ventilation_level) if snap.ventilation_level is not None else None,
+                    "water_consumption": float(snap.water_consumption) if snap.water_consumption is not None else None,
+                    "feed_consumption": float(snap.feed_consumption) if snap.feed_consumption is not None else None,
+                    "current_day": house.age_days,
+                    "status": house.status,
+                    "is_connected": snap.connection_status == 1,
+                    "alarm_status": snap.alarm_status or "normal",
+                    "active_alarms_count": 0,
+                    "data_status": "db_fallback",
+                })
+
+    source_ts = cache.source_timestamp if cache else None
+    fetched_at = cache.fetched_at if cache else now
+    refresh_state = cache.refresh_state if cache else "idle"
+    house_statuses = (cache.house_statuses or {}) if cache else {}
+
+    meta = build_meta(
+        fetched_at=fetched_at,
+        source_timestamp=source_ts,
+        refresh_state=refresh_state,
+        stale_seconds=MAX_STALE_SECONDS,
+        house_statuses=house_statuses,
+        circuit_open=circuit_open,
+    )
+
+    dashboard = (cache.dashboard_payload or {}) if cache else {}
+    alerts_summary = dashboard.get("alerts_summary", {
+        "total_active": 0, "critical": 0, "warning": 0, "normal": 0,
+    })
+    connection_summary = dashboard.get("connection_summary", {
+        "connected": 0, "disconnected": 0,
+    })
+
+    # Per-house alert details (for iOS alarm mapping)
+    alerts_by_house = {}
+    try:
+        active_alerts = WaterConsumptionAlert.objects.filter(
+            farm=farm,
+            is_resolved=False,
+        ).select_related("house")
+        for alert in active_alerts:
+            house_id = alert.house_id
+            if house_id not in alerts_by_house:
+                alerts_by_house[str(house_id)] = {
+                    "active_count": 0,
+                    "highest_severity": "low",
+                    "latest_message": None,
+                }
+            entry = alerts_by_house[str(house_id)]
+            entry["active_count"] += 1
+            severity_rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+            if severity_rank.get(alert.severity, 0) > severity_rank.get(entry["highest_severity"], 0):
+                entry["highest_severity"] = alert.severity
+            if entry["latest_message"] is None:
+                entry["latest_message"] = getattr(alert, "message", None) or f"Water alert ({alert.severity})"
+    except Exception:
+        pass
+
+    data = {
+        "farm_id": farm.id,
+        "farm_name": farm.name,
+        "total_houses": House.objects.filter(farm=farm, is_active=True).count(),
+        "houses": sorted(houses_data, key=lambda h: h.get("house_number", 0) if isinstance(h, dict) else 0),
+        "alerts_summary": alerts_summary,
+        "alerts_by_house": alerts_by_house,
+        "connection_summary": connection_summary,
+    }
+
+    return Response(wrap_cached_response(data, meta))

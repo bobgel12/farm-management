@@ -329,13 +329,15 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # Celery Beat schedule
 CELERY_BEAT_SCHEDULE = {
-    # Legacy Rotem scraper tasks (for existing farms)
-    'scrape-rotem-data-every-5-minutes': {
-        'task': 'rotem_scraper.tasks.scrape_rotem_data',
-        'schedule': 300.0,  # Every 5 minutes (300 seconds)
+    # Unified monitoring sync (replaces scrape_rotem_data + sync_farm_data)
+    'sync-all-farms-monitoring-every-5-minutes': {
+        'task': 'rotem_scraper.tasks.sync_all_farms_monitoring',
+        'schedule': 300.0,  # Every 5 minutes
     },
     'analyze-data-every-hour': {
         'task': 'rotem_scraper.tasks.analyze_data',
@@ -350,11 +352,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 604800.0,  # Every week (604800 seconds)
     },
     
-    # New integration tasks
-    'sync-integrated-farms-every-5-minutes': {
-        'task': 'integrations.tasks.sync_farm_data',
-        'schedule': 300.0,  # Every 5 minutes (300 seconds)
-    },
+    # sync_farm_data removed from beat; replaced by sync_all_farms_monitoring above
     'test-integration-connections-every-hour': {
         'task': 'integrations.tasks.test_integration_connections',
         'schedule': 3600.0,  # Every hour (3600 seconds)
