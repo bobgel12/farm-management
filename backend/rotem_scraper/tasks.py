@@ -273,3 +273,48 @@ def refresh_house_heater_history(self, house_id: int):
     except Exception as exc:
         logger.error("refresh_house_heater_history failed: %s", exc, exc_info=True)
         raise self.retry(exc=exc, countdown=30)
+
+
+@shared_task(bind=True, max_retries=3)
+def calculate_daily_flock_performance(self):
+    """
+    Daily task to calculate and persist real FlockPerformance metrics.
+
+    Calculates for all active flocks:
+    - Daily feed consumption (from Rotem sensors)
+    - Daily water consumption (from Rotem sensors)
+    - Mortality rate (from flock tracking)
+    - Livability percentage
+    - Flock age in days
+
+    Schedule: Daily at 2 AM (after Rotem scrape completes)
+    Triggered by: Celery Beat scheduler
+
+    Returns:
+        Dictionary with results summary
+    """
+    try:
+        from rotem_scraper.flock_performance_calculator import calculate_all_flock_performance
+        from django.utils import timezone
+
+        logger.info("Starting daily flock performance calculation task")
+
+        results = calculate_all_flock_performance()
+
+        summary = (
+            f"✅ Daily flock performance calculation complete. "
+            f"Success: {results['success']}, Failed: {results['failed']}"
+        )
+
+        if results['errors']:
+            summary += f" | Errors: {', '.join(results['errors'][:3])}"
+            if len(results['errors']) > 3:
+                summary += f" ... and {len(results['errors']) - 3} more"
+
+        logger.info(summary)
+        return results
+
+    except Exception as exc:
+        logger.error(f"Daily flock performance calculation failed: {str(exc)}", exc_info=True)
+        # Retry in 5 minutes if failed
+        self.retry(exc=exc, countdown=300, exc=exc)

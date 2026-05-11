@@ -4,6 +4,7 @@ Django settings for chicken_management project.
 
 from pathlib import Path
 from decouple import config
+from celery.schedules import crontab
 import os
 import logging
 
@@ -52,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'chicken_management.response_standardizer.StandardizeResponseMiddleware',  # API Response standardization
 ]
 
 ROOT_URLCONF = 'chicken_management.urls'
@@ -387,6 +389,11 @@ CELERY_BEAT_SCHEDULE = {
     'generate-daily-report': {
         'task': 'integrations.tasks.generate_daily_report',
         'schedule': 86400.0,  # Every day at midnight (86400 seconds)
+    },
+    'calculate-daily-flock-performance': {
+        'task': 'rotem_scraper.tasks.calculate_daily_flock_performance',
+        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM (after Rotem scrape)
+        'options': {'queue': 'background'},
     },
 }
 
