@@ -317,4 +317,4 @@ def calculate_daily_flock_performance(self):
     except Exception as exc:
         logger.error(f"Daily flock performance calculation failed: {str(exc)}", exc_info=True)
         # Retry in 5 minutes if failed
-        self.retry(exc=exc, countdown=300, exc=exc)
+        self.retry(exc=exc, countdown=300)
