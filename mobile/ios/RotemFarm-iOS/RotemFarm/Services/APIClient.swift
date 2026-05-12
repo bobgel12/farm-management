@@ -1097,9 +1097,10 @@ actor APIClient {
     }
 
     /// Direct RotemNet feed history (CommandID 41 via backend facade).
-    func fetchRotemFeedHistory(houseID: Int) async throws -> [APIRotemFeedHistoryPoint] {
+    func fetchRotemFeedHistory(houseID: Int, days: Int = 5) async throws -> [APIRotemFeedHistoryPoint] {
+        let safeDays = min(max(days, 1), 30)
         let data = try await request(
-            path: "/api/rotem/daily-summaries/feed-history/?house_id=\(houseID)",
+            path: "/api/rotem/daily-summaries/feed-history/?house_id=\(houseID)&days=\(safeDays)",
             method: "GET",
             payload: nil,
             requiresAuth: true
@@ -1112,7 +1113,7 @@ actor APIClient {
         }
         return rows.compactMap { row in
             guard let growthDay = row["growth_day"] as? Int else { return nil }
-            let total = (row["daily_feed_total"] as? Double) ?? 0.0
+            let total = jsonDouble(from: row, keys: ["daily_feed_total", "daily_feed", "feed_consumption"]) ?? 0.0
             let date = (row["date"] as? String).flatMap(parseISODate)
             return APIRotemFeedHistoryPoint(
                 date: date,
@@ -1125,7 +1126,8 @@ actor APIClient {
         .sorted(by: { $0.growthDay < $1.growthDay })
     }
 
-    func fetchHouseHeaterHistory(houseID: Int) async throws -> [DailyResourcePoint] {
+    func fetchHouseHeaterHistory(houseID: Int, days: Int = 5) async throws -> [DailyResourcePoint] {
+        let safeDays = min(max(days, 1), 30)
         let data = try await request(
             path: "/api/houses/\(houseID)/heater-history/?mode=cached",
             method: "GET",
@@ -1144,12 +1146,13 @@ actor APIClient {
         else {
             return []
         }
-        return daily.compactMap { item in
+        let points = daily.compactMap { item in
             guard let growthDay = item["growth_day"] as? Int else { return nil }
             let date = (item["date"] as? String).flatMap(parseISODate) ?? Date()
-            let hours = (item["total_hours"] as? Double) ?? 0
+            let hours = jsonDouble(from: item, keys: ["total_hours", "hours"]) ?? 0
             return DailyResourcePoint(day: growthDay, date: date, value: hours, target: nil, isAnomaly: false)
-        }.sorted(by: { $0.day < $1.day })
+        }.sorted(by: { $0.date < $1.date })
+        return Array(points.suffix(safeDays))
     }
 
     func acknowledgeWaterAlert(id: Int) async throws {

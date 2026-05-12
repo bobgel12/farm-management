@@ -31,7 +31,7 @@ struct FeedDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await store.refreshRotemDataForCurrentFarm()
-            daily = await store.fetchFeedHistory(houseId: house.id)
+            daily = await store.fetchFeedHistory(houseId: house.id, days: 14)
         }
     }
 

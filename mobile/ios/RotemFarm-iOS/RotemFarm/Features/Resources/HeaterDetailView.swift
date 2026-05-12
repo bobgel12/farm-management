@@ -48,7 +48,7 @@ struct HeaterDetailView: View {
         errorText = nil
         defer { isLoading = false }
 
-        let history = await store.fetchHeaterHistory(houseId: house.id)
+        let history = await store.fetchHeaterHistory(houseId: house.id, days: 14)
         daily = Array(history.suffix(14))
 
         if daily.isEmpty {

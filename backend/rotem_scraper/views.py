@@ -1220,6 +1220,10 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     def feed_history(self, request):
         """Get feed history for a specific house using CommandID 41."""
         house_id = request.query_params.get('house_id')
+        try:
+            days = min(max(int(request.query_params.get('days', 5)), 1), 30)
+        except (TypeError, ValueError):
+            days = 5
         if not house_id:
             return Response({'error': 'house_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -1259,11 +1263,14 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 today = _dt.date.today()
                 for rec in history:
                     rec['date'] = (today - timedelta(days=(max_gd - rec['growth_day']))).isoformat()
+            if len(history) > days:
+                history = history[-days:]
             return Response({
                 'house_id': int(house_id),
                 'house_number': house.house_number,
                 'feed_history': history,
                 'total_days': len(history),
+                'days': days,
             })
         except House.DoesNotExist:
             return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)

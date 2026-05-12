@@ -756,10 +756,10 @@ final class MockDataStore {
         }
     }
 
-    func fetchFeedHistory(houseId: UUID) async -> [DailyResourcePoint] {
+    func fetchFeedHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
         guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
         do {
-            let rows = try await apiClient.fetchRotemFeedHistory(houseID: backendID)
+            let rows = try await apiClient.fetchRotemFeedHistory(houseID: backendID, days: days)
             return rows.map { row in
                 DailyResourcePoint(
                     day: row.growthDay,
@@ -768,7 +768,7 @@ final class MockDataStore {
                     target: nil,
                     isAnomaly: false
                 )
-            }.sorted(by: { $0.day < $1.day })
+            }.sorted(by: { $0.date < $1.date })
         } catch {
             lastError = error.localizedDescription
             return []
@@ -794,10 +794,10 @@ final class MockDataStore {
         }
     }
 
-    func fetchHeaterHistory(houseId: UUID) async -> [DailyResourcePoint] {
+    func fetchHeaterHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
         guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
         do {
-            return try await apiClient.fetchHouseHeaterHistory(houseID: backendID)
+            return try await apiClient.fetchHouseHeaterHistory(houseID: backendID, days: days)
         } catch {
             if let urlError = error as? URLError, urlError.code == .timedOut {
                 lastError = "Heater history request timed out. Please try again."

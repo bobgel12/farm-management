@@ -190,9 +190,13 @@ struct CompareView: View {
             // #endregion
             return norm
         case .feed:
-            return normalizeLastDays(await store.fetchFeedHistory(houseId: houseID), days: 5)
+            let raw = await store.fetchFeedHistory(houseId: houseID, days: 5)
+            let norm = normalizeLastDays(raw, days: 5)
+            return norm
         case .heater:
-            return normalizeLastDays(Array((await store.fetchHeaterHistory(houseId: houseID)).suffix(7)), days: 5)
+            let raw = await store.fetchHeaterHistory(houseId: houseID, days: 5)
+            let norm = normalizeLastDays(raw, days: 5)
+            return norm
         }
     }
 
