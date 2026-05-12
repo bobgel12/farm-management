@@ -127,6 +127,17 @@ def _extract_current_numeric(house_data: dict, key: str):
     return _safe_float(section.get('CurrentNumericValue'))
 
 
+def _parse_site_controllers_source_timestamp(payload: dict):
+    response_obj = payload.get('reponseObj') if isinstance(payload, dict) else None
+    last_update = response_obj.get('LastUpdateDT') if isinstance(response_obj, dict) else None
+    if isinstance(last_update, str):
+        try:
+            return datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+    return None
+
+
 def _extract_live_house_from_site_controllers(payload: dict, house_number: int):
     response_obj = payload.get('reponseObj') if isinstance(payload, dict) else None
     farm_houses = response_obj.get('FarmHouses', []) if isinstance(response_obj, dict) else []
@@ -539,16 +550,19 @@ def house_monitoring_latest(request, house_id):
             {'detail': 'House live data not found in Rotem response.'},
             status=status.HTTP_404_NOT_FOUND,
         )
-    HouseMonitoringCache.objects.update_or_create(
-        house=house,
-        defaults={
-            'latest_payload': live,
-            'source_timestamp': datetime.fromisoformat(live['source_timestamp'].replace('Z', '+00:00')),
-            'refresh_state': 'fresh',
-            'last_error': '',
-        },
-    )
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    if mode != 'live':
+        HouseMonitoringCache.objects.update_or_create(
+            house=house,
+            defaults={
+                'latest_payload': live,
+                'source_timestamp': datetime.fromisoformat(live['source_timestamp'].replace('Z', '+00:00')),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+        cache = HouseMonitoringCache.objects.filter(house=house).first()
+    else:
+        cache = None
     meta = build_meta(
         fetched_at=cache.fetched_at if cache else timezone.now(),
         source_timestamp=cache.source_timestamp if cache else timezone.now(),
@@ -636,12 +650,6 @@ def house_monitoring_history(request, house_id):
             'feed_consumption': feed,
         })
 
-    # Add latest live general sample so clients still get realtime environment fields.
-    site_payload = scraper.get_site_controllers_info()
-    live = _extract_live_house_from_site_controllers(site_payload or {}, house.house_number)
-    if live:
-        results.append(live)
-
     results = sorted(results, key=lambda x: x.get('source_timestamp') or x.get('timestamp'))[-limit:]
     payload = {
         'count': len(results),
@@ -656,17 +664,17 @@ def house_monitoring_history(request, house_id):
         },
         'results': results
     }
-    HouseMonitoringCache.objects.update_or_create(
-        house=house,
-        defaults={
-            'history_payload': payload,
-            'source_timestamp': timezone.now(),
-            'refresh_state': 'fresh',
-            'last_error': '',
-        },
-    )
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
-    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    if mode != 'live':
+        HouseMonitoringCache.objects.update_or_create(
+            house=house,
+            defaults={
+                'history_payload': payload,
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+    meta = build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)
     return Response(wrap_cached_response(payload, meta))
 
 
@@ -747,16 +755,8 @@ def house_monitoring_kpis(request, house_id):
     feed_today = feed_by_day.get(sorted_feed_days[-1]) if sorted_feed_days else None
     feed_yesterday = feed_by_day.get(sorted_feed_days[-2]) if len(sorted_feed_days) > 1 else None
 
-    # Live heater runtime from Rotem heater history (CommandID 43).
-    heater_data = scraper.get_heater_history(house_number=house.house_number) or {}
-    heater_records = heater_data.get('records', []) if isinstance(heater_data, dict) else []
     heater_hours_24h = None
     heater_cycles_24h = None
-    if heater_records:
-        last = heater_records[-1]
-        heater_hours_24h = _safe_float(last.get('total_runtime_hours'))
-        per_device = last.get('per_device', {}) if isinstance(last.get('per_device'), dict) else {}
-        heater_cycles_24h = len([k for k, v in per_device.items() if isinstance(v, dict) and (v.get('minutes') or 0) > 0])
 
     def calc_delta(current, previous):
         if current is None or previous is None:
@@ -784,7 +784,7 @@ def house_monitoring_kpis(request, house_id):
         'heater_runtime': {
             'hours_24h': heater_hours_24h,
             'cycles_24h': heater_cycles_24h,
-            'method': 'rotem_command_43_live',
+            'method': 'not_loaded_one_rotem_call_limit',
         },
         'fan_runtime': {
             'hours_24h': None,
@@ -807,17 +807,17 @@ def house_monitoring_kpis(request, house_id):
             'active_now': None,
         },
     }
-    HouseMonitoringCache.objects.update_or_create(
-        house=house,
-        defaults={
-            'kpis_payload': payload,
-            'source_timestamp': timezone.now(),
-            'refresh_state': 'fresh',
-            'last_error': '',
-        },
-    )
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
-    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    if mode != 'live':
+        HouseMonitoringCache.objects.update_or_create(
+            house=house,
+            defaults={
+                'kpis_payload': payload,
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+    meta = build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)
     return Response(wrap_cached_response(payload, meta))
 
 
@@ -882,17 +882,17 @@ def farm_houses_monitoring_all(request, farm_id):
             })
 
     payload = {'farm_id': farm_id, 'farm_name': farm.name, 'houses_count': len(results), 'houses': results}
-    FarmMonitoringCache.objects.update_or_create(
-        farm=farm,
-        defaults={
-            'houses_payload': payload,
-            'source_timestamp': timezone.now(),
-            'refresh_state': 'fresh',
-            'last_error': '',
-        },
-    )
-    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
-    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    if mode != 'live':
+        FarmMonitoringCache.objects.update_or_create(
+            farm=farm,
+            defaults={
+                'houses_payload': payload,
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+    meta = build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)
     return Response(wrap_cached_response(payload, meta))
 
 
@@ -987,17 +987,17 @@ def farm_houses_monitoring_dashboard(request, farm_id):
 
         dashboard_data['houses'].append(house_data)
 
-    FarmMonitoringCache.objects.update_or_create(
-        farm=farm,
-        defaults={
-            'dashboard_payload': dashboard_data,
-            'source_timestamp': timezone.now(),
-            'refresh_state': 'fresh',
-            'last_error': '',
-        },
-    )
-    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
-    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    if mode != 'live':
+        FarmMonitoringCache.objects.update_or_create(
+            farm=farm,
+            defaults={
+                'dashboard_payload': dashboard_data,
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+    meta = build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)
     return Response(wrap_cached_response(dashboard_data, meta))
 
 
@@ -1082,9 +1082,9 @@ def farm_houses_monitoring_snapshot(request, farm_id):
             houses_payload = {'houses': live_rows}
             dashboard_payload = {'houses': dashboard_rows}
 
-    if not dashboard_payload and cache and cache.dashboard_payload:
+    if mode != 'live' and not dashboard_payload and cache and cache.dashboard_payload:
         dashboard_payload = cache.dashboard_payload
-    if not houses_payload and cache and cache.houses_payload:
+    if mode != 'live' and not houses_payload and cache and cache.houses_payload:
         houses_payload = cache.houses_payload
 
     snapshot = _compose_monitoring_snapshot_payload(
@@ -1095,7 +1095,7 @@ def farm_houses_monitoring_snapshot(request, farm_id):
     )
     refresh_state = 'fresh' if (dashboard_payload or houses_payload) else 'failed'
     source_ts = timezone.now()
-    if cache and cache.source_timestamp:
+    if mode != 'live' and cache and cache.source_timestamp:
         source_ts = cache.source_timestamp
     elif snapshot.get('houses'):
         source_raw = snapshot['houses'][0].get('source_timestamp')
@@ -1231,17 +1231,17 @@ def house_heater_history(request, house_id):
         })
     daily.sort(key=lambda row: row.get('growth_day', 0))
     payload = {'heater_history': {'daily': daily}}
-    HouseMonitoringCache.objects.update_or_create(
-        house=house,
-        defaults={
-            'heater_payload': payload,
-            'source_timestamp': timezone.now(),
-            'refresh_state': 'fresh',
-            'last_error': '',
-        },
-    )
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
-    meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+    if mode != 'live':
+        HouseMonitoringCache.objects.update_or_create(
+            house=house,
+            defaults={
+                'heater_payload': payload,
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+    meta = build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)
     return Response(wrap_cached_response(payload, meta))
 
 
@@ -2036,6 +2036,133 @@ def farm_ios_snapshot(request, farm_id):
     houses array with every sensor field.
     """
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    mode = _cache_mode(request)
+    if mode == 'live':
+        houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
+        if not houses:
+            meta = build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)
+            return Response(wrap_cached_response({
+                "farm_id": farm.id,
+                "farm_name": farm.name,
+                "total_houses": 0,
+                "houses": [],
+                "alerts_summary": {"total_active": 0, "critical": 0, "warning": 0, "normal": 0},
+                "alerts_by_house": {},
+                "connection_summary": {"connected": 0, "disconnected": 0},
+            }, meta))
+
+        scraper, err = _house_rotem_scraper_or_error(houses[0])
+        if err:
+            return err
+        site_payload = scraper.get_site_controllers_info() or {}
+        source_ts = _parse_site_controllers_source_timestamp(site_payload) or timezone.now()
+        houses_data = []
+        house_statuses = {}
+        connection_summary = {"connected": 0, "disconnected": 0}
+        alerts_summary = {"total_active": 0, "critical": 0, "warning": 0, "normal": 0}
+
+        for house in houses:
+            live = _extract_live_house_from_site_controllers(site_payload, house.house_number)
+            if not live:
+                house_statuses[str(house.house_number)] = {
+                    "status": "failed",
+                    "source_timestamp": None,
+                    "error_msg": "no_live_data",
+                }
+                houses_data.append({
+                    "house_id": house.id,
+                    "house_number": house.house_number,
+                    "current_day": house.age_days,
+                    "status": house.status,
+                    "is_connected": False,
+                    "alarm_status": "normal",
+                    "active_alarms_count": 0,
+                    "data_status": "failed",
+                })
+                connection_summary["disconnected"] += 1
+                alerts_summary["normal"] += 1
+                continue
+
+            house_statuses[str(house.house_number)] = {
+                "status": "ok",
+                "source_timestamp": live.get("source_timestamp"),
+                "error_msg": None,
+            }
+            is_connected = bool(live.get("is_connected"))
+            if is_connected:
+                connection_summary["connected"] += 1
+            else:
+                connection_summary["disconnected"] += 1
+            alarm_status = live.get("alarm_status") or "normal"
+            if alarm_status == "critical":
+                alerts_summary["critical"] += 1
+            elif alarm_status == "warning":
+                alerts_summary["warning"] += 1
+            else:
+                alerts_summary["normal"] += 1
+            houses_data.append({
+                "house_id": house.id,
+                "house_number": house.house_number,
+                "timestamp": live.get("timestamp"),
+                "source_timestamp": live.get("source_timestamp"),
+                "average_temperature": live.get("average_temperature"),
+                "humidity": live.get("humidity"),
+                "static_pressure": live.get("static_pressure"),
+                "airflow_percentage": live.get("airflow_percentage"),
+                "water_consumption": live.get("water_consumption"),
+                "feed_consumption": live.get("feed_consumption"),
+                "current_day": house.age_days,
+                "growth_day": house.age_days,
+                "status": house.status,
+                "is_connected": is_connected,
+                "alarm_status": alarm_status,
+                "active_alarms_count": 0,
+                "data_status": "ok",
+            })
+
+        alerts_by_house = {}
+        try:
+            active_alerts = WaterConsumptionAlert.objects.filter(
+                farm=farm,
+                is_resolved=False,
+            ).select_related("house")
+            for alert in active_alerts:
+                house_id = alert.house_id
+                if house_id not in alerts_by_house:
+                    alerts_by_house[str(house_id)] = {
+                        "active_count": 0,
+                        "highest_severity": "low",
+                        "latest_message": None,
+                    }
+                entry = alerts_by_house[str(house_id)]
+                entry["active_count"] += 1
+                severity_rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+                if severity_rank.get(alert.severity, 0) > severity_rank.get(entry["highest_severity"], 0):
+                    entry["highest_severity"] = alert.severity
+                if entry["latest_message"] is None:
+                    entry["latest_message"] = getattr(alert, "message", None) or f"Water alert ({alert.severity})"
+        except Exception:
+            pass
+        alerts_summary["total_active"] = sum(v.get("active_count", 0) for v in alerts_by_house.values())
+
+        meta = build_meta(
+            fetched_at=timezone.now(),
+            source_timestamp=source_ts,
+            refresh_state='fresh',
+            stale_seconds=MAX_STALE_SECONDS,
+            house_statuses=house_statuses,
+            circuit_open=False,
+        )
+        return Response(wrap_cached_response({
+            "farm_id": farm.id,
+            "farm_name": farm.name,
+            "total_houses": len(houses),
+            "houses": houses_data,
+            "alerts_summary": alerts_summary,
+            "alerts_by_house": alerts_by_house,
+            "connection_summary": connection_summary,
+        }, meta))
+
     cache = _ensure_farm_cache(farm)
 
     now = timezone.now()

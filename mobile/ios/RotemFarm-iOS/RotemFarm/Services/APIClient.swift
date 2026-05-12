@@ -430,10 +430,11 @@ actor APIClient {
 
     func fetchFarmMonitoringDashboard(farmID: Int) async throws -> APIFarmMonitoringDashboardResult {
         let data = try await request(
-            path: "/api/farms/\(farmID)/houses/monitoring/dashboard/?mode=cached",
+            path: "/api/farms/\(farmID)/houses/monitoring/dashboard/?mode=live",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -473,10 +474,11 @@ actor APIClient {
 
     func fetchFarmMonitoringSnapshot(farmID: Int) async throws -> APIFarmMonitoringSnapshotResult {
         let data = try await request(
-            path: "/api/farms/\(farmID)/houses/monitoring/snapshot/?mode=cached",
+            path: "/api/farms/\(farmID)/houses/monitoring/snapshot/?mode=live",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIClientError.decoding
@@ -533,7 +535,7 @@ actor APIClient {
     /// fetchFarmMonitoringSnapshot calls and eliminates cross-cycle data inconsistency.
     func fetchFarmIOSSnapshot(farmID: Int) async throws -> APIFarmIOSSnapshotResult {
         let data = try await request(
-            path: "/api/farms/\(farmID)/ios/snapshot/",
+            path: "/api/farms/\(farmID)/ios/snapshot/?mode=live",
             method: "GET",
             payload: nil,
             requiresAuth: true,
@@ -698,8 +700,8 @@ actor APIClient {
         }
     }
 
-    /// Per-house latest monitoring. Use `mode: "live"` to scrape Rotem via the backend; default `cached` is fast.
-    func fetchLatestMonitoring(houseID: Int, mode: String = "cached") async throws -> APIMonitoring? {
+    /// Per-house latest monitoring defaults to direct Rotem data via the backend.
+    func fetchLatestMonitoring(houseID: Int, mode: String = "live") async throws -> APIMonitoring? {
         let safeMode = mode.lowercased() == "live" ? "live" : "cached"
         do {
             let data = try await request(
@@ -967,7 +969,7 @@ actor APIClient {
             query += "&end_date=\(Self.isoFormatter.string(from: endDate))"
         }
         let data = try await request(
-            path: "/api/houses/\(houseID)/monitoring/history/?\(query)",
+            path: "/api/houses/\(houseID)/monitoring/history/?mode=live&\(query)",
             method: "GET",
             payload: nil,
             requiresAuth: true,
@@ -1000,7 +1002,7 @@ actor APIClient {
 
     func fetchHouseMonitoringKpis(houseID: Int) async throws -> APIHouseMonitoringKpis {
         let data = try await request(
-            path: "/api/houses/\(houseID)/monitoring/kpis/?mode=cached",
+            path: "/api/houses/\(houseID)/monitoring/kpis/?mode=live",
             method: "GET",
             payload: nil,
             requiresAuth: true,
@@ -1181,7 +1183,7 @@ actor APIClient {
     func fetchHouseHeaterHistory(houseID: Int, days: Int = 5) async throws -> [DailyResourcePoint] {
         let safeDays = min(max(days, 1), 30)
         let data = try await request(
-            path: "/api/houses/\(houseID)/heater-history/?mode=cached",
+            path: "/api/houses/\(houseID)/heater-history/?mode=live",
             method: "GET",
             payload: nil,
             requiresAuth: true,

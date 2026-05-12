@@ -810,13 +810,9 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     def water_history(self, request):
         """Get water consumption history for a specific house.
 
-        Cache-first: serves HouseMonitoringCache.water_history_payload when
-        fresh (< 10 minutes old), avoiding a live Rotem login for every request.
-        Falls back to a live CommandID 40 scrape only when the cache is cold.
+        Direct Rotem path for iOS: login plus one water-history request.
         """
         from .scraper import RotemScraper
-        from .services.scraper_service import DjangoRotemScraperService
-        from houses.models import HouseMonitoringCache
         import json
 
         house_id = request.query_params.get('house_id')
@@ -830,32 +826,6 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # --- Cache-first shortcut ---
-        try:
-            _house = House.objects.get(pk=house_id)
-            cache = HouseMonitoringCache.objects.filter(house=_house).first()
-            if (
-                cache
-                and cache.water_history_payload
-                and cache.water_history_fetched_at
-                and _timestamp_is_fresh(cache.water_history_fetched_at)
-            ):
-                days_param = min(max(int(days or 5), 1), 30) if days else 5
-                history = _trim_history_rows(cache.water_history_payload, days_param)
-                return Response({
-                    'house_id': int(house_id),
-                    'house_number': _house.house_number,
-                    'farm_name': _house.farm.name if _house.farm else None,
-                    'water_history': history,
-                    'total_days': len(history),
-                    'average_consumption': sum(h.get('consumption_avg', 0) for h in history) / len(history) if history else 0,
-                    'source': 'cache',
-                })
-        except House.DoesNotExist:
-            return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception:
-            pass  # Cache miss — fall through to live scrape
-        
         try:
             house = House.objects.get(pk=house_id)
             
@@ -1135,20 +1105,6 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     else:
                         water_history.sort(key=lambda x: x.get('date', ''))
                 
-                # Persist to cache so subsequent per-house requests are instant
-                if water_history:
-                    from houses.models import HouseMonitoringCache
-                    try:
-                        HouseMonitoringCache.objects.update_or_create(
-                            house=house,
-                            defaults={
-                                'water_history_payload': water_history,
-                                'water_history_fetched_at': timezone.now(),
-                            },
-                        )
-                    except Exception as _ce:
-                        logger.warning("water_history cache write failed house=%s err=%s", house_id, _ce)
-
                 return Response({
                     'house_id': int(house_id),
                     'house_number': house.house_number,
@@ -1186,21 +1142,6 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': 'house_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             house = House.objects.get(pk=house_id)
-            cache = HouseMonitoringCache.objects.filter(house=house).first()
-            if (
-                cache
-                and cache.temperature_history_payload
-                and _timestamp_is_fresh(cache.temperature_history_fetched_at)
-            ):
-                history = list(cache.temperature_history_payload)
-                return Response({
-                    'house_id': int(house_id),
-                    'house_number': house.house_number,
-                    'temperature_history': history,
-                    'total_days': len(history),
-                    'source': 'cache',
-                })
-
             rows, err = _rotem_history_command_payload(house, command_id="35")
             if err:
                 return Response({'error': err}, status=status.HTTP_401_UNAUTHORIZED)
@@ -1225,13 +1166,6 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                     'date': (house.batch_start_date + timedelta(days=growth_day)).isoformat() if house.batch_start_date else None,
                 })
             history.sort(key=lambda x: x['growth_day'])
-            HouseMonitoringCache.objects.update_or_create(
-                house=house,
-                defaults={
-                    'temperature_history_payload': history,
-                    'temperature_history_fetched_at': timezone.now(),
-                },
-            )
             return Response({
                 'house_id': int(house_id),
                 'house_number': house.house_number,
@@ -1257,22 +1191,6 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': 'house_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             house = House.objects.get(pk=house_id)
-            cache = HouseMonitoringCache.objects.filter(house=house).first()
-            if (
-                cache
-                and cache.feed_history_payload
-                and _timestamp_is_fresh(cache.feed_history_fetched_at)
-            ):
-                history = _trim_history_rows(cache.feed_history_payload, days)
-                return Response({
-                    'house_id': int(house_id),
-                    'house_number': house.house_number,
-                    'feed_history': history,
-                    'total_days': len(history),
-                    'days': days,
-                    'source': 'cache',
-                })
-
             rows, err = _rotem_history_command_payload(house, command_id="41")
             if err:
                 return Response({'error': err}, status=status.HTTP_401_UNAUTHORIZED)
@@ -1308,13 +1226,6 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 today = _dt.date.today()
                 for rec in history:
                     rec['date'] = (today - timedelta(days=(max_gd - rec['growth_day']))).isoformat()
-            HouseMonitoringCache.objects.update_or_create(
-                house=house,
-                defaults={
-                    'feed_history_payload': history,
-                    'feed_history_fetched_at': timezone.now(),
-                },
-            )
             history = _trim_history_rows(history, days)
             return Response({
                 'house_id': int(house_id),

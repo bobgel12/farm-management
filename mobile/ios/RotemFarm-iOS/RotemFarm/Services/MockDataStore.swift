@@ -854,7 +854,8 @@ final class MockDataStore {
     func refreshMonitoringNowForCurrentFarm() async {
         guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return }
         do {
-            if let freshness = try await apiClient.refreshFarmMonitoringNow(farmID: farmBackendID) {
+            let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
+            if let freshness = snapshot.freshness {
                 monitoringFreshnessByFarmId[currentFarmId] = freshness
             }
             await reloadSelectedFarmData()
@@ -984,13 +985,9 @@ final class MockDataStore {
             return
         }
         do {
-            if force {
-                _ = try await apiClient.refreshFarmMonitoringNow(farmID: farmBackendID)
-            } else {
-                let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
-                if let freshness = snapshot.freshness {
-                    monitoringFreshnessByFarmId[currentFarmId] = freshness
-                }
+            let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
+            if let freshness = snapshot.freshness {
+                monitoringFreshnessByFarmId[currentFarmId] = freshness
             }
             lastFarmScrapeAt[currentFarmId] = Date()
         } catch {
