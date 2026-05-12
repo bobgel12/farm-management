@@ -40,6 +40,7 @@ from .services.heater_history_payload import build_heater_history_payload
 from .services.monitoring_cache_service import (
     MAX_STALE_SECONDS,
     build_meta,
+    cache_is_fresh,
     upsert_farm_monitoring_cache,
     wrap_cached_response,
 )
@@ -58,6 +59,26 @@ def _cache_mode(request):
 
 def _should_refresh(meta: dict):
     return bool(meta.get('is_stale')) and meta.get('refresh_state') != 'refreshing'
+
+
+def _ensure_farm_cache(farm: Farm, force: bool = False):
+    """Read-through farm cache: refresh from Rotem when missing or older than TTL."""
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    has_payload = bool(cache and (cache.houses_payload or cache.dashboard_payload))
+    if force or not cache_is_fresh(cache) or not has_payload:
+        upsert_farm_monitoring_cache(farm)
+        cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    return cache
+
+
+def _ensure_house_cache(house: House, field_name: str, force: bool = False):
+    """Refresh the farm bundle when a house cache field is missing or stale."""
+    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    payload = getattr(cache, field_name, None) if cache else None
+    if force or not cache_is_fresh(cache) or not payload:
+        upsert_farm_monitoring_cache(house.farm)
+        cache = HouseMonitoringCache.objects.filter(house=house).first()
+    return cache
 
 
 def _house_from_scope_or_404(request, house_id: int) -> House:
@@ -488,7 +509,11 @@ def house_monitoring_latest(request, house_id):
     """Get latest monitoring data (cached-first by default, live optional)."""
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    cache = (
+        _ensure_house_cache(house, 'latest_payload', force=(mode == 'live'))
+        if mode != 'live'
+        else HouseMonitoringCache.objects.filter(house=house).first()
+    )
     if mode != 'live' and cache and cache.latest_payload:
         meta = build_meta(
             fetched_at=cache.fetched_at,
@@ -539,7 +564,11 @@ def house_monitoring_history(request, house_id):
     """Get house monitoring history (cached-first by default)."""
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    cache = (
+        _ensure_house_cache(house, 'history_payload', force=(mode == 'live'))
+        if mode != 'live'
+        else HouseMonitoringCache.objects.filter(house=house).first()
+    )
     if mode != 'live' and cache and cache.history_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.history_payload, meta))
@@ -668,7 +697,11 @@ def house_monitoring_kpis(request, house_id):
     """Get derived operational KPIs (cached-first by default)."""
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    cache = (
+        _ensure_house_cache(house, 'kpis_payload', force=(mode == 'live'))
+        if mode != 'live'
+        else HouseMonitoringCache.objects.filter(house=house).first()
+    )
     if mode != 'live' and cache and cache.kpis_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.kpis_payload, meta))
@@ -794,7 +827,11 @@ def farm_houses_monitoring_all(request, farm_id):
     """Get latest monitoring for all houses in a farm (cached-first by default)."""
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     mode = _cache_mode(request)
-    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    cache = (
+        _ensure_farm_cache(farm, force=(mode == 'live'))
+        if mode != 'live'
+        else FarmMonitoringCache.objects.filter(farm=farm).first()
+    )
     if mode != 'live' and cache and cache.houses_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.houses_payload, meta))
@@ -865,7 +902,11 @@ def farm_houses_monitoring_dashboard(request, farm_id):
     """Get dashboard data (cached-first by default)."""
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     mode = _cache_mode(request)
-    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    cache = (
+        _ensure_farm_cache(farm, force=(mode == 'live'))
+        if mode != 'live'
+        else FarmMonitoringCache.objects.filter(farm=farm).first()
+    )
     if mode != 'live' and cache and cache.dashboard_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         payload = cache.dashboard_payload
@@ -966,7 +1007,11 @@ def farm_houses_monitoring_snapshot(request, farm_id):
     """Get one cached-first monitoring snapshot for all houses in a farm."""
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     mode = _cache_mode(request)
-    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    cache = (
+        _ensure_farm_cache(farm, force=(mode == 'live'))
+        if mode != 'live'
+        else FarmMonitoringCache.objects.filter(farm=farm).first()
+    )
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
 
     if mode != 'live' and cache and (cache.dashboard_payload or cache.houses_payload):
@@ -1132,7 +1177,11 @@ def house_heater_history(request, house_id):
     """Get house heater history (cached-first by default)."""
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
-    cache = HouseMonitoringCache.objects.filter(house=house).first()
+    cache = (
+        _ensure_house_cache(house, 'heater_payload', force=(mode == 'live'))
+        if mode != 'live'
+        else HouseMonitoringCache.objects.filter(house=house).first()
+    )
     if mode != 'live' and cache and cache.heater_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.heater_payload, meta))
@@ -1252,7 +1301,7 @@ def houses_comparison(request):
     mode = _cache_mode(request)
     if farm_id and mode != 'live':
         scoped_farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
-        cache = FarmMonitoringCache.objects.filter(farm=scoped_farm).first()
+        cache = _ensure_farm_cache(scoped_farm)
         if cache and cache.comparison_payload:
             meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
             return Response(wrap_cached_response(cache.comparison_payload, meta))
@@ -1987,8 +2036,7 @@ def farm_ios_snapshot(request, farm_id):
     houses array with every sensor field.
     """
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
-
-    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    cache = _ensure_farm_cache(farm)
 
     now = timezone.now()
     circuit_open = bool(
