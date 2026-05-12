@@ -356,6 +356,7 @@ final class MockDataStore {
             let snapshotHouses = houses
             var mappedHouses: [House] = []
             var mappedAlarms: [Alarm] = []
+            var waterSeedFromSnapshot: [UUID: Double] = [:]
             for apiHouse in activeHouses {
                 let houseID = Self.stableUUID(prefix: "house", intID: apiHouse.id)
                 let fallbackSnapshot = snapshotHouses.first(where: { $0.backendId == apiHouse.id })?.snapshot
@@ -398,6 +399,10 @@ final class MockDataStore {
                     airflowFill: Self.clamp01(resolvedAirflow / 100)
                 )
                 let state = Self.stateForSnapshot(snapshot)
+                let flockDayResolved = iosHouseData?.currentDay ?? apiHouse.currentDay
+                if let w = iosHouseData?.waterConsumption {
+                    waterSeedFromSnapshot[houseID] = w
+                }
                 mappedHouses.append(
                     House(
                         id: houseID,
@@ -406,7 +411,7 @@ final class MockDataStore {
                         name: "House \(apiHouse.houseNumber)",
                         type: .tunnel,
                         birdCount: 0,
-                        flockDay: iosHouseData?.currentDay ?? apiHouse.currentDay,
+                        flockDay: flockDayResolved,
                         state: state,
                         pillText: state == .ok ? "All OK" : (state == .warning ? "Check conditions" : "Needs attention"),
                         snapshot: snapshot
@@ -433,45 +438,49 @@ final class MockDataStore {
             }
 
             houses = mappedHouses
-            // Phase 2: after house-wide load, fetch per-house realtime water + heater histories.
-            var kpiByHouse: [UUID: APIHouseMonitoringKpis] = [:]
-            var waterRealtimeByHouse: [UUID: Double] = [:]
-            var heaterRealtimeByHouse: [UUID: Double] = [:]
-            var loadedRealtimeHouseIDs: Set<UUID> = []
-            let kpiClient = apiClient
-            await withTaskGroup(of: (UUID, APIHouseMonitoringKpis?, Double?, Double?).self) { group in
-                for h in mappedHouses {
-                    guard let bid = h.backendId else { continue }
-                    let hid = h.id
-                    group.addTask {
-                        let k = try? await kpiClient.fetchHouseMonitoringKpis(houseID: bid)
-                        let rotemWaterHistory = (try? await kpiClient.fetchRotemWaterHistory(
-                            houseID: bid,
-                            days: 5
-                        )) ?? []
-                        let waterRealtime = rotemWaterHistory.last?.consumptionAvg
-                        let heaterHistory = (try? await kpiClient.fetchHouseHeaterHistory(houseID: bid)) ?? []
-                        let heaterRealtime = heaterHistory.sorted(by: { $0.date < $1.date }).last?.value
-                        return (hid, k, waterRealtime, heaterRealtime)
+            // Phase 2: water from iOS farm snapshot (above) + KPI waterToday fallback; heater sequentially (Compare-style).
+            houseWaterRealtimeByHouseId = waterSeedFromSnapshot
+            houseKpisByHouseId = [:]
+            houseHeaterRealtimeByHouseId = [:]
+            houseRealtimeLoadedIds = []
+            for h in mappedHouses.sorted(by: { $0.name < $1.name }) {
+                let hid = h.id
+                guard let bid = h.backendId else {
+                    houseRealtimeLoadedIds.insert(hid)
+                    continue
+                }
+                guard let houseIdx = houses.firstIndex(where: { $0.id == hid }) else {
+                    houseRealtimeLoadedIds.insert(hid)
+                    continue
+                }
+                var row = houses[houseIdx]
+                if let live = try? await apiClient.fetchLatestMonitoring(houseID: bid) {
+                    Self.applyLatestMonitoring(live, to: &row.snapshot)
+                    let st = Self.stateForSnapshot(row.snapshot)
+                    row.state = st
+                    row.pillText = st == .ok ? "All OK" : (st == .warning ? "Check conditions" : "Needs attention")
+                    if let w = live.waterConsumption {
+                        houseWaterRealtimeByHouseId[hid] = w
                     }
                 }
-                for await (hid, kpi, waterRealtime, heaterRealtime) in group {
-                    if let kpi {
-                        kpiByHouse[hid] = kpi
+                var heaterVal: Double?
+                if let k = try? await apiClient.fetchHouseMonitoringKpis(houseID: bid) {
+                    houseKpisByHouseId[hid] = k
+                    if houseWaterRealtimeByHouseId[hid] == nil, let wt = k.waterToday {
+                        houseWaterRealtimeByHouseId[hid] = wt
                     }
-                    if let waterRealtime {
-                        waterRealtimeByHouse[hid] = waterRealtime
-                    }
-                    if let heaterRealtime {
-                        heaterRealtimeByHouse[hid] = heaterRealtime
-                    }
-                    loadedRealtimeHouseIDs.insert(hid)
+                    heaterVal = k.heaterHours24h
                 }
+                let heaterHistory = (try? await apiClient.fetchHouseHeaterHistory(houseID: bid, days: 5)) ?? []
+                if let lastHeater = heaterHistory.sorted(by: { $0.date < $1.date }).last?.value {
+                    heaterVal = lastHeater
+                }
+                if let hv = heaterVal {
+                    houseHeaterRealtimeByHouseId[hid] = hv
+                }
+                houses[houseIdx] = row
+                houseRealtimeLoadedIds.insert(hid)
             }
-            houseKpisByHouseId = kpiByHouse
-            houseWaterRealtimeByHouseId = waterRealtimeByHouse
-            houseHeaterRealtimeByHouseId = heaterRealtimeByHouse
-            houseRealtimeLoadedIds = loadedRealtimeHouseIDs
             alarms = mappedAlarms.sorted { $0.occurredAt > $1.occurredAt }
             if let freshness = iosSnapshot?.freshness {
                 monitoringFreshnessByFarmId[selectedFarm.id] = freshness
@@ -479,7 +488,7 @@ final class MockDataStore {
             if let idx = farms.firstIndex(where: { $0.id == currentFarmId }) {
                 farms[idx].houseIds = houses.map(\.id)
                 farms[idx].alertSummary = alarms.isEmpty ? "No alerts" : "\(alarms.count) alerts"
-                farms[idx].worstState = Self.farmState(from: mappedHouses)
+                farms[idx].worstState = Self.farmState(from: houses)
             }
             do {
                 let apiFlocks = try await apiClient.fetchFlocks(farmID: selectedFarmBackendID)
@@ -970,15 +979,22 @@ final class MockDataStore {
     }
 
     func refreshRotemDataForCurrentFarm(force: Bool = false) async {
-        guard let rotemFarmID = farmRotemIDs[currentFarmId], !rotemFarmID.isEmpty else { return }
+        guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return }
         if !force, let last = lastFarmScrapeAt[currentFarmId], Date().timeIntervalSince(last) < 45 {
             return
         }
         do {
-            try await apiClient.triggerFarmScrape(rotemFarmID: rotemFarmID)
+            if force {
+                _ = try await apiClient.refreshFarmMonitoringNow(farmID: farmBackendID)
+            } else {
+                let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
+                if let freshness = snapshot.freshness {
+                    monitoringFreshnessByFarmId[currentFarmId] = freshness
+                }
+            }
             lastFarmScrapeAt[currentFarmId] = Date()
         } catch {
-            // Keep UI usable even when scrape trigger fails.
+            // Keep UI usable even when the read-through refresh fails.
             lastError = error.localizedDescription
         }
     }
@@ -1016,6 +1032,20 @@ final class MockDataStore {
             return .warning
         }
         return .ok
+    }
+
+    /// Merges Rotem live `monitoring/latest` payload fields into the house snapshot (CO₂/NH₃ unchanged — not in API yet).
+    private static func applyLatestMonitoring(_ live: APIMonitoring, to snapshot: inout HouseSnapshot) {
+        if let v = live.averageTemperature { snapshot.tempC = v }
+        if let v = live.humidity { snapshot.humidity = v }
+        if let v = live.staticPressure { snapshot.staticPressurePa = v }
+        if let v = live.airflowPercentage { snapshot.airflowPct = v }
+        if let v = live.waterConsumption { snapshot.waterLphr = v }
+        if let v = live.feedConsumption { snapshot.feedLbs = v }
+        snapshot.tempFill = clamp01((snapshot.tempC.isNaN ? 0 : snapshot.tempC) / 35)
+        snapshot.humidityFill = clamp01((snapshot.humidity.isNaN ? 0 : snapshot.humidity) / 100)
+        snapshot.staticFill = clamp01((snapshot.staticPressurePa.isNaN ? 0 : snapshot.staticPressurePa) / 60)
+        snapshot.airflowFill = clamp01((snapshot.airflowPct.isNaN ? 0 : snapshot.airflowPct) / 100)
     }
 
     private static func farmState(from houses: [House]) -> SensorState {

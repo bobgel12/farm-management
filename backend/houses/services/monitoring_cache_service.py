@@ -136,6 +136,14 @@ def wrap_cached_response(data: Any, meta: Dict[str, Any]):
     return {"data": data, "meta": meta}
 
 
+def cache_is_fresh(cache, stale_seconds: int = MAX_STALE_SECONDS) -> bool:
+    """Return true when a cache row exists and was written inside the TTL."""
+    fetched_at = getattr(cache, "fetched_at", None)
+    if not fetched_at:
+        return False
+    return (timezone.now() - fetched_at).total_seconds() < stale_seconds
+
+
 @dataclass
 class UpsertResult:
     status: str

@@ -536,7 +536,8 @@ actor APIClient {
             path: "/api/farms/\(farmID)/ios/snapshot/",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIClientError.decoding
@@ -553,21 +554,31 @@ actor APIClient {
         let rawHouses = payload["houses"] as? [[String: Any]] ?? []
         let mappedHouses: [APIFarmIOSSnapshotHouse] = rawHouses.compactMap { h in
             guard let houseID = h["house_id"] as? Int else { return nil }
-            func dbl(_ key: String) -> Double? {
-                if let v = h[key] as? Double { return v }
-                if let v = h[key] as? Int { return Double(v) }
+            func snapDouble(_ key: String) -> Double? {
+                guard let raw = h[key] else { return nil }
+                if let v = raw as? Double { return v }
+                if let v = raw as? Int { return Double(v) }
+                if let n = raw as? NSNumber { return n.doubleValue }
+                if let s = raw as? String {
+                    let t = s.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: "")
+                    if t.isEmpty { return nil }
+                    return Double(t)
+                }
                 return nil
             }
+            let currentDay: Int? = (h["current_day"] as? Int)
+                ?? (h["growth_day"] as? Int)
+                ?? (h["age_days"] as? Int)
             return APIFarmIOSSnapshotHouse(
                 houseID: houseID,
                 houseNumber: (h["house_number"] as? Int) ?? houseID,
-                currentDay: h["current_day"] as? Int,
-                averageTemperature: dbl("average_temperature"),
-                humidity: dbl("humidity"),
-                staticPressure: dbl("static_pressure"),
-                airflowPercentage: dbl("airflow_percentage"),
-                waterConsumption: dbl("water_consumption"),
-                feedConsumption: dbl("feed_consumption"),
+                currentDay: currentDay,
+                averageTemperature: snapDouble("average_temperature"),
+                humidity: snapDouble("humidity"),
+                staticPressure: snapDouble("static_pressure"),
+                airflowPercentage: snapDouble("airflow_percentage"),
+                waterConsumption: snapDouble("water_consumption"),
+                feedConsumption: snapDouble("feed_consumption"),
                 isConnected: (h["is_connected"] as? Bool) ?? false,
                 alarmStatus: (h["alarm_status"] as? String) ?? "normal",
                 dataStatus: (h["data_status"] as? String) ?? "ok"
@@ -687,20 +698,56 @@ actor APIClient {
         }
     }
 
-    func fetchLatestMonitoring(houseID: Int) async throws -> APIMonitoring? {
+    /// Per-house latest monitoring. Use `mode: "live"` to scrape Rotem via the backend; default `cached` is fast.
+    func fetchLatestMonitoring(houseID: Int, mode: String = "cached") async throws -> APIMonitoring? {
+        let safeMode = mode.lowercased() == "live" ? "live" : "cached"
         do {
-            let data = try await request(path: "/api/houses/\(houseID)/monitoring/latest/?mode=cached", method: "GET", payload: nil, requiresAuth: true)
+            let data = try await request(
+                path: "/api/houses/\(houseID)/monitoring/latest/?mode=\(safeMode)",
+                method: "GET",
+                payload: nil,
+                requiresAuth: true,
+                timeoutOverride: 90
+            )
             guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
             let item = decodeEnvelope(root).payload
+            let env = item["environment"] as? [String: Any] ?? [:]
+            let consumption = item["consumption"] as? [String: Any] ?? [:]
+            let ventilation = item["ventilation"] as? [String: Any] ?? [:]
+            func firstNonNil(_ primary: Double?, _ fallbacks: Double?...) -> Double? {
+                if let v = primary { return v }
+                for f in fallbacks {
+                    if let v = f { return v }
+                }
+                return nil
+            }
             return APIMonitoring(
-                averageTemperature: item["average_temperature"] as? Double,
-                humidity: item["humidity"] as? Double,
-                staticPressure: item["static_pressure"] as? Double,
-                waterConsumption: item["water_consumption"] as? Double,
-                feedConsumption: item["feed_consumption"] as? Double,
-                airflowPercentage: item["airflow_percentage"] as? Double
+                averageTemperature: firstNonNil(
+                    jsonDouble(from: item, keys: ["average_temperature", "avg_temperature", "temperature"]),
+                    jsonDouble(from: env, keys: ["average_temperature", "avg_temperature", "temperature"])
+                ),
+                humidity: firstNonNil(
+                    jsonDouble(from: item, keys: ["humidity", "relative_humidity", "rh"]),
+                    jsonDouble(from: env, keys: ["humidity", "relative_humidity", "rh"])
+                ),
+                staticPressure: firstNonNil(
+                    jsonDouble(from: item, keys: ["static_pressure", "pressure"]),
+                    jsonDouble(from: env, keys: ["static_pressure", "pressure"])
+                ),
+                waterConsumption: firstNonNil(
+                    jsonDouble(from: item, keys: ["water_consumption", "water_today", "water"]),
+                    jsonDouble(from: consumption, keys: ["water_consumption", "water"])
+                ),
+                feedConsumption: firstNonNil(
+                    jsonDouble(from: item, keys: ["feed_consumption", "feed_today", "feed"]),
+                    jsonDouble(from: consumption, keys: ["feed_consumption", "feed"])
+                ),
+                airflowPercentage: firstNonNil(
+                    jsonDouble(from: item, keys: ["airflow_percentage", "ventilation_level", "ventilation"]),
+                    jsonDouble(from: ventilation, keys: ["airflow_percentage", "ventilation_level", "ventilation_level_pct"])
+                )
             )
         } catch APIClientError.server {
             return nil
@@ -923,7 +970,8 @@ actor APIClient {
             path: "/api/houses/\(houseID)/monitoring/history/?\(query)",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -955,7 +1003,8 @@ actor APIClient {
             path: "/api/houses/\(houseID)/monitoring/kpis/?mode=cached",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIClientError.decoding
@@ -1019,7 +1068,8 @@ actor APIClient {
             path: "/api/rotem/daily-summaries/water-history/?house_id=\(houseID)&days=\(safeDays)",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -1074,7 +1124,8 @@ actor APIClient {
             path: "/api/rotem/daily-summaries/temperature-history/?house_id=\(houseID)",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -1103,7 +1154,8 @@ actor APIClient {
             path: "/api/rotem/daily-summaries/feed-history/?house_id=\(houseID)&days=\(safeDays)",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -1132,7 +1184,8 @@ actor APIClient {
             path: "/api/houses/\(houseID)/heater-history/?mode=cached",
             method: "GET",
             payload: nil,
-            requiresAuth: true
+            requiresAuth: true,
+            timeoutOverride: 90
         )
         guard
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -1146,7 +1199,7 @@ actor APIClient {
         else {
             return []
         }
-        let points = daily.compactMap { item in
+        let points: [DailyResourcePoint] = daily.compactMap { item in
             guard let growthDay = item["growth_day"] as? Int else { return nil }
             let date = (item["date"] as? String).flatMap(parseISODate) ?? Date()
             let hours = jsonDouble(from: item, keys: ["total_hours", "hours"]) ?? 0
@@ -1241,10 +1294,15 @@ actor APIClient {
     private func jsonDouble(from row: [String: Any], keys: [String]) -> Double? {
         for key in keys {
             guard let raw = row[key] else { continue }
+            if raw is NSNull { continue }
             if let d = raw as? Double { return d }
             if let i = raw as? Int { return Double(i) }
             if let n = raw as? NSNumber { return n.doubleValue }
-            if let s = raw as? String, let d = Double(s.replacingOccurrences(of: ",", with: "")) { return d }
+            if let s = raw as? String {
+                let t = s.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: "")
+                if t.isEmpty { continue }
+                if let d = Double(t) { return d }
+            }
         }
         return nil
     }
