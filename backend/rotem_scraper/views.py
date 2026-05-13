@@ -1217,11 +1217,16 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 history.append({
                     'growth_day': growth_day,
                     'daily_feed_total': _safe_float(
-                        row.get('HistoryRecord_DailyFeed')
+                        row.get('HistoryRecord_FeederTotal')
+                        or row.get('HistoryRecord_DailyFeed')
                         or row.get('HistoryRecord_TotalFeed')
                         or row.get('DailyFeed')
                     ),
-                    'change_percent': _safe_float(row.get('HistoryRecord_ChangeFeed')),
+                    # Rotem HistoryFeed UI uses ChangeTotal on the aggregated "Daily Feed" column.
+                    'change_percent': _safe_float(
+                        row.get('HistoryRecord_ChangeFeed')
+                        or row.get('HistoryRecord_ChangeTotal')
+                    ),
                     'feed_per_bird': _safe_float(row.get('HistoryRecord_FeedPerBird')),
                     'date': (house.batch_start_date + timedelta(days=growth_day)).isoformat() if house.batch_start_date else None,
                 })

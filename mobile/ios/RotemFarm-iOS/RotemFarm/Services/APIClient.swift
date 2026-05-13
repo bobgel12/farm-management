@@ -1206,15 +1206,31 @@ actor APIClient {
             throw APIClientError.decoding
         }
         return rows.compactMap { row in
-            guard let growthDay = row["growth_day"] as? Int else { return nil }
-            let total = jsonDouble(from: row, keys: ["daily_feed_total", "daily_feed", "feed_consumption"]) ?? 0.0
+            let growthDay: Int? = {
+                if let v = row["growth_day"] as? Int { return v }
+                if let v = row["growth_day"] as? Double { return Int(v.rounded()) }
+                if let v = row["growth_day"] as? NSNumber { return v.intValue }
+                return nil
+            }()
+            guard let growthDay else { return nil }
+            let total = jsonDouble(from: row, keys: [
+                "daily_feed_total",
+                "daily_feed",
+                "feed_consumption",
+                "HistoryRecord_FeederTotal",
+                "HistoryRecord_DailyFeed"
+            ]) ?? 0.0
             let date = (row["date"] as? String).flatMap(parseISODate)
+            let feedPerBird = jsonDouble(from: row, keys: ["feed_per_bird", "HistoryRecord_FeedPerBird"])
+                ?? row["feed_per_bird"] as? Double
+            let changePercent = jsonDouble(from: row, keys: ["change_percent", "HistoryRecord_ChangeTotal", "HistoryRecord_ChangeFeed"])
+                ?? row["change_percent"] as? Double
             return APIRotemFeedHistoryPoint(
                 date: date,
                 growthDay: growthDay,
                 dailyFeedTotal: total,
-                feedPerBird: row["feed_per_bird"] as? Double,
-                changePercent: row["change_percent"] as? Double
+                feedPerBird: feedPerBird,
+                changePercent: changePercent
             )
         }
         .sorted(by: { $0.growthDay < $1.growthDay })

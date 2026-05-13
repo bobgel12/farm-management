@@ -176,3 +176,27 @@ class FeedHistoryApiTests(TestCase):
             [row["growth_day"] for row in response.data["feed_history"]],
             [1, 2, 3, 4, 5, 6],
         )
+
+    @patch("rotem_scraper.views._rotem_history_command_payload")
+    def test_feed_history_prefers_feeder_total_from_rotem(self, mock_payload):
+        """Production Rotem HistoryFeed grids expose HistoryRecord_FeederTotal."""
+        mock_payload.return_value = (
+            [
+                {
+                    "HistoryRecord_GrowthDay": 2,
+                    "HistoryRecord_FeederTotal": 42.5,
+                }
+            ],
+            None,
+        )
+        request = self.factory.get(
+            f"/api/rotem/daily-summaries/feed-history/?house_id={self.house.id}&days=5"
+        )
+        force_authenticate(request, user=self.user)
+
+        view = RotemDailySummaryViewSet.as_view({"get": "feed_history"})
+        response = view(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["feed_history"]), 1)
+        self.assertAlmostEqual(response.data["feed_history"][0]["daily_feed_total"], 42.5)

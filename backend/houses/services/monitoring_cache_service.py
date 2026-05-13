@@ -256,7 +256,12 @@ def _build_house_history(house: House, scraper: RotemScraper, limit: int = 100):
                 "static_pressure": None,
                 "airflow_percentage": None,
                 "water_consumption": safe_float(row.get("HistoryRecord_DailyWater") or row.get("DailyWater") or row.get("Water")),
-                "feed_consumption": safe_float(row.get("HistoryRecord_DailyFeed") or row.get("DailyFeed") or row.get("Feed")),
+                "feed_consumption": safe_float(
+                    row.get("HistoryRecord_FeederTotal")
+                    or row.get("HistoryRecord_DailyFeed")
+                    or row.get("DailyFeed")
+                    or row.get("Feed")
+                ),
             }
         )
     site_payload = scraper.get_site_controllers_info() or {}
@@ -293,7 +298,12 @@ def _build_house_kpis(house: House, scraper: RotemScraper):
         if house.batch_start_date:
             day_key = (house.batch_start_date + timedelta(days=gday)).isoformat()
         w = safe_float(row.get("HistoryRecord_DailyWater") or row.get("DailyWater") or row.get("Water"))
-        f = safe_float(row.get("HistoryRecord_DailyFeed") or row.get("DailyFeed") or row.get("Feed"))
+        f = safe_float(
+            row.get("HistoryRecord_FeederTotal")
+            or row.get("HistoryRecord_DailyFeed")
+            or row.get("DailyFeed")
+            or row.get("Feed")
+        )
         if w is not None:
             water_by_day[day_key] = w
         if f is not None:
