@@ -1092,10 +1092,16 @@ actor APIClient {
     }
 
     /// Direct RotemNet water history (non-DB): sourced from scraper command stream.
-    func fetchRotemWaterHistory(houseID: Int, days: Int = 5) async throws -> [APIRotemWaterHistoryPoint] {
-        let safeDays = min(max(days, 1), 30)
+    func fetchRotemWaterHistory(houseID: Int, days: Int = 5, allHistory: Bool = false) async throws -> [APIRotemWaterHistoryPoint] {
+        let query: String
+        if allHistory {
+            query = "house_id=\(houseID)&all_history=true"
+        } else {
+            let safeDays = min(max(days, 1), 30)
+            query = "house_id=\(houseID)&days=\(safeDays)"
+        }
         let data = try await request(
-            path: "/api/rotem/daily-summaries/water-history/?house_id=\(houseID)&days=\(safeDays)",
+            path: "/api/rotem/daily-summaries/water-history/?\(query)",
             method: "GET",
             payload: nil,
             requiresAuth: true,
@@ -1178,10 +1184,16 @@ actor APIClient {
     }
 
     /// Direct RotemNet feed history (CommandID 41 via backend facade).
-    func fetchRotemFeedHistory(houseID: Int, days: Int = 5) async throws -> [APIRotemFeedHistoryPoint] {
-        let safeDays = min(max(days, 1), 30)
+    func fetchRotemFeedHistory(houseID: Int, days: Int = 5, allHistory: Bool = false) async throws -> [APIRotemFeedHistoryPoint] {
+        let query: String
+        if allHistory {
+            query = "house_id=\(houseID)&all_history=true"
+        } else {
+            let safeDays = min(max(days, 1), 30)
+            query = "house_id=\(houseID)&days=\(safeDays)"
+        }
         let data = try await request(
-            path: "/api/rotem/daily-summaries/feed-history/?house_id=\(houseID)&days=\(safeDays)",
+            path: "/api/rotem/daily-summaries/feed-history/?\(query)",
             method: "GET",
             payload: nil,
             requiresAuth: true,

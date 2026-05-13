@@ -35,6 +35,12 @@ def _trim_history_rows(rows, days):
     return rows[-days:] if len(rows) > days else rows
 
 
+def _query_bool(value) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
 def _safe_float(value):
     if value is None:
         return None
@@ -1183,6 +1189,7 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     def feed_history(self, request):
         """Get feed history for a specific house using CommandID 41."""
         house_id = request.query_params.get('house_id')
+        all_history = _query_bool(request.query_params.get("all_history"))
         try:
             days = min(max(int(request.query_params.get('days', 5)), 1), 30)
         except (TypeError, ValueError):
@@ -1226,13 +1233,16 @@ class RotemDailySummaryViewSet(viewsets.ReadOnlyModelViewSet):
                 today = _dt.date.today()
                 for rec in history:
                     rec['date'] = (today - timedelta(days=(max_gd - rec['growth_day']))).isoformat()
-            history = _trim_history_rows(history, days)
+            if not all_history:
+                history = _trim_history_rows(history, days)
+            returned_days_meta = len(history) if all_history else days
             return Response({
                 'house_id': int(house_id),
                 'house_number': house.house_number,
                 'feed_history': history,
                 'total_days': len(history),
-                'days': days,
+                'days': returned_days_meta,
+                'all_history': all_history,
                 'source': 'live',
             })
         except House.DoesNotExist:

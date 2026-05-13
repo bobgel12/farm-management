@@ -372,8 +372,10 @@ def main() -> int:
             endpoint("House water alerts", "GET", f"/api/houses/{house_id}/water/alerts/?include_resolved=true"),
             endpoint("House tasks", "GET", f"/api/houses/{house_id}/tasks/"),
             endpoint("Rotem water history", "GET", f"/api/rotem/daily-summaries/water-history/?house_id={house_id}&days=5", optional=True),
+            endpoint("Rotem water history (Compare, all flock)", "GET", f"/api/rotem/daily-summaries/water-history/?house_id={house_id}&all_history=true", optional=True),
             endpoint("Rotem temperature history", "GET", f"/api/rotem/daily-summaries/temperature-history/?house_id={house_id}", optional=True),
             endpoint("Rotem feed history", "GET", f"/api/rotem/daily-summaries/feed-history/?house_id={house_id}&days=5", optional=True),
+            endpoint("Rotem feed history (Compare, all flock)", "GET", f"/api/rotem/daily-summaries/feed-history/?house_id={house_id}&all_history=true", optional=True),
         ]
         for spec in house_specs:
             result, payload = run_endpoint(api, spec)

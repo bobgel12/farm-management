@@ -716,10 +716,10 @@ final class MockDataStore {
         }
     }
 
-    func fetchFeedHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
+    func fetchFeedHistory(houseId: UUID, days: Int = 5, allHistory: Bool = false) async -> [DailyResourcePoint] {
         guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
         do {
-            let rows = try await apiClient.fetchRotemFeedHistory(houseID: backendID, days: days)
+            let rows = try await apiClient.fetchRotemFeedHistory(houseID: backendID, days: days, allHistory: allHistory)
             return rows.map { row in
                 DailyResourcePoint(
                     day: row.growthDay,
@@ -735,19 +735,21 @@ final class MockDataStore {
         }
     }
 
-    func fetchWaterHistory(houseId: UUID, days: Int = 5) async -> [DailyResourcePoint] {
+    func fetchWaterHistory(houseId: UUID, days: Int = 5, allHistory: Bool = false) async -> [DailyResourcePoint] {
         guard let backendID = houses.first(where: { $0.id == houseId })?.backendId else { return [] }
         do {
-            let rows = try await apiClient.fetchRotemWaterHistory(houseID: backendID, days: days)
-            return rows.enumerated().map { index, row in
-                DailyResourcePoint(
-                    day: row.growthDay ?? (index + 1),
-                    date: row.date ?? Date(),
-                    value: row.consumptionAvg,
-                    target: nil,
-                    isAnomaly: false
-                )
-            }.sorted(by: { $0.date < $1.date })
+            let rows = try await apiClient.fetchRotemWaterHistory(houseID: backendID, days: days, allHistory: allHistory)
+            return rows
+                .sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+                .map { row in
+                    DailyResourcePoint(
+                        day: row.growthDay ?? 0,
+                        date: row.date ?? Date(),
+                        value: row.consumptionAvg,
+                        target: nil,
+                        isAnomaly: false
+                    )
+                }
         } catch {
             lastError = error.localizedDescription
             return []

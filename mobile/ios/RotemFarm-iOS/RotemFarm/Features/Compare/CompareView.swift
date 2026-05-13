@@ -167,36 +167,40 @@ struct CompareView: View {
     private func pointsForHouse(houseID: UUID, metric: CompareMetric) async -> [DailyResourcePoint] {
         switch metric {
         case .water:
-            let raw = await store.fetchWaterHistory(houseId: houseID, days: 5)
-            let norm = normalizeLastDays(raw, days: 5)
-            // #region agent log
-            let cal = Calendar.current
-            let today = cal.startOfDay(for: Date())
-            let expectedFirst = cal.date(byAdding: .day, value: -4, to: today)
-            let rawKeys = Set(raw.map { cal.startOfDay(for: $0.date).timeIntervalSince1970 })
-            let normNonZero = norm.filter { $0.value > 0 }.count
-            FarmDebugLog.post(
-                hypothesisId: "C",
-                location: "CompareView.swift:pointsForHouse",
-                message: "water normalize",
-                data: [
-                    "rawCount": raw.count,
-                    "normCount": norm.count,
-                    "normNonZero": normNonZero,
-                    "expectedFirstDay": (expectedFirst ?? today).timeIntervalSince1970,
-                    "rawDistinctDayBuckets": rawKeys.count
-                ]
-            )
-            // #endregion
-            return norm
+            let raw = await store.fetchWaterHistory(houseId: houseID, allHistory: true)
+            return normalizedCompareSeries(raw)
         case .feed:
-            let raw = await store.fetchFeedHistory(houseId: houseID, days: 5)
-            let norm = normalizeLastDays(raw, days: 5)
-            return norm
+            let raw = await store.fetchFeedHistory(houseId: houseID, allHistory: true)
+            return normalizedCompareSeries(raw)
         case .heater:
             let raw = await store.fetchHeaterHistory(houseId: houseID, days: 5)
-            let norm = normalizeLastDays(raw, days: 5)
-            return norm
+            return normalizeLastDays(raw, days: 5)
+        }
+    }
+
+    /// One reading per flock day when every point carries a positive growth-day index; otherwise dedupe by calendar day.
+    private func normalizedCompareSeries(_ raw: [DailyResourcePoint]) -> [DailyResourcePoint] {
+        let sorted = raw.sorted { $0.date < $1.date }
+        let withGrowth = sorted.filter { $0.day > 0 }
+        if !sorted.isEmpty, withGrowth.count == sorted.count {
+            var byGrowth: [Int: DailyResourcePoint] = [:]
+            for p in sorted {
+                byGrowth[p.day] = p
+            }
+            return byGrowth.keys.sorted().map { gd in
+                let p = byGrowth[gd]!
+                return DailyResourcePoint(day: gd, date: p.date, value: p.value, target: nil, isAnomaly: false)
+            }
+        }
+        let calendar = Calendar.current
+        var byCalendarDay: [Date: DailyResourcePoint] = [:]
+        for p in sorted {
+            byCalendarDay[calendar.startOfDay(for: p.date)] = p
+        }
+        let orderedDays = byCalendarDay.keys.sorted()
+        return orderedDays.enumerated().map { idx, d in
+            let p = byCalendarDay[d]!
+            return DailyResourcePoint(day: idx + 1, date: d, value: p.value, target: nil, isAnomaly: false)
         }
     }
 
@@ -243,16 +247,21 @@ private struct KPIBox: View {
                 .foregroundStyle(state.tint)
             if !points.isEmpty {
                 Divider().overlay(Color.appSeparator).padding(.vertical, 4)
-                ForEach(points.suffix(3)) { point in
-                    HStack {
-                        Text(point.date.formatted(date: .abbreviated, time: .omitted))
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(String(format: "%.1f", point.value))
-                            .font(AppFont.captionBold)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(points) { point in
+                            HStack {
+                                Text(point.date.formatted(date: .abbreviated, time: .omitted))
+                                    .font(AppFont.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(String(format: "%.1f", point.value))
+                                    .font(AppFont.captionBold)
+                            }
+                        }
                     }
                 }
+                .frame(maxHeight: 220)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
