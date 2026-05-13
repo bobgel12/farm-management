@@ -158,6 +158,9 @@ struct APIFarmHouseMonitoringCard {
     let houseID: Int
     let houseNumber: Int
     let averageTemperature: Double?
+    let humidity: Double?
+    let staticPressure: Double?
+    let airflowPercentage: Double?
     let waterConsumption: Double?
     let feedConsumption: Double?
     let growthDay: Int?
@@ -304,6 +307,7 @@ actor APIClient {
     private var baseURL: URL
     private var token: String?
     private let verboseLogging: Bool
+    private let diagnosticsEnabled: Bool
 
     init(
         baseURLString: String = ProcessInfo.processInfo.environment["ROTEM_API_BASE_URL"] ?? "http://localhost:8002",
@@ -316,6 +320,7 @@ actor APIClient {
         self.baseURL = URL(string: baseURLString) ?? URL(string: "http://localhost:8002")!
         self.token = tokenStore.loadToken()
         self.verboseLogging = (ProcessInfo.processInfo.environment["ROTEM_IOS_VERBOSE_LOGS"] ?? "").lowercased() == "true"
+        self.diagnosticsEnabled = (ProcessInfo.processInfo.environment["ROTEM_IOS_DIAGNOSTICS"] ?? "true").lowercased() != "false"
     }
 
     func setEnvironment(_ environment: APIEnvironment) throws {
@@ -456,14 +461,18 @@ actor APIClient {
             return APIFarmHouseMonitoringCard(
                 houseID: houseID,
                 houseNumber: houseNumber,
-                averageTemperature: item["average_temperature"] as? Double,
-                waterConsumption: item["water_consumption"] as? Double,
-                feedConsumption: item["feed_consumption"] as? Double,
+                averageTemperature: jsonDouble(from: item, keys: ["average_temperature", "temperature"]),
+                humidity: jsonDouble(from: item, keys: ["humidity"]),
+                staticPressure: jsonDouble(from: item, keys: ["static_pressure", "pressure"]),
+                airflowPercentage: jsonDouble(from: item, keys: ["airflow_percentage", "ventilation_level"]),
+                waterConsumption: jsonDouble(from: item, keys: ["water_consumption", "water"]),
+                feedConsumption: jsonDouble(from: item, keys: ["feed_consumption", "feed"]),
                 growthDay: item["growth_day"] as? Int,
                 houseCurrentDay: item["current_day"] as? Int,
                 activeAlarmsCount: (item["active_alarms_count"] as? Int) ?? 0
             )
         }
+        diagnostic("fetchFarmMonitoringDashboard farmID=\(farmID) totalHouses=\(totalHouses) cards=\(cards.count) fresh=\(String(describing: envelope.meta)) samples=\(previewObject(cards.prefix(3).map { ["house": $0.houseNumber, "temp": String(describing: $0.averageTemperature), "humidity": String(describing: $0.humidity), "pressure": String(describing: $0.staticPressure), "airflow": String(describing: $0.airflowPercentage), "water": String(describing: $0.waterConsumption), "feed": String(describing: $0.feedConsumption)] }, maxChars: 1200))")
         return APIFarmMonitoringDashboardResult(
             totalHouses: totalHouses,
             alertsSummaryTotalActive: totalActiveAlerts,
@@ -554,6 +563,7 @@ actor APIClient {
         let circuitOpen = (rawMeta?["circuit_open"] as? Bool) ?? false
 
         let rawHouses = payload["houses"] as? [[String: Any]] ?? []
+        diagnostic("fetchFarmIOSSnapshot farmID=\(farmID) farmName=\(farmName) rawHouses=\(rawHouses.count) payloadKeys=\(payload.keys.sorted()) meta=\(String(describing: rawMeta))")
         let mappedHouses: [APIFarmIOSSnapshotHouse] = rawHouses.compactMap { h in
             guard let houseID = h["house_id"] as? Int else { return nil }
             func snapDouble(_ key: String) -> Double? {
@@ -585,6 +595,24 @@ actor APIClient {
                 alarmStatus: (h["alarm_status"] as? String) ?? "normal",
                 dataStatus: (h["data_status"] as? String) ?? "ok"
             )
+        }
+        if rawHouses.isEmpty {
+            diagnostic("fetchFarmIOSSnapshot EMPTY houses rawPayload=\(previewObject(payload, maxChars: 1500))")
+        } else {
+            let samples = rawHouses.prefix(3).map { h in
+                [
+                    "house_id": h["house_id"] ?? "nil",
+                    "house_number": h["house_number"] ?? "nil",
+                    "temp": h["average_temperature"] ?? "nil",
+                    "humidity": h["humidity"] ?? "nil",
+                    "pressure": h["static_pressure"] ?? "nil",
+                    "airflow": h["airflow_percentage"] ?? "nil",
+                    "water": h["water_consumption"] ?? "nil",
+                    "feed": h["feed_consumption"] ?? "nil",
+                    "status": h["data_status"] ?? "nil"
+                ]
+            }
+            diagnostic("fetchFarmIOSSnapshot mappedHouses=\(mappedHouses.count) samples=\(previewObject(samples, maxChars: 1500))")
         }
 
         var alertsByHouseID: [Int: APIFarmIOSSnapshotAlert] = [:]
@@ -1395,9 +1423,23 @@ actor APIClient {
         print("[APIClient] \(message)")
     }
 
+    private func diagnostic(_ message: String) {
+        guard diagnosticsEnabled else { return }
+        print("[APIClient][diagnostic] \(message)")
+    }
+
     private func previewBody(_ data: Data, maxChars: Int = 400) -> String {
         guard !data.isEmpty else { return "<empty>" }
         let text = String(decoding: data, as: UTF8.self)
+        if text.count <= maxChars {
+            return text
+        }
+        return String(text.prefix(maxChars)) + "..."
+    }
+
+    private func previewObject(_ value: Any, maxChars: Int = 1000) -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted]))
+        let text = data.map { String(decoding: $0, as: UTF8.self) } ?? String(describing: value)
         if text.count <= maxChars {
             return text
         }
@@ -1410,8 +1452,10 @@ actor APIClient {
 enum FarmDebugLog {
     private static let endpoint = URL(string: "http://127.0.0.1:7446/ingest/1f94348e-18e7-4829-95a8-c88970a05b9d")!
     private static let sessionId = "ed7eeb"
+    private static let isEnabled = (ProcessInfo.processInfo.environment["ROTEM_IOS_AGENT_LOGS"] ?? "").lowercased() == "true"
 
     static func post(hypothesisId: String, location: String, message: String, data: [String: Any]) {
+        guard isEnabled else { return }
         Task.detached {
             var payload: [String: Any] = [
                 "sessionId": sessionId,

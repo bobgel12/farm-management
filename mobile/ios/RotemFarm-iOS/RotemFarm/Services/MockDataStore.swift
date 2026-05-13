@@ -48,6 +48,7 @@ final class MockDataStore {
     var isLoading = false
     var lastError: String?
     private var hasLoadedLiveData = false
+    private var isReloadingSelectedFarmData = false
     private var liveSensorHistoryByHouse: [UUID: [SensorKind: [SensorSample]]] = [:]
     private var farmRotemIDs: [UUID: String] = [:]
     private var lastFarmScrapeAt: [UUID: Date] = [:]
@@ -327,6 +328,10 @@ final class MockDataStore {
     }
 
     func reloadSelectedFarmData() async {
+        if isReloadingSelectedFarmData {
+            diagnostic("reloadSelectedFarmData skipped because another reload is already running")
+            return
+        }
         guard let selectedFarm = farms.first(where: { $0.id == currentFarmId }),
               let selectedFarmBackendID = selectedFarm.backendId else {
             houses = []
@@ -334,6 +339,7 @@ final class MockDataStore {
             alarms = []
             return
         }
+        isReloadingSelectedFarmData = true
         isLoading = true
         // Prevent stale water/heater values during farm reload.
         houseWaterRealtimeByHouseId = [:]
@@ -341,45 +347,43 @@ final class MockDataStore {
         houseRealtimeLoadedIds = []
         monitoringFreshnessByFarmId = [:]
         houseHeaterHoursForListByHouseId = [:]
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            isReloadingSelectedFarmData = false
+        }
         do {
             log("reloadSelectedFarmData() farmBackendID=\(selectedFarmBackendID)")
             let client = apiClient
             let apiHouses = try await apiClient.fetchHouses(farmID: selectedFarmBackendID)
-            // Unified single-request snapshot — eliminates 3-endpoint merge inconsistency
-            let iosSnapshot = try? await apiClient.fetchFarmIOSSnapshot(farmID: selectedFarmBackendID)
-            let iosHouseByID = Dictionary(
-                uniqueKeysWithValues: (iosSnapshot?.houses ?? []).map { ($0.houseID, $0) }
+            diagnostic("reloadSelectedFarmData fetched apiHouses=\(apiHouses.count) ids=\(apiHouses.map { $0.id }) active=\(apiHouses.filter(\.isActive).count)")
+            let dashboard = try? await apiClient.fetchFarmMonitoringDashboard(farmID: selectedFarmBackendID)
+            if let dashboard {
+                diagnostic("reloadSelectedFarmData overview endpoint houses=\(dashboard.houses.count) alerts=\(dashboard.alertsSummaryTotalActive) fresh=\(String(describing: dashboard.freshness))")
+            } else {
+                diagnostic("reloadSelectedFarmData overview endpoint FAILED/nil")
+            }
+            let dashboardByID = Dictionary(
+                uniqueKeysWithValues: (dashboard?.houses ?? []).map { ($0.houseID, $0) }
             )
-
             let activeHouses = apiHouses.filter(\.isActive)
             let snapshotHouses = houses
             var mappedHouses: [House] = []
             var mappedAlarms: [Alarm] = []
-            var waterSeedFromSnapshot: [UUID: Double] = [:]
             for apiHouse in activeHouses {
                 let houseID = Self.stableUUID(prefix: "house", intID: apiHouse.id)
                 let fallbackSnapshot = snapshotHouses.first(where: { $0.backendId == apiHouse.id })?.snapshot
-                // Single consistent source — all fields from the same scrape cycle
-                let iosHouseData = iosHouseByID[apiHouse.id]
-                let resolvedTemp = iosHouseData?.averageTemperature
-                    ?? fallbackSnapshot?.tempC
-                    ?? .nan
-                let resolvedHumidity = iosHouseData?.humidity
-                    ?? fallbackSnapshot?.humidity
-                    ?? .nan
-                let resolvedStatic = iosHouseData?.staticPressure
-                    ?? fallbackSnapshot?.staticPressurePa
-                    ?? .nan
-                let resolvedAirflow = iosHouseData?.airflowPercentage
-                    ?? fallbackSnapshot?.airflowPct
-                    ?? .nan
-                let resolvedWater = iosHouseData?.waterConsumption
-                    ?? fallbackSnapshot?.waterLphr
-                    ?? .nan
-                let resolvedFeed = iosHouseData?.feedConsumption
-                    ?? fallbackSnapshot?.feedLbs
-                    ?? .nan
+                let dashboardData = dashboardByID[apiHouse.id]
+                let dashboardHasOnlyZeroes = dashboardData.map(Self.monitoringCardIsAllZeroOrMissing) ?? false
+                let usableDashboardData = dashboardHasOnlyZeroes ? nil : dashboardData
+                if dashboardHasOnlyZeroes {
+                    diagnostic("overview endpoint rejected all-zero house backendID=\(apiHouse.id) number=\(apiHouse.houseNumber)")
+                }
+                let resolvedTemp = usableDashboardData?.averageTemperature ?? fallbackSnapshot?.tempC ?? .nan
+                let resolvedHumidity = usableDashboardData?.humidity ?? fallbackSnapshot?.humidity ?? .nan
+                let resolvedStatic = usableDashboardData?.staticPressure ?? fallbackSnapshot?.staticPressurePa ?? .nan
+                let resolvedAirflow = usableDashboardData?.airflowPercentage ?? fallbackSnapshot?.airflowPct ?? .nan
+                let resolvedWater = usableDashboardData?.waterConsumption ?? fallbackSnapshot?.waterLphr ?? .nan
+                let resolvedFeed = usableDashboardData?.feedConsumption ?? fallbackSnapshot?.feedLbs ?? .nan
                 let snapshot = HouseSnapshot(
                     tempC: resolvedTemp,
                     humidity: resolvedHumidity,
@@ -398,11 +402,8 @@ final class MockDataStore {
                     staticFill: Self.clamp01(resolvedStatic / 60),
                     airflowFill: Self.clamp01(resolvedAirflow / 100)
                 )
+                diagnostic("map house backendID=\(apiHouse.id) number=\(apiHouse.houseNumber) source=\(usableDashboardData == nil ? "local/empty" : "overviewEndpoint") temp=\(resolvedTemp) humidity=\(resolvedHumidity) pressure=\(resolvedStatic) airflow=\(resolvedAirflow) water=\(resolvedWater) feed=\(resolvedFeed) state=\(Self.stateForSnapshot(snapshot).rawValue)")
                 let state = Self.stateForSnapshot(snapshot)
-                let flockDayResolved = iosHouseData?.currentDay ?? apiHouse.currentDay
-                if let w = iosHouseData?.waterConsumption {
-                    waterSeedFromSnapshot[houseID] = w
-                }
                 mappedHouses.append(
                     House(
                         id: houseID,
@@ -411,80 +412,28 @@ final class MockDataStore {
                         name: "House \(apiHouse.houseNumber)",
                         type: .tunnel,
                         birdCount: 0,
-                        flockDay: flockDayResolved,
+                        flockDay: apiHouse.currentDay,
                         state: state,
                         pillText: state == .ok ? "All OK" : (state == .warning ? "Check conditions" : "Needs attention"),
                         snapshot: snapshot
                     )
                 )
-                if let alert = iosSnapshot?.alertsByHouseID[apiHouse.id], alert.activeCount > 0 {
-                    mappedAlarms.append(
-                        Alarm(
-                            id: Self.stableUUID(prefix: "snapshot-alert", intID: apiHouse.id),
-                            backendId: nil,
-                            severity: Self.mapSeverity(alert.highestSeverity, acknowledged: false),
-                            title: alert.latestMessage ?? "Water alert",
-                            meta: "House \(apiHouse.houseNumber)",
-                            houseName: "House \(apiHouse.houseNumber)",
-                            occurredAt: Date(),
-                            sparkline: [],
-                            threshold: nil,
-                            peakValue: nil,
-                            recommendation: nil,
-                            isAcknowledged: false
-                        )
-                    )
-                }
             }
 
             houses = mappedHouses
-            // Phase 2: water from iOS farm snapshot (above) + KPI waterToday fallback; heater sequentially (Compare-style).
-            houseWaterRealtimeByHouseId = waterSeedFromSnapshot
+            diagnostic("reloadSelectedFarmData mappedHouses=\(mappedHouses.count) nanSnapshots=\(mappedHouses.filter { $0.snapshot.tempC.isNaN || $0.snapshot.humidity.isNaN || $0.snapshot.staticPressurePa.isNaN || $0.snapshot.airflowPct.isNaN }.count)")
+            // Current overview comes from the farm dashboard endpoint; history is loaded by detail screens.
+            houseWaterRealtimeByHouseId = Dictionary(
+                uniqueKeysWithValues: mappedHouses.compactMap { house in
+                    guard house.snapshot.waterLphr.isFinite else { return nil }
+                    return (house.id, house.snapshot.waterLphr)
+                }
+            )
             houseKpisByHouseId = [:]
             houseHeaterRealtimeByHouseId = [:]
-            houseRealtimeLoadedIds = []
-            for h in mappedHouses.sorted(by: { $0.name < $1.name }) {
-                let hid = h.id
-                guard let bid = h.backendId else {
-                    houseRealtimeLoadedIds.insert(hid)
-                    continue
-                }
-                guard let houseIdx = houses.firstIndex(where: { $0.id == hid }) else {
-                    houseRealtimeLoadedIds.insert(hid)
-                    continue
-                }
-                var row = houses[houseIdx]
-                if let live = try? await apiClient.fetchLatestMonitoring(houseID: bid) {
-                    Self.applyLatestMonitoring(live, to: &row.snapshot)
-                    let st = Self.stateForSnapshot(row.snapshot)
-                    row.state = st
-                    row.pillText = st == .ok ? "All OK" : (st == .warning ? "Check conditions" : "Needs attention")
-                    if let w = live.waterConsumption {
-                        houseWaterRealtimeByHouseId[hid] = w
-                    }
-                }
-                var heaterVal: Double?
-                if let k = try? await apiClient.fetchHouseMonitoringKpis(houseID: bid) {
-                    houseKpisByHouseId[hid] = k
-                    if houseWaterRealtimeByHouseId[hid] == nil, let wt = k.waterToday {
-                        houseWaterRealtimeByHouseId[hid] = wt
-                    }
-                    heaterVal = k.heaterHours24h
-                }
-                let heaterHistory = (try? await apiClient.fetchHouseHeaterHistory(houseID: bid, days: 5)) ?? []
-                if let lastHeater = heaterHistory.sorted(by: { $0.date < $1.date }).last?.value {
-                    heaterVal = lastHeater
-                }
-                if let hv = heaterVal {
-                    houseHeaterRealtimeByHouseId[hid] = hv
-                }
-                houses[houseIdx] = row
-                houseRealtimeLoadedIds.insert(hid)
-            }
+            houseRealtimeLoadedIds = Set(mappedHouses.map(\.id))
+            diagnostic("reloadSelectedFarmData overview loaded waterRealtime=\(houseWaterRealtimeByHouseId.count) realtimeLoaded=\(houseRealtimeLoadedIds.count)")
             alarms = mappedAlarms.sorted { $0.occurredAt > $1.occurredAt }
-            if let freshness = iosSnapshot?.freshness {
-                monitoringFreshnessByFarmId[selectedFarm.id] = freshness
-            }
             if let idx = farms.firstIndex(where: { $0.id == currentFarmId }) {
                 farms[idx].houseIds = houses.map(\.id)
                 farms[idx].alertSummary = alarms.isEmpty ? "No alerts" : "\(alarms.count) alerts"
@@ -656,9 +605,11 @@ final class MockDataStore {
             }
             lastError = nil
             log("reloadSelectedFarmData() success houses=\(houses.count) alarms=\(alarms.count) flocks=\(flocks.count) tasks=\(tasks.count) programs=\(programs.count) workers=\(workers.count)")
+            diagnostic("reloadSelectedFarmData success waterRealtime=\(houseWaterRealtimeByHouseId.count) heaterRealtime=\(houseHeaterRealtimeByHouseId.count) realtimeLoaded=\(houseRealtimeLoadedIds.count)")
         } catch {
             lastError = error.localizedDescription
             log("reloadSelectedFarmData() failed error=\(error.localizedDescription)")
+            diagnostic("reloadSelectedFarmData top-level FAILED error=\(error.localizedDescription)")
         }
     }
 
@@ -827,42 +778,37 @@ final class MockDataStore {
     }
 
     func fetchFarmMonitoringDashboard(farmBackendID: Int) async -> [APIFarmHouseMonitoringCard] {
-        do {
-            let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
-            if let farmUUID = farms.first(where: { $0.backendId == farmBackendID })?.id,
-               let freshness = snapshot.freshness {
-                monitoringFreshnessByFarmId[farmUUID] = freshness
-            }
-            return snapshot.houses.map { h in
-                APIFarmHouseMonitoringCard(
-                    houseID: h.houseID,
-                    houseNumber: h.houseNumber,
-                    averageTemperature: h.averageTemperature,
-                    waterConsumption: h.waterConsumption,
-                    feedConsumption: h.feedConsumption,
-                    growthDay: h.currentDay,
-                    houseCurrentDay: h.currentDay,
-                    activeAlarmsCount: snapshot.alertsByHouseID[h.houseID]?.activeCount ?? 0
-                )
-            }
-        } catch {
-            lastError = error.localizedDescription
-            return []
+        let farmUUID = farms.first(where: { $0.backendId == farmBackendID })?.id
+        let sourceHouses = houses.filter { house in
+            guard let farmUUID else { return false }
+            return house.farmId == farmUUID
         }
+        var cards: [APIFarmHouseMonitoringCard] = []
+        for house in sourceHouses {
+            guard let backendID = house.backendId,
+                  let number = Int(house.name.replacingOccurrences(of: "House ", with: "")) else {
+                continue
+            }
+            cards.append(APIFarmHouseMonitoringCard(
+                houseID: backendID,
+                houseNumber: number,
+                averageTemperature: house.snapshot.tempC.isFinite ? house.snapshot.tempC : nil,
+                humidity: house.snapshot.humidity.isFinite ? house.snapshot.humidity : nil,
+                staticPressure: house.snapshot.staticPressurePa.isFinite ? house.snapshot.staticPressurePa : nil,
+                airflowPercentage: house.snapshot.airflowPct.isFinite ? house.snapshot.airflowPct : nil,
+                waterConsumption: houseWaterRealtimeByHouseId[house.id] ?? (house.snapshot.waterLphr.isFinite ? house.snapshot.waterLphr : nil),
+                feedConsumption: house.snapshot.feedLbs.isFinite ? house.snapshot.feedLbs : nil,
+                growthDay: house.flockDay,
+                houseCurrentDay: house.flockDay,
+                activeAlarmsCount: 0
+            ))
+        }
+        return cards
     }
 
     func refreshMonitoringNowForCurrentFarm() async {
-        guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return }
-        do {
-            let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
-            if let freshness = snapshot.freshness {
-                monitoringFreshnessByFarmId[currentFarmId] = freshness
-            }
-            await reloadSelectedFarmData()
-            await refreshFarmHomeOverviews()
-        } catch {
-            lastError = error.localizedDescription
-        }
+        await reloadSelectedFarmData()
+        await refreshFarmHomeOverviews()
     }
 
     func fetchProgramTasks(programId: UUID, day: Int? = nil) async -> [APIProgramTask] {
@@ -942,58 +888,29 @@ final class MockDataStore {
             farmHomeOverviewByFarmId = [:]
             return
         }
-        let client = apiClient
         var next: [UUID: FarmHomeOverview] = [:]
-        await withTaskGroup(of: (UUID, FarmHomeOverview?).self) { group in
-            for farm in farms {
-                guard let bid = farm.backendId else { continue }
-                let farmUUID = farm.id
-                let fallbackCount = farm.activeHousesFromApi
-                group.addTask {
-                    do {
-                        let snapshot = try await client.fetchFarmIOSSnapshot(farmID: bid)
-                        let days = snapshot.houses.compactMap(\.currentDay)
-                        let avg: Int? = days.isEmpty ? nil : days.reduce(0, +) / days.count
-                        let overview = FarmHomeOverview(
-                            houseCount: max(snapshot.houses.count, fallbackCount),
-                            avgDayAge: avg,
-                            houseRelatedAlertCount: snapshot.alertsSummaryTotalActive
-                        )
-                        return (farmUUID, overview)
-                    } catch {
-                        let overview = FarmHomeOverview(
-                            houseCount: fallbackCount,
-                            avgDayAge: nil,
-                            houseRelatedAlertCount: 0
-                        )
-                        return (farmUUID, overview)
-                    }
-                }
-            }
-            for await (fid, overview) in group {
-                if let overview {
-                    next[fid] = overview
-                }
-            }
+        for farm in farms {
+            let farmHouses = houses.filter { $0.farmId == farm.id }
+            let days = farmHouses.map(\.flockDay)
+            let avg: Int? = days.isEmpty ? nil : days.reduce(0, +) / days.count
+            let alertCount = alarms.filter { alarm in
+                farmHouses.contains(where: { $0.name == alarm.houseName })
+            }.count
+            next[farm.id] = FarmHomeOverview(
+                houseCount: max(farmHouses.count, farm.activeHousesFromApi),
+                avgDayAge: avg,
+                houseRelatedAlertCount: alertCount
+            )
         }
         farmHomeOverviewByFarmId = next
     }
 
     func refreshRotemDataForCurrentFarm(force: Bool = false) async {
-        guard let farmBackendID = farms.first(where: { $0.id == currentFarmId })?.backendId else { return }
         if !force, let last = lastFarmScrapeAt[currentFarmId], Date().timeIntervalSince(last) < 45 {
             return
         }
-        do {
-            let snapshot = try await apiClient.fetchFarmIOSSnapshot(farmID: farmBackendID)
-            if let freshness = snapshot.freshness {
-                monitoringFreshnessByFarmId[currentFarmId] = freshness
-            }
-            lastFarmScrapeAt[currentFarmId] = Date()
-        } catch {
-            // Keep UI usable even when the read-through refresh fails.
-            lastError = error.localizedDescription
-        }
+        await reloadSelectedFarmData()
+        lastFarmScrapeAt[currentFarmId] = Date()
     }
 
     // MARK: Preview helper --------------------------------------------------------
@@ -1043,6 +960,34 @@ final class MockDataStore {
         snapshot.humidityFill = clamp01((snapshot.humidity.isNaN ? 0 : snapshot.humidity) / 100)
         snapshot.staticFill = clamp01((snapshot.staticPressurePa.isNaN ? 0 : snapshot.staticPressurePa) / 60)
         snapshot.airflowFill = clamp01((snapshot.airflowPct.isNaN ? 0 : snapshot.airflowPct) / 100)
+    }
+
+    private static func monitoringIsAllZeroOrMissing(_ live: APIMonitoring) -> Bool {
+        [
+            live.averageTemperature,
+            live.humidity,
+            live.staticPressure,
+            live.airflowPercentage,
+            live.waterConsumption,
+            live.feedConsumption
+        ].allSatisfy { value in
+            guard let value else { return true }
+            return value == 0
+        }
+    }
+
+    private static func monitoringCardIsAllZeroOrMissing(_ card: APIFarmHouseMonitoringCard) -> Bool {
+        [
+            card.averageTemperature,
+            card.humidity,
+            card.staticPressure,
+            card.airflowPercentage,
+            card.waterConsumption,
+            card.feedConsumption
+        ].allSatisfy { value in
+            guard let value else { return true }
+            return value == 0
+        }
     }
 
     private static func farmState(from houses: [House]) -> SensorState {
@@ -1173,6 +1118,10 @@ final class MockDataStore {
     private func log(_ message: String) {
         guard verboseLogging else { return }
         print("[FarmDataStore] \(message)")
+    }
+
+    private func diagnostic(_ message: String) {
+        print("[FarmDataStore][diagnostic] \(message)")
     }
 }
 

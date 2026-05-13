@@ -115,6 +115,10 @@ def _safe_float(value):
     try:
         if value is None:
             return None
+        if isinstance(value, str):
+            value = value.strip().replace(',', '')
+            if value in {'', '- - -', 'N/A', '---', 'null'}:
+                return None
         return float(value)
     except (TypeError, ValueError):
         return None
@@ -124,7 +128,32 @@ def _extract_current_numeric(house_data: dict, key: str):
     section = house_data.get(key, {}) if isinstance(house_data, dict) else {}
     if not isinstance(section, dict):
         return None
-    return _safe_float(section.get('CurrentNumericValue'))
+    for value_key in (
+        'CurrentNumericValue',
+        'CurrentValue',
+        'Value',
+        'NumericValue',
+        'ParameterValue',
+        'DisplayValue',
+        'Text',
+    ):
+        value = _safe_float(section.get(value_key))
+        if value is not None:
+            return value
+    return None
+
+
+def _first_non_zero(*values):
+    fallback = None
+    for value in values:
+        parsed = _safe_float(value)
+        if parsed is None:
+            continue
+        if fallback is None:
+            fallback = parsed
+        if parsed != 0:
+            return parsed
+    return fallback
 
 
 def _parse_site_controllers_source_timestamp(payload: dict):
@@ -151,12 +180,35 @@ def _extract_live_house_from_site_controllers(payload: dict, house_number: int):
 
     data = target.get('Data', {}) if isinstance(target.get('Data'), dict) else {}
     # Rotem "GetSiteControllersInfo" provides direct daily values in this bundle.
-    average_temperature = _extract_current_numeric(data, 'Temperature')
-    humidity = _extract_current_numeric(data, 'Humidity')
-    static_pressure = _extract_current_numeric(data, 'Pressure')
-    airflow_percentage = _extract_current_numeric(data, 'VentLevel')
-    water_consumption = _extract_current_numeric(data, 'DailyWater')
-    feed_consumption = _extract_current_numeric(data, 'DailyFeed')
+    average_temperature = _first_non_zero(
+        _extract_current_numeric(data, 'Temperature'),
+        _extract_comparison_item(response_obj, 'Average_Temperature', house_number),
+        _extract_comparison_item(response_obj, 'Tunnel_Temperature', house_number),
+        _extract_comparison_item(response_obj, 'Temperature', house_number),
+    )
+    humidity = _first_non_zero(
+        _extract_current_numeric(data, 'Humidity'),
+        _extract_comparison_item(response_obj, 'Inside_Humidity', house_number),
+        _extract_comparison_item(response_obj, 'Humidity', house_number),
+    )
+    static_pressure = _first_non_zero(
+        _extract_current_numeric(data, 'Pressure'),
+        _extract_comparison_item(response_obj, 'Static_Pressure', house_number),
+        _extract_comparison_item(response_obj, 'Pressure', house_number),
+    )
+    airflow_percentage = _first_non_zero(
+        _extract_current_numeric(data, 'VentLevel'),
+        _extract_comparison_item(response_obj, 'Vent_Level', house_number),
+        _extract_comparison_item(response_obj, 'Ventilation_Level', house_number),
+    )
+    water_consumption = _first_non_zero(
+        _extract_current_numeric(data, 'DailyWater'),
+        _extract_comparison_item(response_obj, 'Water_Daily', house_number),
+    )
+    feed_consumption = _first_non_zero(
+        _extract_current_numeric(data, 'DailyFeed'),
+        _extract_comparison_item(response_obj, 'Feed_Daily', house_number),
+    )
 
     last_update = response_obj.get('LastUpdateDT') if isinstance(response_obj, dict) else None
     timestamp = timezone.now()

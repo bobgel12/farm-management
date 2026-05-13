@@ -20,23 +20,23 @@ struct HouseDetailView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
                           spacing: 8) {
                     NavigationLink(value: SensorKind.humidity) {
-                        SensorCard(title: "Humidity", value: String(format: "%.0f", house.snapshot.humidity),
+                        SensorCard(title: "Humidity", value: formatMetric(house.snapshot.humidity, "%.0f"),
                                    unit: "%", state: .warning, systemImage: "drop.fill",
                                    fillFraction: house.snapshot.humidityFill)
                     }.buttonStyle(.plain)
                     NavigationLink(value: SensorKind.co2) {
-                        SensorCard(title: "CO₂", value: String(format: "%.1f", house.snapshot.co2Ppm),
+                        SensorCard(title: "CO₂", value: formatMetric(house.snapshot.co2Ppm, "%.1f"),
                                    unit: "k ppm", state: .ok, systemImage: "cloud.fog.fill",
                                    fillFraction: house.snapshot.co2Fill)
                     }.buttonStyle(.plain)
                     NavigationLink(value: SensorKind.ammonia) {
-                        SensorCard(title: "NH₃ Ammonia", value: String(format: "%.0f", house.snapshot.ammoniaPpm),
+                        SensorCard(title: "NH₃ Ammonia", value: formatMetric(house.snapshot.ammoniaPpm, "%.0f"),
                                    unit: "ppm", state: .ok, systemImage: "wind",
                                    fillFraction: house.snapshot.ammoniaFill)
                     }.buttonStyle(.plain)
                     NavigationLink(value: SensorKind.staticPressure) {
                         SensorCard(title: "Static Pressure",
-                                   value: String(format: "%.0f", house.snapshot.staticPressurePa),
+                                   value: formatMetric(house.snapshot.staticPressurePa, "%.0f"),
                                    unit: "Pa", state: house.state == .critical ? .critical : .ok,
                                    systemImage: "gauge.medium",
                                    fillFraction: house.snapshot.staticFill)
@@ -80,7 +80,7 @@ struct HouseDetailView: View {
         NavigationLink(value: SensorKind.temperature) {
             HeroMetricCard(
                 label: "Inside Temperature",
-                value: String(format: "%.1f", house.snapshot.tempC),
+                value: formatMetric(house.snapshot.tempC, "%.1f"),
                 unit: "°C",
                 target: "Target: 26.5–28.0°C",
                 delta: (text: "▲ 0.9°", state: .warning)
@@ -165,13 +165,18 @@ struct HouseDetailView: View {
                          title: "Heaters", value: "Off")
                 Divider().overlay(Color.appSeparator).padding(.vertical, 10)
                 ValueRow(systemImage: "drop.fill", iconColor: .stateInfo,
-                         title: "Water flow", value: String(format: "%.0f L / hr", house.snapshot.waterLphr))
+                         title: "Water flow", value: formatMetric(house.snapshot.waterLphr, "%.0f L / hr"))
                 Divider().overlay(Color.appSeparator).padding(.vertical, 10)
                 ValueRow(systemImage: "shippingbox.fill",
                          iconColor: Color(red: 166/255, green: 90/255, blue: 40/255),
                          title: "Feed augers", value: "Cycle \(house.snapshot.feedCyclesDone) of \(house.snapshot.feedCyclesPlanned)")
             }
         }
+    }
+
+    private func formatMetric(_ value: Double, _ format: String) -> String {
+        guard value.isFinite else { return "—" }
+        return String(format: format, value)
     }
 }
 

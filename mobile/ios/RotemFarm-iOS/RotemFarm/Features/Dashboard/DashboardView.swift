@@ -136,9 +136,9 @@ struct DashboardView: View {
                     .font(AppFont.title)
                     .foregroundStyle(.white)
                 HStack(spacing: 20) {
-                    heroStat(String(format: "%.2f kg", flock?.avgWeightKg ?? 0), "avg weight")
-                    heroStat(String(format: "%.2f", flock?.fcr ?? 0), "FCR")
-                    heroStat(String(format: "%.1f%%", flock?.livabilityPct ?? 0), "livability")
+                    heroStat(String(format: "%.2f kg", flock?.avgWeightKg ?? 0.0), "avg weight")
+                    heroStat(String(format: "%.2f", flock?.fcr ?? 0.0), "FCR")
+                    heroStat(String(format: "%.1f%%", flock?.livabilityPct ?? 0.0), "livability")
                 }
                 .padding(.top, 6)
             }

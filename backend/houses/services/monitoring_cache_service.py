@@ -38,6 +38,10 @@ def safe_float(value):
     try:
         if value is None:
             return None
+        if isinstance(value, str):
+            value = value.strip().replace(",", "")
+            if value in {"", "- - -", "N/A", "---", "null"}:
+                return None
         return float(value)
     except (TypeError, ValueError):
         return None
@@ -62,7 +66,32 @@ def extract_current_numeric(house_data: dict, key: str):
     section = house_data.get(key, {}) if isinstance(house_data, dict) else {}
     if not isinstance(section, dict):
         return None
-    return safe_float(section.get("CurrentNumericValue"))
+    for value_key in (
+        "CurrentNumericValue",
+        "CurrentValue",
+        "Value",
+        "NumericValue",
+        "ParameterValue",
+        "DisplayValue",
+        "Text",
+    ):
+        value = safe_float(section.get(value_key))
+        if value is not None:
+            return value
+    return None
+
+
+def first_non_zero(*values):
+    fallback = None
+    for value in values:
+        parsed = safe_float(value)
+        if parsed is None:
+            continue
+        if fallback is None:
+            fallback = parsed
+        if parsed != 0:
+            return parsed
+    return fallback
 
 
 def extract_live_house(payload: dict, house_number: int):
@@ -81,12 +110,35 @@ def extract_live_house(payload: dict, house_number: int):
         "house_id": int(target.get("HouseNumber", house_number)),
         "source_timestamp": source_ts.isoformat(),
         "timestamp": timezone.now().isoformat(),
-        "average_temperature": extract_current_numeric(data, "Temperature"),
-        "humidity": extract_current_numeric(data, "Humidity"),
-        "static_pressure": extract_current_numeric(data, "Pressure"),
-        "airflow_percentage": extract_current_numeric(data, "VentLevel"),
-        "water_consumption": extract_current_numeric(data, "DailyWater"),
-        "feed_consumption": extract_current_numeric(data, "DailyFeed"),
+        "average_temperature": first_non_zero(
+            extract_current_numeric(data, "Temperature"),
+            extract_comparison_item(response_obj, "Average_Temperature", house_number),
+            extract_comparison_item(response_obj, "Tunnel_Temperature", house_number),
+            extract_comparison_item(response_obj, "Temperature", house_number),
+        ),
+        "humidity": first_non_zero(
+            extract_current_numeric(data, "Humidity"),
+            extract_comparison_item(response_obj, "Inside_Humidity", house_number),
+            extract_comparison_item(response_obj, "Humidity", house_number),
+        ),
+        "static_pressure": first_non_zero(
+            extract_current_numeric(data, "Pressure"),
+            extract_comparison_item(response_obj, "Static_Pressure", house_number),
+            extract_comparison_item(response_obj, "Pressure", house_number),
+        ),
+        "airflow_percentage": first_non_zero(
+            extract_current_numeric(data, "VentLevel"),
+            extract_comparison_item(response_obj, "Vent_Level", house_number),
+            extract_comparison_item(response_obj, "Ventilation_Level", house_number),
+        ),
+        "water_consumption": first_non_zero(
+            extract_current_numeric(data, "DailyWater"),
+            extract_comparison_item(response_obj, "Water_Daily", house_number),
+        ),
+        "feed_consumption": first_non_zero(
+            extract_current_numeric(data, "DailyFeed"),
+            extract_comparison_item(response_obj, "Feed_Daily", house_number),
+        ),
         "is_connected": int(target.get("ConnectionStatus", 0)) == 1,
         "alarm_status": "normal",
     }

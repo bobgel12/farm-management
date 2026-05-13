@@ -70,15 +70,20 @@ struct HousesView: View {
             state: house.state,
             pillText: house.pillText,
             stats: [
-                ("Temp",   String(format: "%.1f°", house.snapshot.tempC)),
-                ("RH",     String(format: "%.0f%%", house.snapshot.humidity)),
-                ("CO₂",    String(format: "%.1fk", house.snapshot.co2Ppm)),
+                ("Temp",   formatMetric(house.snapshot.tempC, "%.1f°")),
+                ("RH",     formatMetric(house.snapshot.humidity, "%.0f%%")),
+                ("CO₂",    formatMetric(house.snapshot.co2Ppm, "%.1fk")),
                 (house.state == .critical ? "Static" : "NH₃",
                  house.state == .critical
-                 ? String(format: "%.0f Pa", house.snapshot.staticPressurePa)
-                 : String(format: "%.0f", house.snapshot.ammoniaPpm))
+                 ? formatMetric(house.snapshot.staticPressurePa, "%.0f Pa")
+                 : formatMetric(house.snapshot.ammoniaPpm, "%.0f"))
             ]
         )
+    }
+
+    private func formatMetric(_ value: Double, _ format: String) -> String {
+        guard value.isFinite else { return "—" }
+        return String(format: format, value)
     }
 }
 

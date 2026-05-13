@@ -22,6 +22,8 @@ from typing import Any
 
 
 DEFAULT_BASE_URL = "https://farm-management-production-54e4.up.railway.app"
+DEFAULT_TIMEOUT_SECONDS = 30
+SCRIPT_VERSION = "ios-live-rotem-v2"
 
 
 @dataclass
@@ -255,7 +257,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--password", default=os.environ.get("ROTEM_IOS_PASSWORD"), help="Login password")
     parser.add_argument("--farm-id", type=int, help="Only test a specific farm ID")
     parser.add_argument("--house-id", type=int, help="Only test a specific house ID")
-    parser.add_argument("--timeout", type=int, default=90, help="Request timeout seconds")
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS, help="Request timeout seconds")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON report")
     parser.add_argument("--include-refresh", action="store_true", help="Call refresh/scrape endpoints that hit Rotem")
     parser.add_argument("--include-mutations", action="store_true", help="Call mutating endpoints when IDs are provided")
@@ -278,9 +280,10 @@ def main() -> int:
     api = API(api_root(args.base_url), timeout=args.timeout, verbose=not args.quiet and not args.json)
     results: list[Result] = []
     if api.verbose:
-        print(f"iOS API endpoint smoke test", flush=True)
+        print(f"iOS API endpoint smoke test ({SCRIPT_VERSION})", flush=True)
         print(f"Base URL: {api.base_url}", flush=True)
         print(f"Timeout: {args.timeout}s per request", flush=True)
+        print("Monitoring mode: live Rotem endpoints only", flush=True)
         print("Mutations: " + ("enabled" if args.include_mutations else "skipped"), flush=True)
         print("Refresh calls: " + ("enabled" if args.include_refresh else "skipped"), flush=True)
 
@@ -333,9 +336,9 @@ def main() -> int:
             endpoint("Farm detail", "GET", f"/api/farms/{farm_id}/"),
             endpoint("Farm integration status", "GET", f"/api/farms/{farm_id}/integration_status/"),
             endpoint("Farm houses", "GET", f"/api/farms/{farm_id}/houses/"),
-            endpoint("iOS farm snapshot", "GET", f"/api/farms/{farm_id}/ios/snapshot/?mode=live"),
-            endpoint("Farm monitoring dashboard", "GET", f"/api/farms/{farm_id}/houses/monitoring/dashboard/?mode=live"),
-            endpoint("Farm monitoring snapshot", "GET", f"/api/farms/{farm_id}/houses/monitoring/snapshot/?mode=live"),
+            endpoint("iOS farm snapshot (live)", "GET", f"/api/farms/{farm_id}/ios/snapshot/?mode=live"),
+            endpoint("Farm monitoring dashboard (live)", "GET", f"/api/farms/{farm_id}/houses/monitoring/dashboard/?mode=live"),
+            endpoint("Farm monitoring snapshot (live)", "GET", f"/api/farms/{farm_id}/houses/monitoring/snapshot/?mode=live"),
             endpoint("Flocks by farm", "GET", f"/api/flocks/?farm_id={farm_id}"),
             endpoint("Workers by farm", "GET", f"/api/workers/?farm_id={farm_id}"),
         ]
@@ -362,10 +365,10 @@ def main() -> int:
 
     for house_id in house_ids:
         house_specs = [
-            endpoint("House monitoring latest", "GET", f"/api/houses/{house_id}/monitoring/latest/?mode=live"),
-            endpoint("House monitoring history", "GET", f"/api/houses/{house_id}/monitoring/history/?mode=live&limit=24"),
-            endpoint("House monitoring KPIs", "GET", f"/api/houses/{house_id}/monitoring/kpis/?mode=live"),
-            endpoint("House heater history", "GET", f"/api/houses/{house_id}/heater-history/?mode=live"),
+            endpoint("House monitoring latest (live)", "GET", f"/api/houses/{house_id}/monitoring/latest/?mode=live"),
+            endpoint("House monitoring history (live)", "GET", f"/api/houses/{house_id}/monitoring/history/?mode=live&limit=24"),
+            endpoint("House monitoring KPIs (live)", "GET", f"/api/houses/{house_id}/monitoring/kpis/?mode=live"),
+            endpoint("House heater history (live)", "GET", f"/api/houses/{house_id}/heater-history/?mode=live"),
             endpoint("House water alerts", "GET", f"/api/houses/{house_id}/water/alerts/?include_resolved=true"),
             endpoint("House tasks", "GET", f"/api/houses/{house_id}/tasks/"),
             endpoint("Rotem water history", "GET", f"/api/rotem/daily-summaries/water-history/?house_id={house_id}&days=5", optional=True),
