@@ -1,0 +1,53 @@
+{
+  "count": 2,
+  "houses": [
+    {
+      "house_id": 101,
+      "house_number": 1,
+      "farm_id": 12,
+      "farm_name": "Farm Alpha",
+      "current_day": 19,
+      "age_days": 19,
+      "status": "growth",
+      "is_full_house": true,
+      "last_update_time": "2026-04-07T09:00:00Z",
+      "average_temperature": 32.4,
+      "outside_temperature": 28.1,
+      "target_temperature": 31.5,
+      "static_pressure": 0.12,
+      "inside_humidity": 61.2,
+      "water_consumption": 1240.0,
+      "feed_consumption": 980.0,
+      "bird_count": 985,
+      "livability": 98.5,
+      "growth_day": 19,
+      "is_connected": true,
+      "has_alarms": false,
+      "alarm_status": "normal"
+    },
+    {
+      "house_id": 102,
+      "house_number": 2,
+      "farm_id": 12,
+      "farm_name": "Farm Alpha",
+      "current_day": 21,
+      "age_days": 21,
+      "status": "maturation",
+      "is_full_house": true,
+      "last_update_time": "2026-04-07T09:05:00Z",
+      "average_temperature": 33.1,
+      "outside_temperature": 29.0,
+      "target_temperature": 31.0,
+      "static_pressure": 0.11,
+      "inside_humidity": 59.8,
+      "water_consumption": 1320.0,
+      "feed_consumption": 1035.0,
+      "bird_count": 972,
+      "livability": 97.2,
+      "growth_day": 21,
+      "is_connected": true,
+      "has_alarms": true,
+      "alarm_status": "warning"
+    }
+  ]
+}

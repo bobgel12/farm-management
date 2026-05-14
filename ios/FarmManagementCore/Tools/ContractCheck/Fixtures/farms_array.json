@@ -1,0 +1,13 @@
+[
+  {
+    "id": 30,
+    "organization": null,
+    "name": "Farm Gamma",
+    "location": "District C",
+    "description": "Legacy endpoint format",
+    "is_active": true,
+    "total_houses": 3,
+    "active_houses": 2,
+    "is_integrated": false
+  }
+]

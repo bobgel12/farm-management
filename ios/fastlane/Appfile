@@ -1,0 +1,5 @@
+app_identifier("com.farmmanagement.ios")
+apple_id("ios-release@your-company.com")
+
+# Team ID should be configured in CI secrets or local env.
+# team_id("YOUR_TEAM_ID")
