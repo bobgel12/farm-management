@@ -38,7 +38,7 @@ import {
   StarBorder,
   Warning,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   ArrowBack,
   Home,
   Thermostat,
@@ -120,6 +120,21 @@ interface HouseComparison {
 interface ComparisonResponse {
   count: number;
   houses: HouseComparison[];
+}
+
+interface CachedComparisonResponse {
+  data: ComparisonResponse;
+  meta?: Record<string, unknown>;
+}
+
+function unwrapComparisonResponse(payload: ComparisonResponse | CachedComparisonResponse): ComparisonResponse {
+  if ('houses' in payload && Array.isArray(payload.houses)) {
+    return payload;
+  }
+  if ('data' in payload && payload.data && Array.isArray(payload.data.houses)) {
+    return payload.data;
+  }
+  throw new Error('Comparison API returned an unexpected response shape.');
 }
 
 type SortField = 'house_number' | 'current_day' | 'average_temperature' | 'static_pressure' | 'inside_humidity' | 'water_consumption' | 'feed_consumption' | 'bird_count' | 'livability';
@@ -258,8 +273,8 @@ const ComparisonDashboard: React.FC = () => {
         params.house_ids = Array.from(favorites);
       }
 
-      const response = await api.get<ComparisonResponse>('/houses/comparison/', { params });
-      let data = response.data.houses;
+      const response = await api.get<ComparisonResponse | CachedComparisonResponse>('/houses/comparison/', { params });
+      let data = unwrapComparisonResponse(response.data).houses;
 
       if (favoritesOnly) {
         data = data.filter(house => favorites.has(house.house_id));
@@ -281,7 +296,7 @@ const ComparisonDashboard: React.FC = () => {
 
       setHouses(data);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load comparison data');
+      setError(err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to load comparison data');
       console.error('Error loading comparison data:', err);
     } finally {
       setLoading(false);
@@ -718,7 +733,7 @@ const ComparisonDashboard: React.FC = () => {
                         </Typography>
                         {!house.is_connected && (
                           <Tooltip title="Disconnected">
-                            <Error color="error" fontSize="small" />
+                            <ErrorIcon color="error" fontSize="small" />
                           </Tooltip>
                         )}
                       </Box>
