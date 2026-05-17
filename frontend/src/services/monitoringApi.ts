@@ -6,6 +6,7 @@ import {
   FarmHousesMonitoringResponse,
   MonitoringDashboardData,
   HouseMonitoringKpis,
+  FarmWaterHistoryComparisonResponse,
   WaterConsumptionAlert,
   WaterConsumptionForecast,
 } from '../types/monitoring';
@@ -113,6 +114,26 @@ class MonitoringApiService {
     return response.data;
   }
 
+  async getFarmWaterHistoryComparison(
+    farmId: number,
+    options?: { days?: number; dodReferenceDate?: string | null; mode?: 'cached' | 'live' | 'cached_then_live' }
+  ): Promise<FarmWaterHistoryComparisonResponse> {
+    const params: Record<string, string> = {
+      mode: options?.mode || 'cached_then_live',
+    };
+    if (options?.days != null) {
+      params.days = String(options.days);
+    }
+    if (options?.dodReferenceDate) {
+      params.dod_reference_date = options.dodReferenceDate;
+    }
+    const response = await api.get(`/farms/${farmId}/houses/water-history-comparison/`, {
+      params,
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
   async getWaterAlerts(houseId: number): Promise<{ count: number; results: WaterConsumptionAlert[] }> {
     const response = await api.get(`/houses/${houseId}/water/alerts/`, {
       headers: this.getAuthHeaders(),
@@ -192,4 +213,3 @@ class MonitoringApiService {
 
 const monitoringApiService = new MonitoringApiService();
 export default monitoringApiService;
-

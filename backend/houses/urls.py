@@ -18,6 +18,7 @@ urlpatterns = [
     path('farms/<int:farm_id>/houses/monitoring/dashboard/', views.farm_houses_monitoring_dashboard, name='farm-houses-monitoring-dashboard'),
     path('farms/<int:farm_id>/houses/monitoring/snapshot/', views.farm_houses_monitoring_snapshot, name='farm-houses-monitoring-snapshot'),
     path('farms/<int:farm_id>/houses/monitoring/refresh/', views.farm_monitoring_refresh, name='farm-monitoring-refresh'),
+    path('farms/<int:farm_id>/houses/water-history-comparison/', views.farm_water_history_comparison, name='farm-water-history-comparison'),
     path('farms/<int:farm_id>/ios/snapshot/', views.farm_ios_snapshot, name='farm-ios-snapshot'),
     
     # Comparison endpoint

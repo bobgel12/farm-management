@@ -6,6 +6,8 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Max, Min
 from django.utils import timezone
 from datetime import timedelta, datetime, date
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 from .models import (
     House,
     HouseMonitoringSnapshot,
@@ -48,6 +50,8 @@ from .models import FarmMonitoringCache, HouseMonitoringCache
 from rotem_scraper.tasks import sync_refresh_house_heater_history
 from farms.views import user_accessible_organization_ids
 from rotem_scraper.scraper import RotemScraper
+
+logger = logging.getLogger(__name__)
 
 
 def _cache_mode(request):
@@ -243,6 +247,172 @@ def _extract_comparison_item(response_obj: dict, category: str, house_number: in
     if not isinstance(bucket, dict):
         return None
     return bucket.get(f'House{house_number}')
+
+
+def _parse_int_query_param(raw_value, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        parsed = default
+    return min(max(parsed, minimum), maximum)
+
+
+def _trim_history_rows(rows, days: int):
+    rows = list(rows or [])
+    return rows[-days:] if len(rows) > days else rows
+
+
+def _calc_delta(current, previous):
+    if current is None or previous is None:
+        return {'current': current, 'previous': previous, 'delta': None, 'delta_pct': None}
+    delta = current - previous
+    delta_pct = (delta / previous * 100.0) if previous != 0 else None
+    return {'current': current, 'previous': previous, 'delta': delta, 'delta_pct': delta_pct}
+
+
+def _parse_rotem_history_rows(raw_water_data):
+    response_obj = raw_water_data.get('reponseObj', raw_water_data) if isinstance(raw_water_data, dict) else {}
+    ds_data = response_obj.get('dsData', {}) if isinstance(response_obj, dict) else {}
+    return ds_data.get('Data', []) if isinstance(ds_data, dict) else []
+
+
+def _history_record_date_from_growth_day(house: House, growth_day: int, max_growth_day: int | None):
+    if house.batch_start_date:
+        return (house.batch_start_date + timedelta(days=growth_day)).isoformat()
+    if max_growth_day is not None:
+        return (timezone.localdate() - timedelta(days=(max_growth_day - growth_day))).isoformat()
+    return None
+
+
+def _normalize_water_feed_history(raw_water_data, house: House):
+    """Reuse Rotem water parsing and enrich records with feed totals when present."""
+    from rotem_scraper.views import _parse_water_history_raw
+
+    water_rows = _parse_water_history_raw(raw_water_data, house)
+    rows = _parse_rotem_history_rows(raw_water_data)
+    valid_growth_days = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            growth_day = int(row.get('HistoryRecord_GrowthDay'))
+        except (TypeError, ValueError):
+            continue
+        if growth_day >= 0:
+            valid_growth_days.append(growth_day)
+    max_growth_day = max(valid_growth_days) if valid_growth_days else None
+
+    by_growth_day = {}
+    by_date = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            growth_day = int(row.get('HistoryRecord_GrowthDay'))
+        except (TypeError, ValueError):
+            continue
+        if growth_day < 0:
+            continue
+        record_date = _history_record_date_from_growth_day(house, growth_day, max_growth_day)
+        feed = _safe_float(
+            row.get('HistoryRecord_FeederTotal')
+            or row.get('HistoryRecord_DailyFeed')
+            or row.get('DailyFeed')
+            or row.get('Feed')
+        )
+        water = _safe_float(
+            row.get('HistoryRecord_TotalDrink')
+            or row.get('HistoryRecord_TotalWater')
+            or row.get('HistoryRecord_DailyWater')
+            or row.get('DailyWater')
+            or row.get('Water')
+        )
+        enriched = {
+            'growth_day': growth_day,
+            'date': record_date,
+            'consumption_avg': water,
+            'feed_consumption': feed,
+        }
+        by_growth_day[growth_day] = enriched
+        if record_date:
+            by_date[record_date] = enriched
+
+    normalized = []
+    seen_keys = set()
+    for row in water_rows:
+        if not isinstance(row, dict):
+            continue
+        growth_day = row.get('growth_day')
+        date_key = row.get('date')
+        raw_match = None
+        if growth_day is not None:
+            try:
+                raw_match = by_growth_day.get(int(growth_day))
+            except (TypeError, ValueError):
+                raw_match = None
+        if raw_match is None and date_key:
+            raw_match = by_date.get(date_key)
+
+        normalized_row = {
+            **row,
+            'consumption_avg': _safe_float(row.get('consumption_avg')),
+            'feed_consumption': raw_match.get('feed_consumption') if raw_match else _safe_float(row.get('feed_consumption')),
+        }
+        key = normalized_row.get('date') or normalized_row.get('growth_day')
+        if key is not None:
+            seen_keys.add(str(key))
+        normalized.append(normalized_row)
+
+    for raw_row in by_growth_day.values():
+        key = raw_row.get('date') or raw_row.get('growth_day')
+        if key is not None and str(key) in seen_keys:
+            continue
+        if raw_row.get('date'):
+            normalized.append(raw_row)
+
+    normalized = [row for row in normalized if row.get('date')]
+    normalized.sort(key=lambda row: row.get('date') or '')
+    return normalized
+
+
+def _select_history_row_for_date(rows, target_date: date | None):
+    dated_rows = [row for row in rows if isinstance(row, dict) and row.get('date')]
+    dated_rows.sort(key=lambda row: row.get('date') or '')
+    if not dated_rows:
+        return None, None
+
+    if target_date is None:
+        current = dated_rows[-1]
+        previous = dated_rows[-2] if len(dated_rows) > 1 else None
+        return current, previous
+
+    target_key = target_date.isoformat()
+    previous_key = (target_date - timedelta(days=1)).isoformat()
+    current = next((row for row in dated_rows if row.get('date') == target_key), None)
+    previous = next((row for row in dated_rows if row.get('date') == previous_key), None)
+    return current, previous
+
+
+def _build_water_history_comparison_row(house: House, rows, source: str, target_date: date | None, error: str | None = None):
+    current, previous = _select_history_row_for_date(rows or [], target_date)
+    water_current = _safe_float(current.get('consumption_avg')) if current else None
+    water_previous = _safe_float(previous.get('consumption_avg')) if previous else None
+    feed_current = _safe_float(current.get('feed_consumption')) if current else None
+    feed_previous = _safe_float(previous.get('feed_consumption')) if previous else None
+    payload = {
+        'house_id': house.id,
+        'house_number': house.house_number,
+        'water_day_over_day': _calc_delta(water_current, water_previous),
+        'feed_day_over_day': _calc_delta(feed_current, feed_previous),
+        'data_quality': {
+            'enough_for_dod_delta': water_current is not None and water_previous is not None,
+            'has_feed_delta': feed_current is not None and feed_previous is not None,
+        },
+        'source': source,
+    }
+    if error:
+        payload['error'] = error
+    return payload
 
 
 def _snapshot_fallback_for_house(house: House):
@@ -1529,6 +1699,137 @@ def houses_comparison(request):
         meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
         return Response(wrap_cached_response(payload, meta))
     return Response(wrap_cached_response(payload, build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_water_history_comparison(request, farm_id):
+    """Get per-house water/feed day-over-day comparison from cached or parallel Rotem history."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id, is_active=True)
+    mode = _cache_mode(request)
+    days = _parse_int_query_param(request.query_params.get('days'), default=8, minimum=1, maximum=30)
+    ref_date_raw = request.query_params.get('dod_reference_date')
+    ref_date = None
+    if ref_date_raw:
+        try:
+            ref_date = date.fromisoformat(ref_date_raw)
+        except ValueError:
+            return Response(
+                {'detail': 'dod_reference_date must be YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    houses = list(
+        _scoped_houses_queryset(request)
+        .filter(farm=farm, is_active=True)
+        .order_by('house_number')
+    )
+    now = timezone.now()
+    caches = {
+        cache.house_id: cache
+        for cache in HouseMonitoringCache.objects.filter(house__in=houses)
+    }
+    response_houses = {}
+    stale_houses = []
+
+    for house in houses:
+        cache = caches.get(house.id)
+        has_payload = bool(cache and cache.water_history_payload)
+        is_fresh = bool(
+            cache
+            and cache.water_history_fetched_at
+            and (now - cache.water_history_fetched_at).total_seconds() < MAX_STALE_SECONDS
+        )
+        if mode != 'live' and has_payload and (is_fresh or mode == 'cached'):
+            source = 'cache' if is_fresh else 'stale_cache'
+            rows = _trim_history_rows(cache.water_history_payload, days)
+            response_houses[str(house.id)] = _build_water_history_comparison_row(house, rows, source, ref_date)
+        elif mode == 'cached':
+            response_houses[str(house.id)] = _build_water_history_comparison_row(
+                house,
+                [],
+                'failed',
+                ref_date,
+                error='No cached water history is available for this house.',
+            )
+        else:
+            stale_houses.append(house)
+
+    def fetch_house_history(house: House):
+        if not farm.rotem_username or not farm.rotem_password:
+            raise ValueError('Farm Rotem credentials are not configured.')
+        scraper = RotemScraper(username=farm.rotem_username, password=farm.rotem_password)
+        if not scraper.login():
+            raise ValueError('Failed to authenticate with Rotem API.')
+        raw = scraper.get_water_history(house_number=house.house_number) or {}
+        rows = _normalize_water_feed_history(raw, house)
+        HouseMonitoringCache.objects.update_or_create(
+            house=house,
+            defaults={
+                'water_history_payload': rows,
+                'water_history_fetched_at': timezone.now(),
+                'source_timestamp': timezone.now(),
+                'refresh_state': 'fresh',
+                'last_error': '',
+            },
+        )
+        return rows
+
+    if stale_houses:
+        max_workers = min(4, len(stale_houses))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(fetch_house_history, house): house for house in stale_houses}
+            for future in as_completed(futures):
+                house = futures[future]
+                cache = caches.get(house.id)
+                try:
+                    rows = future.result()
+                    response_houses[str(house.id)] = _build_water_history_comparison_row(
+                        house,
+                        _trim_history_rows(rows, days),
+                        'live',
+                        ref_date,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        'farm_water_history_comparison_failed farm=%s house=%s err=%s',
+                        farm.id,
+                        house.house_number,
+                        exc,
+                    )
+                    if cache and cache.water_history_payload:
+                        response_houses[str(house.id)] = _build_water_history_comparison_row(
+                            house,
+                            _trim_history_rows(cache.water_history_payload, days),
+                            'stale_cache',
+                            ref_date,
+                            error=str(exc),
+                        )
+                    else:
+                        response_houses[str(house.id)] = _build_water_history_comparison_row(
+                            house,
+                            [],
+                            'failed',
+                            ref_date,
+                            error=str(exc),
+                        )
+
+    ordered_houses = {
+        str(house.id): response_houses[str(house.id)]
+        for house in houses
+        if str(house.id) in response_houses
+    }
+    partial = any(row.get('source') == 'failed' or row.get('error') for row in ordered_houses.values())
+    return Response({
+        'farm_id': farm.id,
+        'days': days,
+        'dod_reference_date': ref_date.isoformat() if ref_date else None,
+        'houses': ordered_houses,
+        'meta': {
+            'fetched_at': timezone.now().isoformat(),
+            'partial': partial,
+        },
+    })
 
 
 @api_view(['GET', 'POST'])

@@ -50,7 +50,7 @@ import {
 import api from '../../services/api';
 import { useFarm } from '../../contexts/FarmContext';
 import monitoringApi from '../../services/monitoringApi';
-import { HouseMonitoringKpis } from '../../types/monitoring';
+import { FarmWaterHistoryComparisonHouse } from '../../types/monitoring';
 
 const COMPARISON_VIEW_KEYS = ['consumption', 'climate', 'environment', 'operations'] as const;
 
@@ -178,11 +178,12 @@ const ComparisonDashboard: React.FC = () => {
     },
     [setSearchParams]
   );
-  const [opsKpis, setOpsKpis] = useState<Record<number, HouseMonitoringKpis | null>>({});
+  const [opsKpis, setOpsKpis] = useState<Record<number, FarmWaterHistoryComparisonHouse | null>>({});
   const [opsHeaterRefDayHours, setOpsHeaterRefDayHours] = useState<Record<number, number | null>>({});
   const [opsLoading, setOpsLoading] = useState(false);
   /** Ignore stale async results when DOD date or house list changes quickly. */
   const opsFetchGenRef = useRef(0);
+  const comparisonFetchInFlightRef = useRef(false);
 
   const viewFromUrl = searchParams.get('view');
   const activeTab = useMemo(() => {
@@ -221,32 +222,45 @@ const ComparisonDashboard: React.FC = () => {
     const cacheBust = `${dodRefDate}-${fetchGen}-${Date.now()}`;
     let cancelled = false;
     (async () => {
-      const nextKpi: Record<number, HouseMonitoringKpis | null> = {};
+      const nextKpi: Record<number, FarmWaterHistoryComparisonHouse | null> = {};
       const nextHeat: Record<number, number | null> = {};
+      const farmIds = Array.from(new Set(houses.map((h) => h.farm_id).filter((id): id is number => id != null)));
       await Promise.all(
-        houses.map(async (h) => {
-          try {
-            const [k, heaterRes] = await Promise.all([
-              monitoringApi.getHouseMonitoringKpis(h.house_id, {
+        [
+          ...farmIds.map(async (id) => {
+            try {
+              const comparison = await monitoringApi.getFarmWaterHistoryComparison(id, {
+                days: 8,
                 dodReferenceDate: dodRefDate,
-                cacheBust,
-              }),
-              monitoringApi.getHouseHeaterHistory(h.house_id, cacheBust).catch(() => null),
-            ]);
-            nextKpi[h.house_id] = k;
-            if (heaterRes?.heater_history) {
-              const daily = (heaterRes.heater_history as { daily?: Array<{ date?: string | null; total_hours?: number }> })
-                .daily;
-              const row = daily?.find((r) => r.date === dodRefDate);
-              nextHeat[h.house_id] = row?.total_hours ?? null;
-            } else {
+                mode: 'cached_then_live',
+              });
+              Object.values(comparison.houses || {}).forEach((row) => {
+                nextKpi[row.house_id] = row;
+              });
+            } catch {
+              houses
+                .filter((h) => h.farm_id === id)
+                .forEach((h) => {
+                  nextKpi[h.house_id] = null;
+                });
+            }
+          }),
+          ...houses.map(async (h) => {
+            try {
+              const heaterRes = await monitoringApi.getHouseHeaterHistory(h.house_id, cacheBust).catch(() => null);
+              if (heaterRes?.heater_history) {
+                const daily = (heaterRes.heater_history as { daily?: Array<{ date?: string | null; total_hours?: number }> })
+                  .daily;
+                const row = daily?.find((r) => r.date === dodRefDate);
+                nextHeat[h.house_id] = row?.total_hours ?? null;
+              } else {
+                nextHeat[h.house_id] = null;
+              }
+            } catch {
               nextHeat[h.house_id] = null;
             }
-          } catch {
-            nextKpi[h.house_id] = null;
-            nextHeat[h.house_id] = null;
-          }
-        })
+          }),
+        ]
       );
       if (cancelled || fetchGen !== opsFetchGenRef.current) {
         return;
@@ -260,8 +274,12 @@ const ComparisonDashboard: React.FC = () => {
     };
   }, [activeTab, houses, dodRefDate]);
 
-  const loadComparisonData = async () => {
+  const loadComparisonData = useCallback(async () => {
+    if (comparisonFetchInFlightRef.current) {
+      return;
+    }
     try {
+      comparisonFetchInFlightRef.current = true;
       setLoading(true);
       setError(null);
 
@@ -280,28 +298,15 @@ const ComparisonDashboard: React.FC = () => {
         data = data.filter(house => favorites.has(house.house_id));
       }
 
-      data.sort((a, b) => {
-        const aVal: any = a[sortField];
-        const bVal: any = b[sortField];
-
-        if (aVal === null || aVal === undefined) return 1;
-        if (bVal === null || bVal === undefined) return -1;
-
-        if (sortDirection === 'asc') {
-          return aVal > bVal ? 1 : -1;
-        } else {
-          return aVal < bVal ? 1 : -1;
-        }
-      });
-
       setHouses(data);
     } catch (err: any) {
       setError(err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to load comparison data');
       console.error('Error loading comparison data:', err);
     } finally {
+      comparisonFetchInFlightRef.current = false;
       setLoading(false);
     }
-  };
+  }, [farmFilter, favoritesOnly, favorites]);
 
   useEffect(() => {
     const savedFavorites = localStorage.getItem('houseComparisonFavorites');
@@ -328,13 +333,30 @@ const ComparisonDashboard: React.FC = () => {
 
   useEffect(() => {
     loadComparisonData();
-  }, [farmFilter, favoritesOnly, sortField, sortDirection]);
+  }, [loadComparisonData]);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
     const interval = setInterval(loadComparisonData, 30000);
     return () => clearInterval(interval);
-  }, [farmFilter, favoritesOnly]);
+  }, [loadComparisonData]);
+
+  const sortedHouses = useMemo(() => {
+    const data = [...houses];
+    data.sort((a, b) => {
+      const aVal: any = a[sortField];
+      const bVal: any = b[sortField];
+
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      }
+      return aVal < bVal ? 1 : -1;
+    });
+    return data;
+  }, [houses, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -702,7 +724,7 @@ const ComparisonDashboard: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {houses.length === 0 ? (
+              {sortedHouses.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={28} align="center">
                     <Typography variant="body2" color="text.secondary" py={4}>
@@ -711,7 +733,7 @@ const ComparisonDashboard: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                houses.map((house) => (
+                sortedHouses.map((house) => (
                   <TableRow 
                     key={house.house_id} 
                     hover 

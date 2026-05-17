@@ -215,6 +215,42 @@ export interface MonitoringDashboardData {
   };
 }
 
+export interface DayOverDayDelta {
+  current: number | null;
+  previous: number | null;
+  delta: number | null;
+  delta_pct: number | null;
+}
+
+export interface FarmWaterHistoryComparisonHouse {
+  house_id: number;
+  house_number: number;
+  water_day_over_day: DayOverDayDelta;
+  feed_day_over_day: DayOverDayDelta;
+  data_quality: {
+    enough_for_dod_delta: boolean;
+    has_feed_delta?: boolean;
+  };
+  heater_runtime?: {
+    hours_24h: number | null;
+    cycles_24h?: number | null;
+    method?: string;
+  };
+  source: 'cache' | 'live' | 'stale_cache' | 'failed';
+  error?: string;
+}
+
+export interface FarmWaterHistoryComparisonResponse {
+  farm_id: number;
+  days: number;
+  dod_reference_date: string | null;
+  houses: Record<string, FarmWaterHistoryComparisonHouse>;
+  meta: {
+    fetched_at: string;
+    partial: boolean;
+  };
+}
+
 export interface HouseMonitoringKpis {
   house_id: number;
   window_hours: number;
@@ -265,4 +301,3 @@ export interface HouseMonitoringKpis {
     active_now: number;
   };
 }
-
