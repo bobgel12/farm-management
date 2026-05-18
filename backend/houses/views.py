@@ -415,6 +415,190 @@ def _build_water_history_comparison_row(house: House, rows, source: str, target_
     return payload
 
 
+def _build_house_comparison_row(house: House, farm_payload: dict | None, now):
+    response_obj = farm_payload.get('reponseObj', {}) if isinstance(farm_payload, dict) else {}
+    live = _extract_live_house_from_site_controllers(farm_payload or {}, house.house_number) or {}
+    age_days = house.age_days
+    water_consumption = _safe_float(
+        _extract_comparison_item(response_obj, 'Water_Daily', house.house_number)
+    )
+    if water_consumption is None:
+        water_consumption = live.get('water_consumption')
+    feed_consumption = _safe_float(
+        _extract_comparison_item(response_obj, 'Feed_Daily', house.house_number)
+    )
+    if feed_consumption is None:
+        feed_consumption = live.get('feed_consumption')
+    bird_count = _safe_float(_extract_comparison_item(response_obj, 'Current_Birds_Count_In_House', house.house_number))
+    bird_count = int(bird_count) if bird_count is not None else None
+    water_per_bird = (
+        (float(water_consumption) / float(bird_count))
+        if (water_consumption is not None and bird_count not in [None, 0])
+        else None
+    )
+    feed_per_bird = (
+        (float(feed_consumption) / float(bird_count))
+        if (feed_consumption is not None and bird_count not in [None, 0])
+        else None
+    )
+    water_feed_ratio = (
+        (float(water_consumption) / float(feed_consumption))
+        if (water_consumption is not None and feed_consumption not in [None, 0])
+        else None
+    )
+
+    source_ts = live.get('source_timestamp')
+    data_freshness_minutes = None
+    if source_ts:
+        try:
+            dt = datetime.fromisoformat(str(source_ts).replace('Z', '+00:00'))
+            data_freshness_minutes = max(int((now - dt).total_seconds() / 60), 0)
+        except ValueError:
+            data_freshness_minutes = None
+
+    heater_raw = _extract_comparison_item(response_obj, 'Heaters', house.house_number)
+    fan_raw = _extract_comparison_item(response_obj, 'Tunnel_Fans', house.house_number) or _extract_comparison_item(response_obj, 'Exh_Fans', house.house_number)
+    heater_on = bool(heater_raw and str(heater_raw).lower() not in ('langkey_off', 'off', '0', 'false', 'none', ''))
+    fan_on = bool(fan_raw and str(fan_raw).lower() not in ('langkey_off', 'off', '0', 'false', 'none', ''))
+
+    return {
+        'house_id': house.id,
+        'house_number': house.house_number,
+        'farm_id': house.farm.id,
+        'farm_name': house.farm.name,
+        'current_day': age_days,
+        'age_days': age_days,
+        'current_age_days': house.current_age_days,
+        'is_integrated': house.is_integrated,
+        'status': house.status,
+        'is_full_house': age_days is not None and age_days >= 0,
+        'last_update_time': source_ts or now,
+        'average_temperature': live.get('average_temperature'),
+        'outside_temperature': _safe_float(_extract_comparison_item(response_obj, 'Outside_Temperature', house.house_number)),
+        'tunnel_temperature': _safe_float(_extract_comparison_item(response_obj, 'Tunnel_Temperature', house.house_number)),
+        'target_temperature': _safe_float(_extract_comparison_item(response_obj, 'Set_Temperature', house.house_number)),
+        'static_pressure': live.get('static_pressure'),
+        'inside_humidity': live.get('humidity'),
+        'ventilation_mode': _extract_comparison_item(response_obj, 'Vent_Mode', house.house_number),
+        'ventilation_level': _safe_float(_extract_comparison_item(response_obj, 'Vent_Level', house.house_number)),
+        'airflow_cfm': _safe_float(str(_extract_comparison_item(response_obj, 'Current_Level_CFM', house.house_number) or '').replace(',', '')),
+        'airflow_percentage': live.get('airflow_percentage'),
+        'water_consumption': water_consumption,
+        'feed_consumption': feed_consumption,
+        'water_per_bird': water_per_bird,
+        'feed_per_bird': feed_per_bird,
+        'water_feed_ratio': water_feed_ratio,
+        'bird_count': bird_count,
+        'livability': _safe_float(_extract_comparison_item(response_obj, 'Livablity_Percents', house.house_number)),
+        'growth_day': age_days,
+        'is_connected': bool(live.get('is_connected')),
+        'has_alarms': False,
+        'alarm_status': live.get('alarm_status') or 'normal',
+        'active_alarms_count': None,
+        'data_freshness_minutes': data_freshness_minutes,
+        'heater_on': heater_on,
+        'fan_on': fan_on,
+        'wind_speed': _safe_float(_extract_comparison_item(response_obj, 'Wind_Speed', house.house_number)),
+        'wind_direction': _safe_float(_extract_comparison_item(response_obj, 'Wind_Direction', house.house_number)),
+        'wind_chill_temperature': _safe_float(_extract_comparison_item(response_obj, 'Wind_Chill_Temperature', house.house_number)),
+    }
+
+
+def _build_house_comparison_row_from_snapshot(house: House, snapshot, now):
+    age_days = house.age_days
+    water_consumption = snapshot.water_consumption if snapshot else None
+    feed_consumption = snapshot.feed_consumption if snapshot else None
+    bird_count = snapshot.bird_count if snapshot else None
+    water_per_bird = (
+        (float(water_consumption) / float(bird_count))
+        if (water_consumption is not None and bird_count not in [None, 0])
+        else None
+    )
+    feed_per_bird = (
+        (float(feed_consumption) / float(bird_count))
+        if (feed_consumption is not None and bird_count not in [None, 0])
+        else None
+    )
+    water_feed_ratio = (
+        (float(water_consumption) / float(feed_consumption))
+        if (water_consumption is not None and feed_consumption not in [None, 0])
+        else None
+    )
+    timestamp = snapshot.timestamp if snapshot else now
+    return {
+        'house_id': house.id,
+        'house_number': house.house_number,
+        'farm_id': house.farm.id,
+        'farm_name': house.farm.name,
+        'current_day': age_days,
+        'age_days': age_days,
+        'current_age_days': house.current_age_days,
+        'is_integrated': house.is_integrated,
+        'status': house.status,
+        'is_full_house': age_days is not None and age_days >= 0,
+        'last_update_time': timestamp,
+        'average_temperature': snapshot.average_temperature if snapshot else None,
+        'outside_temperature': snapshot.outside_temperature if snapshot else None,
+        'tunnel_temperature': None,
+        'target_temperature': snapshot.target_temperature if snapshot else None,
+        'static_pressure': snapshot.static_pressure if snapshot else None,
+        'inside_humidity': snapshot.humidity if snapshot else None,
+        'ventilation_mode': None,
+        'ventilation_level': snapshot.ventilation_level if snapshot else None,
+        'airflow_cfm': snapshot.airflow_cfm if snapshot else None,
+        'airflow_percentage': snapshot.airflow_percentage if snapshot else None,
+        'water_consumption': water_consumption,
+        'feed_consumption': feed_consumption,
+        'water_per_bird': water_per_bird,
+        'feed_per_bird': feed_per_bird,
+        'water_feed_ratio': water_feed_ratio,
+        'bird_count': bird_count,
+        'livability': snapshot.livability if snapshot else None,
+        'growth_day': age_days,
+        'is_connected': bool(snapshot.is_connected) if snapshot else False,
+        'has_alarms': bool(snapshot.has_alarms) if snapshot else False,
+        'alarm_status': snapshot.alarm_status if snapshot else 'unknown',
+        'active_alarms_count': None,
+        'data_freshness_minutes': max(int((now - timestamp).total_seconds() / 60), 0) if timestamp else None,
+        'heater_on': False,
+        'fan_on': False,
+        'wind_speed': None,
+        'wind_direction': None,
+        'wind_chill_temperature': None,
+    }
+
+
+def _comparison_payload_from_rows(rows):
+    rows.sort(key=lambda row: (row['farm_name'], row['house_number']))
+    serializer = HouseComparisonSerializer(rows, many=True)
+    return {'count': len(serializer.data), 'houses': serializer.data}
+
+
+def _db_comparison_payload(houses):
+    now = timezone.now()
+    rows = [
+        _build_house_comparison_row_from_snapshot(house, house.get_latest_snapshot(), now)
+        for house in houses
+    ]
+    return _comparison_payload_from_rows(rows)
+
+
+def _lightweight_farm_comparison_payload(farm: Farm, houses):
+    now = timezone.now()
+    if not houses:
+        return {'count': 0, 'houses': []}, now
+    scraper, err = _house_rotem_scraper_or_error(houses[0])
+    if err:
+        detail = getattr(err, 'data', {}).get('detail', 'Failed to initialize Rotem scraper.')
+        raise ValueError(detail)
+    farm_payload = scraper.get_site_controllers_info() or {}
+    if not farm_payload:
+        raise ValueError('No live Rotem comparison data returned.')
+    source_ts = _parse_site_controllers_source_timestamp(farm_payload) or now
+    rows = [_build_house_comparison_row(house, farm_payload, now) for house in houses]
+    return _comparison_payload_from_rows(rows), source_ts
+
+
 def _snapshot_fallback_for_house(house: House):
     snapshot = house.get_latest_snapshot()
     if not snapshot:
@@ -1527,178 +1711,155 @@ def farm_monitoring_refresh(request, farm_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def houses_comparison(request):
-    """Get houses comparison data (cached-first by default)."""
-    # Get query parameters
+    """Get houses comparison data without triggering the full monitoring refresh path."""
     farm_id = request.query_params.get('farm_id')
     mode = _cache_mode(request)
-    if farm_id and mode != 'live':
+    house_ids = request.query_params.getlist('house_ids')
+
+    if farm_id:
         scoped_farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
-        cache = _ensure_farm_cache(scoped_farm)
-        if cache and cache.comparison_payload:
+        cache = FarmMonitoringCache.objects.filter(farm=scoped_farm).first()
+        if mode != 'live' and cache and cache.comparison_payload:
             meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
             return Response(wrap_cached_response(cache.comparison_payload, meta))
 
-    house_ids = request.query_params.getlist('house_ids')
-    favorites_only = request.query_params.get('favorites', 'false').lower() == 'true'
-    
-    # Build queryset (scoped) and select farm for grouped live calls.
-    houses = _scoped_houses_queryset(request).filter(is_active=True).select_related('farm')
-    
-    if farm_id:
-        houses = houses.filter(farm_id=farm_id)
-    
+        houses = list(
+            _scoped_houses_queryset(request)
+            .filter(farm=scoped_farm, is_active=True)
+            .select_related('farm')
+            .order_by('farm__name', 'house_number')
+        )
+        if house_ids:
+            house_id_set = {int(house_id) for house_id in house_ids if str(house_id).isdigit()}
+            houses = [house for house in houses if house.id in house_id_set]
+
+        if mode == 'cached':
+            payload = _db_comparison_payload(houses)
+            meta = build_meta(
+                cache.fetched_at if cache else timezone.now(),
+                cache.source_timestamp if cache else timezone.now(),
+                cache.refresh_state if cache else 'idle',
+                MAX_STALE_SECONDS,
+            )
+            meta['source'] = 'db_fallback'
+            return Response(wrap_cached_response(payload, meta))
+
+        try:
+            payload, source_ts = _lightweight_farm_comparison_payload(scoped_farm, houses)
+            cache, _ = FarmMonitoringCache.objects.update_or_create(
+                farm=scoped_farm,
+                defaults={
+                    'comparison_payload': payload,
+                    'source_timestamp': source_ts,
+                    'refresh_state': 'fresh',
+                    'last_error': '',
+                },
+            )
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+            meta['source'] = 'live'
+            return Response(wrap_cached_response(payload, meta))
+        except Exception as exc:
+            if cache and cache.comparison_payload:
+                meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+                meta['warning'] = str(exc)
+                meta['source'] = 'stale_cache'
+                return Response(wrap_cached_response(cache.comparison_payload, meta))
+            payload = _db_comparison_payload(houses)
+            meta = build_meta(timezone.now(), timezone.now(), 'failed', MAX_STALE_SECONDS)
+            meta['warning'] = str(exc)
+            meta['source'] = 'db_fallback'
+            return Response(wrap_cached_response(payload, meta))
+
+    houses = list(
+        _scoped_houses_queryset(request)
+        .filter(is_active=True)
+        .select_related('farm')
+        .order_by('farm__name', 'house_number')
+    )
     if house_ids:
-        houses = houses.filter(id__in=house_ids)
-    
-    # TODO: Implement favorites when user preferences are added
-    # if favorites_only:
-    #     houses = houses.filter(id__in=user_favorite_house_ids)
-    
-    comparison_data = []
-    now = timezone.now()
-    live_by_farm = {}
-    for farm_id_value in {h.farm_id for h in houses}:
-        farm_houses = [h for h in houses if h.farm_id == farm_id_value]
-        if not farm_houses:
-            continue
-        scraper, err = _house_rotem_scraper_or_error(farm_houses[0])
-        if err:
-            continue
-        live_by_farm[farm_id_value] = scraper.get_site_controllers_info() or {}
+        house_id_set = {int(house_id) for house_id in house_ids if str(house_id).isdigit()}
+        houses = [house for house in houses if house.id in house_id_set]
 
+    if mode != 'live':
+        payload = _db_comparison_payload(houses)
+        meta = build_meta(timezone.now(), timezone.now(), 'idle', MAX_STALE_SECONDS)
+        meta['source'] = 'db_fallback'
+        return Response(wrap_cached_response(payload, meta))
+
+    rows = []
+    warnings = []
+    farms_by_id = {}
+    houses_by_farm_id = {}
     for house in houses:
-        age_days = house.age_days
-        is_full_house = age_days is not None and age_days >= 0
-        farm_payload = live_by_farm.get(house.farm_id, {})
-        live = _extract_live_house_from_site_controllers(farm_payload, house.house_number) or {}
-        response_obj = farm_payload.get('reponseObj', {}) if isinstance(farm_payload, dict) else {}
+        farms_by_id[house.farm_id] = house.farm
+        houses_by_farm_id.setdefault(house.farm_id, []).append(house)
 
-        water_consumption = _safe_float(
-            _extract_comparison_item(response_obj, 'Water_Daily', house.house_number)
-        )
-        if water_consumption is None:
-            water_consumption = live.get('water_consumption')
-        feed_consumption = _safe_float(
-            _extract_comparison_item(response_obj, 'Feed_Daily', house.house_number)
-        )
-        if feed_consumption is None:
-            feed_consumption = live.get('feed_consumption')
-        bird_count = _safe_float(_extract_comparison_item(response_obj, 'Current_Birds_Count_In_House', house.house_number))
-        bird_count = int(bird_count) if bird_count is not None else None
-        water_per_bird = (
-            (float(water_consumption) / float(bird_count))
-            if (water_consumption is not None and bird_count not in [None, 0])
-            else None
-        )
-        feed_per_bird = (
-            (float(feed_consumption) / float(bird_count))
-            if (feed_consumption is not None and bird_count not in [None, 0])
-            else None
-        )
-        water_feed_ratio = (
-            (float(water_consumption) / float(feed_consumption))
-            if (water_consumption is not None and feed_consumption not in [None, 0])
-            else None
-        )
+    for farm_id_value, farm in farms_by_id.items():
+        farm_houses = houses_by_farm_id[farm_id_value]
+        try:
+            payload, source_ts = _lightweight_farm_comparison_payload(farm, farm_houses)
+            FarmMonitoringCache.objects.update_or_create(
+                farm=farm,
+                defaults={
+                    'comparison_payload': payload,
+                    'source_timestamp': source_ts,
+                    'refresh_state': 'fresh',
+                    'last_error': '',
+                },
+            )
+            rows.extend(payload.get('houses', []))
+        except Exception as exc:
+            warnings.append(f'{farm.id}: {exc}')
+            now = timezone.now()
+            rows.extend([
+                _build_house_comparison_row_from_snapshot(house, house.get_latest_snapshot(), now)
+                for house in farm_houses
+            ])
+    payload = _comparison_payload_from_rows(rows)
+    meta = build_meta(timezone.now(), timezone.now(), 'fresh' if not warnings else 'failed', MAX_STALE_SECONDS)
+    if warnings:
+        meta['warning'] = '; '.join(warnings)
+    meta['source'] = 'live' if not warnings else 'partial_db_fallback'
+    return Response(wrap_cached_response(payload, meta))
 
-        # Freshness in minutes since last live update.
-        data_freshness_minutes = None
-        source_ts = live.get('source_timestamp')
-        if source_ts:
-            try:
-                dt = datetime.fromisoformat(str(source_ts).replace('Z', '+00:00'))
-                data_freshness_minutes = max(int((now - dt).total_seconds() / 60), 0)
-            except ValueError:
-                data_freshness_minutes = None
 
-        heater_raw = _extract_comparison_item(response_obj, 'Heaters', house.house_number)
-        fan_raw = _extract_comparison_item(response_obj, 'Tunnel_Fans', house.house_number) or _extract_comparison_item(response_obj, 'Exh_Fans', house.house_number)
-        heater_on = bool(heater_raw and str(heater_raw).lower() not in ('langkey_off', 'off', '0', 'false', 'none', ''))
-        fan_on = bool(fan_raw and str(fan_raw).lower() not in ('langkey_off', 'off', '0', 'false', 'none', ''))
-        wind_speed = _safe_float(_extract_comparison_item(response_obj, 'Wind_Speed', house.house_number))
-        wind_direction = _safe_float(_extract_comparison_item(response_obj, 'Wind_Direction', house.house_number))
-        wind_chill_temperature = _safe_float(_extract_comparison_item(response_obj, 'Wind_Chill_Temperature', house.house_number))
-
-        house_comparison = {
-            'house_id': house.id,
-            'house_number': house.house_number,
-            'farm_id': house.farm.id,
-            'farm_name': house.farm.name,
-            
-            # House Status - use age_days for consistency (prefers Rotem age over calculated)
-            'current_day': age_days,
-            'age_days': age_days,
-            'current_age_days': house.current_age_days,
-            'is_integrated': house.is_integrated,
-            'status': house.status,
-            'is_full_house': is_full_house,
-            
-            # Time
-            'last_update_time': source_ts or now,
-            
-            # Metrics - Temperature
-            'average_temperature': live.get('average_temperature'),
-            'outside_temperature': _safe_float(_extract_comparison_item(response_obj, 'Outside_Temperature', house.house_number)),
-            'tunnel_temperature': _safe_float(_extract_comparison_item(response_obj, 'Tunnel_Temperature', house.house_number)),
-            'target_temperature': _safe_float(_extract_comparison_item(response_obj, 'Set_Temperature', house.house_number)),
-            
-            # Metrics - Environment
-            'static_pressure': live.get('static_pressure'),
-            'inside_humidity': live.get('humidity'),
-            'ventilation_mode': _extract_comparison_item(response_obj, 'Vent_Mode', house.house_number),
-            'ventilation_level': _safe_float(_extract_comparison_item(response_obj, 'Vent_Level', house.house_number)),
-            'airflow_cfm': _safe_float(str(_extract_comparison_item(response_obj, 'Current_Level_CFM', house.house_number) or '').replace(',', '')),
-            'airflow_percentage': live.get('airflow_percentage'),
-            
-            # Metrics - Consumption (Daily)
-            'water_consumption': water_consumption,
-            'feed_consumption': feed_consumption,
-            'water_per_bird': water_per_bird,
-            'feed_per_bird': feed_per_bird,
-            'water_feed_ratio': water_feed_ratio,
-            
-            # Metrics - Bird Status
-            'bird_count': bird_count,
-            'livability': _safe_float(_extract_comparison_item(response_obj, 'Livablity_Percents', house.house_number)),
-            'growth_day': age_days,
-            
-            # Additional status
-            'is_connected': bool(live.get('is_connected')),
-            'has_alarms': False,
-            'alarm_status': live.get('alarm_status') or 'normal',
-            'active_alarms_count': None,
-            'data_freshness_minutes': data_freshness_minutes,
-            'heater_on': heater_on,
-            'fan_on': fan_on,
-            'wind_speed': wind_speed,
-            'wind_direction': wind_direction,
-            'wind_chill_temperature': wind_chill_temperature,
-        }
-        comparison_data.append(house_comparison)
-    
-    # Sort by farm name, then house number
-    comparison_data.sort(key=lambda x: (x['farm_name'], x['house_number']))
-    
-    serializer = HouseComparisonSerializer(comparison_data, many=True)
-    payload = {
-        'count': len(serializer.data),
-        'houses': serializer.data
-    }
-    if farm_id:
-        scoped_farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
-        FarmMonitoringCache.objects.update_or_create(
-            farm=scoped_farm,
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def farm_comparison_refresh(request, farm_id):
+    """Refresh only the farm comparison payload without building per-house monitoring caches."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id, is_active=True)
+    houses = list(
+        _scoped_houses_queryset(request)
+        .filter(farm=farm, is_active=True)
+        .select_related('farm')
+        .order_by('farm__name', 'house_number')
+    )
+    cache = FarmMonitoringCache.objects.filter(farm=farm).first()
+    try:
+        payload, source_ts = _lightweight_farm_comparison_payload(farm, houses)
+        cache, _ = FarmMonitoringCache.objects.update_or_create(
+            farm=farm,
             defaults={
                 'comparison_payload': payload,
-                'source_timestamp': timezone.now(),
+                'source_timestamp': source_ts,
                 'refresh_state': 'fresh',
                 'last_error': '',
             },
         )
-        cache = FarmMonitoringCache.objects.filter(farm=scoped_farm).first()
-        meta = build_meta(cache.fetched_at if cache else timezone.now(), cache.source_timestamp if cache else timezone.now(), 'fresh', MAX_STALE_SECONDS)
+        meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+        meta['source'] = 'live'
         return Response(wrap_cached_response(payload, meta))
-    return Response(wrap_cached_response(payload, build_meta(timezone.now(), timezone.now(), 'fresh', MAX_STALE_SECONDS)))
+    except Exception as exc:
+        if cache and cache.comparison_payload:
+            meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
+            meta['warning'] = str(exc)
+            meta['source'] = 'stale_cache'
+            return Response(wrap_cached_response(cache.comparison_payload, meta))
+        payload = _db_comparison_payload(houses)
+        meta = build_meta(timezone.now(), timezone.now(), 'failed', MAX_STALE_SECONDS)
+        meta['warning'] = str(exc)
+        meta['source'] = 'db_fallback'
+        return Response(wrap_cached_response(payload, meta))
 
 
 @api_view(['GET'])

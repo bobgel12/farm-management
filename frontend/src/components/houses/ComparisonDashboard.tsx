@@ -53,6 +53,7 @@ import monitoringApi from '../../services/monitoringApi';
 import { FarmWaterHistoryComparisonHouse } from '../../types/monitoring';
 
 const COMPARISON_VIEW_KEYS = ['consumption', 'climate', 'environment', 'operations'] as const;
+type CacheMode = 'cached' | 'live' | 'cached_then_live';
 
 function todayIsoLocal(): string {
   const d = new Date();
@@ -154,6 +155,7 @@ const ComparisonDashboard: React.FC = () => {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [dodRefDate, setDodRefDate] = useState(todayIsoLocal);
+  const [refreshingComparison, setRefreshingComparison] = useState(false);
 
   /** Hydrate / sync DOD from ?dod= (shareable links, browser history). */
   useEffect(() => {
@@ -184,6 +186,10 @@ const ComparisonDashboard: React.FC = () => {
   /** Ignore stale async results when DOD date or house list changes quickly. */
   const opsFetchGenRef = useRef(0);
   const comparisonFetchInFlightRef = useRef(false);
+  const visibleHouses = useMemo(
+    () => (favoritesOnly ? houses.filter((house) => favorites.has(house.house_id)) : houses),
+    [favoritesOnly, favorites, houses]
+  );
 
   const viewFromUrl = searchParams.get('view');
   const activeTab = useMemo(() => {
@@ -209,7 +215,7 @@ const ComparisonDashboard: React.FC = () => {
   const currentFarm = farmId ? farms.find(f => f.id === parseInt(farmId)) : null;
 
   useEffect(() => {
-    if (activeTab !== 3 || houses.length === 0) {
+    if (activeTab !== 3 || visibleHouses.length === 0) {
       setOpsLoading(false);
       setOpsHeaterRefDayHours({});
       setOpsKpis({});
@@ -221,60 +227,89 @@ const ComparisonDashboard: React.FC = () => {
     setOpsLoading(true);
     const cacheBust = `${dodRefDate}-${fetchGen}-${Date.now()}`;
     let cancelled = false;
-    (async () => {
+    const farmIds = Array.from(new Set(visibleHouses.map((h) => h.farm_id).filter((id): id is number => id != null)));
+
+    const fetchWaterComparison = async (mode: CacheMode) => {
       const nextKpi: Record<number, FarmWaterHistoryComparisonHouse | null> = {};
-      const nextHeat: Record<number, number | null> = {};
-      const farmIds = Array.from(new Set(houses.map((h) => h.farm_id).filter((id): id is number => id != null)));
       await Promise.all(
-        [
-          ...farmIds.map(async (id) => {
-            try {
-              const comparison = await monitoringApi.getFarmWaterHistoryComparison(id, {
-                days: 8,
-                dodReferenceDate: dodRefDate,
-                mode: 'cached_then_live',
+        farmIds.map(async (id) => {
+          try {
+            const comparison = await monitoringApi.getFarmWaterHistoryComparison(id, {
+              days: 8,
+              dodReferenceDate: dodRefDate,
+              mode,
+            });
+            Object.values(comparison.houses || {}).forEach((row) => {
+              nextKpi[row.house_id] = row;
+            });
+          } catch {
+            visibleHouses
+              .filter((h) => h.farm_id === id)
+              .forEach((h) => {
+                nextKpi[h.house_id] = null;
               });
-              Object.values(comparison.houses || {}).forEach((row) => {
-                nextKpi[row.house_id] = row;
-              });
-            } catch {
-              houses
-                .filter((h) => h.farm_id === id)
-                .forEach((h) => {
-                  nextKpi[h.house_id] = null;
-                });
-            }
-          }),
-          ...houses.map(async (h) => {
-            try {
-              const heaterRes = await monitoringApi.getHouseHeaterHistory(h.house_id, cacheBust).catch(() => null);
-              if (heaterRes?.heater_history) {
-                const daily = (heaterRes.heater_history as { daily?: Array<{ date?: string | null; total_hours?: number }> })
-                  .daily;
-                const row = daily?.find((r) => r.date === dodRefDate);
-                nextHeat[h.house_id] = row?.total_hours ?? null;
-              } else {
-                nextHeat[h.house_id] = null;
-              }
-            } catch {
+          }
+        })
+      );
+      return nextKpi;
+    };
+
+    (async () => {
+      const cachedKpis = await fetchWaterComparison('cached');
+      if (cancelled || fetchGen !== opsFetchGenRef.current) {
+        return;
+      }
+      setOpsKpis(cachedKpis);
+      setOpsLoading(false);
+
+      const shouldRefreshLive = visibleHouses.some((h) => {
+        const row = cachedKpis[h.house_id];
+        return !row || row.source !== 'cache';
+      });
+      if (!shouldRefreshLive) {
+        return;
+      }
+      const liveKpis = await fetchWaterComparison('live');
+      if (cancelled || fetchGen !== opsFetchGenRef.current) {
+        return;
+      }
+      const successfulLiveKpis = Object.fromEntries(
+        Object.entries(liveKpis).filter(([, row]) => row != null)
+      ) as Record<number, FarmWaterHistoryComparisonHouse>;
+      setOpsKpis((prev) => ({ ...prev, ...successfulLiveKpis }));
+    })();
+
+    (async () => {
+      const nextHeat: Record<number, number | null> = {};
+      await Promise.all(
+        visibleHouses.map(async (h) => {
+          try {
+            const heaterRes = await monitoringApi.getHouseHeaterHistory(h.house_id, cacheBust).catch(() => null);
+            if (heaterRes?.heater_history) {
+              const daily = (heaterRes.heater_history as { daily?: Array<{ date?: string | null; total_hours?: number }> })
+                .daily;
+              const row = daily?.find((r) => r.date === dodRefDate);
+              nextHeat[h.house_id] = row?.total_hours ?? null;
+            } else {
               nextHeat[h.house_id] = null;
             }
-          }),
-        ]
+          } catch {
+            nextHeat[h.house_id] = null;
+          }
+        })
       );
       if (cancelled || fetchGen !== opsFetchGenRef.current) {
         return;
       }
-      setOpsKpis(nextKpi);
       setOpsHeaterRefDayHours(nextHeat);
-      setOpsLoading(false);
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [activeTab, houses, dodRefDate]);
+  }, [activeTab, visibleHouses, dodRefDate]);
 
-  const loadComparisonData = useCallback(async () => {
+  const loadComparisonData = useCallback(async (mode: CacheMode = 'cached') => {
     if (comparisonFetchInFlightRef.current) {
       return;
     }
@@ -284,21 +319,12 @@ const ComparisonDashboard: React.FC = () => {
       setError(null);
 
       const params: any = {};
+      params.mode = mode;
       if (farmFilter !== 'all') {
         params.farm_id = farmFilter;
       }
-      if (favoritesOnly && favorites.size > 0) {
-        params.house_ids = Array.from(favorites);
-      }
-
       const response = await api.get<ComparisonResponse | CachedComparisonResponse>('/houses/comparison/', { params });
-      let data = unwrapComparisonResponse(response.data).houses;
-
-      if (favoritesOnly) {
-        data = data.filter(house => favorites.has(house.house_id));
-      }
-
-      setHouses(data);
+      setHouses(unwrapComparisonResponse(response.data).houses);
     } catch (err: any) {
       setError(err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to load comparison data');
       console.error('Error loading comparison data:', err);
@@ -306,7 +332,28 @@ const ComparisonDashboard: React.FC = () => {
       comparisonFetchInFlightRef.current = false;
       setLoading(false);
     }
-  }, [farmFilter, favoritesOnly, favorites]);
+  }, [farmFilter]);
+
+  const handleRefreshComparison = useCallback(async () => {
+    if (refreshingComparison) {
+      return;
+    }
+    setRefreshingComparison(true);
+    setError(null);
+    try {
+      if (farmFilter !== 'all') {
+        await api.post(`/farms/${farmFilter}/houses/comparison/refresh/`);
+        await loadComparisonData('cached');
+      } else {
+        await loadComparisonData('live');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to refresh comparison data');
+      console.error('Error refreshing comparison data:', err);
+    } finally {
+      setRefreshingComparison(false);
+    }
+  }, [farmFilter, loadComparisonData, refreshingComparison]);
 
   useEffect(() => {
     const savedFavorites = localStorage.getItem('houseComparisonFavorites');
@@ -335,14 +382,14 @@ const ComparisonDashboard: React.FC = () => {
     loadComparisonData();
   }, [loadComparisonData]);
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh cached data cheaply without triggering live Rotem work.
   useEffect(() => {
-    const interval = setInterval(loadComparisonData, 30000);
+    const interval = setInterval(loadComparisonData, 60000);
     return () => clearInterval(interval);
   }, [loadComparisonData]);
 
   const sortedHouses = useMemo(() => {
-    const data = [...houses];
+    const data = [...visibleHouses];
     data.sort((a, b) => {
       const aVal: any = a[sortField];
       const bVal: any = b[sortField];
@@ -356,7 +403,7 @@ const ComparisonDashboard: React.FC = () => {
       return aVal < bVal ? 1 : -1;
     });
     return data;
-  }, [houses, sortField, sortDirection]);
+  }, [visibleHouses, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -501,7 +548,7 @@ const ComparisonDashboard: React.FC = () => {
             House Comparison Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {houses.length} houses • Last updated: {new Date().toLocaleTimeString()}
+            {visibleHouses.length} houses • Last updated: {new Date().toLocaleTimeString()}
           </Typography>
         </Box>
         <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
@@ -531,7 +578,8 @@ const ComparisonDashboard: React.FC = () => {
           >
             Favorites
           </Button>
-          <IconButton onClick={loadComparisonData} disabled={loading}>
+          {refreshingComparison && <CircularProgress size={22} />}
+          <IconButton onClick={handleRefreshComparison} disabled={loading || refreshingComparison}>
             <Refresh />
           </IconButton>
         </Box>
@@ -869,7 +917,9 @@ const ComparisonDashboard: React.FC = () => {
                             </Tooltip>
                           </TableCell>
                           <TableCell sx={cellStyle}>
-                            {!opsLoading && k ? (
+                            {opsLoading ? (
+                              <Typography variant="caption">…</Typography>
+                            ) : k ? (
                               <Chip
                                 size="small"
                                 label={dodOk ? 'OK' : 'Thin'}
@@ -877,7 +927,7 @@ const ComparisonDashboard: React.FC = () => {
                                 variant="outlined"
                               />
                             ) : (
-                              <Typography variant="caption">…</Typography>
+                              <Typography variant="caption">—</Typography>
                             )}
                           </TableCell>
                         </>

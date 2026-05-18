@@ -23,6 +23,7 @@ urlpatterns = [
     
     # Comparison endpoint
     path('houses/comparison/', views.houses_comparison, name='houses-comparison'),
+    path('farms/<int:farm_id>/houses/comparison/refresh/', views.farm_comparison_refresh, name='farm-comparison-refresh'),
     
     # Detailed house information
     path('houses/<int:house_id>/details/', views.house_details, name='house-details'),
