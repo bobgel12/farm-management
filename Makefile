@@ -260,6 +260,11 @@ rotem-seed: ## Seed Rotem test data for Playwright tests
 	$(LOCAL_COMPOSE) exec backend python manage.py seed_rotem_data --days=7
 	@echo "✅ Rotem test data seeded!"
 
+rotem-backfill-summaries: ## Backfill house daily summaries from monitoring snapshots
+	@echo "📊 Backfilling daily summaries..."
+	$(LOCAL_COMPOSE) exec backend python manage.py backfill_daily_summaries --days=7
+	@echo "✅ Daily summaries backfilled!"
+
 rotem-seed-clear: ## Clear and re-seed Rotem test data
 	@echo "🧹 Clearing and re-seeding Rotem test data..."
 	$(LOCAL_COMPOSE) exec backend python manage.py seed_rotem_data --clear --days=7

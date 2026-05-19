@@ -40,6 +40,7 @@ import {
 import monitoringApi from '../../services/monitoringApi';
 import { HouseMonitoringKpis } from '../../types/monitoring';
 import HouseMonitoringCharts from './HouseMonitoringCharts';
+import MonitoringTrendsPanel from '../monitoring/MonitoringTrendsPanel';
 
 /** Command 43 heater history daily row (API `heater_history.daily`). */
 interface HeaterHistoryDailyRow {
@@ -870,6 +871,15 @@ const HouseOverviewTab: React.FC<HouseOverviewTabProps> = ({
           <Button onClick={() => setHeaterDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {house?.id && (
+        <Box sx={{ mt: 3 }}>
+          <MonitoringTrendsPanel
+            houseId={house.id}
+            growthDay={monitoring?.growth_day ?? undefined}
+          />
+        </Box>
+      )}
 
       <Dialog open={trendOpen} onClose={() => setTrendOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>

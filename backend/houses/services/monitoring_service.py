@@ -283,10 +283,25 @@ class MonitoringService:
             consumption = parsed_data.get('consumption', {})
             status = parsed_data.get('status', {})
             
+            snapshot_ts = timezone.now()
+            source_ts = parsed_data.get('source_timestamp')
+            if source_ts:
+                try:
+                    if isinstance(source_ts, str):
+                        snapshot_ts = timezone.datetime.fromisoformat(
+                            source_ts.replace('Z', '+00:00')
+                        )
+                        if timezone.is_naive(snapshot_ts):
+                            snapshot_ts = timezone.make_aware(snapshot_ts)
+                    elif hasattr(source_ts, 'isoformat'):
+                        snapshot_ts = source_ts
+                except (ValueError, TypeError):
+                    pass
+
             # Create snapshot
             snapshot = HouseMonitoringSnapshot.objects.create(
                 house=house,
-                timestamp=timezone.now(),
+                timestamp=snapshot_ts,
                 average_temperature=general.get('average_temperature'),
                 outside_temperature=general.get('outside_temperature'),
                 humidity=general.get('humidity'),

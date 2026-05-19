@@ -26,9 +26,18 @@ class MLAnalysisService:
         """Run all ML analysis tasks"""
         logger.info("Starting comprehensive ML analysis")
         results = []
+
+        try:
+            from .ml_multivariate_service import MLMultivariateService
+            mv = MLMultivariateService()
+            mv_results = mv.score_all_farms()
+            results.extend(mv_results)
+            logger.info("Multivariate anomaly scoring produced %s predictions", len(mv_results))
+        except Exception as e:
+            logger.warning("Multivariate scoring skipped: %s", e)
         
         try:
-            # Anomaly detection
+            # Anomaly detection (persisted univariate models when available)
             logger.info("Running anomaly detection...")
             anomaly_results = self.detect_anomalies()
             results.extend(anomaly_results)
@@ -80,16 +89,24 @@ class MLAnalysisService:
                 values = group['value'].values.reshape(-1, 1)
                 timestamps = group['timestamp'].values
                 
-                # Train Isolation Forest
-                contamination = 0.1  # Expect 10% anomalies
-                iso_forest = IsolationForest(
-                    contamination=contamination, 
-                    random_state=42,
-                    n_estimators=100
-                )
-                
+                contamination = 0.1
+                model_path = os.path.join(self.models_dir, 'anomaly_model.joblib')
+                iso_forest = None
+                if os.path.exists(model_path):
+                    try:
+                        iso_forest = joblib.load(model_path)
+                    except Exception:
+                        iso_forest = None
+                if iso_forest is None:
+                    iso_forest = IsolationForest(
+                        contamination=contamination,
+                        random_state=42,
+                        n_estimators=100,
+                    )
+                    iso_forest.fit(values)
+
                 try:
-                    anomaly_scores = iso_forest.fit_predict(values)
+                    anomaly_scores = iso_forest.predict(values)
                     scores = iso_forest.score_samples(values)
                     
                     # Find anomalies (score = -1)
@@ -544,6 +561,20 @@ class MLAnalysisService:
             
             # Train failure prediction model
             self._train_failure_model(df)
+
+            try:
+                from .ml_multivariate_service import MLMultivariateService
+                mv_results = MLMultivariateService().train_all_farms()
+                logger.info("Multivariate farm training: %s", mv_results)
+            except Exception as exc:
+                logger.warning("Multivariate training failed: %s", exc)
+
+            try:
+                from farms.services.mortality_risk_service import MortalityRiskService
+                MortalityRiskService().train_mortality_classifier()
+                MortalityRiskService().train_fcr_regressor()
+            except Exception as exc:
+                logger.warning("Mortality/FCR training skipped: %s", exc)
             
             logger.info("Model training completed successfully")
             return True

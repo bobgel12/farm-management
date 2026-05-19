@@ -192,8 +192,12 @@ def run_ml_analysis():
     logger.info("Starting ML analysis task")
     
     try:
+        from rotem_scraper.services.ml_multivariate_service import MLMultivariateService
+        mv_results = MLMultivariateService().score_all_farms()
+
         ml_service = EnhancedMLAnalysisService()
         results = ml_service.run_global_analysis()
+        results = list(results) + list(mv_results)
         
         logger.info(f"ML analysis completed. Generated {len(results)} predictions")
         return f"ML analysis completed. Generated {len(results)} predictions"

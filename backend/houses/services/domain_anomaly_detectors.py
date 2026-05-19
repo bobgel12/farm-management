@@ -14,6 +14,13 @@ from .heater_runtime_metrics import (
     severity_for_ratio,
     window_boundaries,
 )
+from .growth_day_baselines import (
+    baseline_from_daily_summaries,
+    daily_summaries_for_growth_day,
+    get_house_growth_day,
+    snapshot_baseline_same_growth_day,
+    target_temperature_for_growth_day,
+)
 from .water_anomaly_detector import WaterAnomalyDetector
 
 
@@ -36,33 +43,112 @@ class WaterDomainDetector(BaseAnomalyDetector):
 
 class FeedDomainDetector(BaseAnomalyDetector):
     domain = "feed"
+    HIGH_RATIO = 1.35
+    LOW_RATIO = 0.70
 
     def detect(self) -> List[Dict]:
-        recent = list(
-            HouseMonitoringSnapshot.objects.filter(
-                house=self.house,
-                timestamp__gte=timezone.now() - timedelta(hours=24),
-                feed_consumption__isnull=False,
-            ).order_by("timestamp")
-        )
-        if len(recent) < 6:
+        growth_day = get_house_growth_day(self.house)
+        latest = self.house.monitoring_snapshots.order_by('-timestamp').first()
+        if not latest or latest.feed_consumption is None:
             return []
-        values = [float(s.feed_consumption) for s in recent if s.feed_consumption is not None]
-        avg = sum(values) / len(values)
-        current = values[-1]
-        if avg <= 0:
+        current = float(latest.feed_consumption)
+
+        summaries = daily_summaries_for_growth_day(self.house, growth_day, limit=10)
+        baseline = baseline_from_daily_summaries(summaries, 'feed_consumption_avg')
+        if baseline is None:
+            fallback = snapshot_baseline_same_growth_day(
+                self.house, growth_day, 'feed_consumption'
+            )
+            if fallback is None or fallback <= 0:
+                return []
+            mean_val, std_val = fallback, fallback * 0.12
+        else:
+            mean_val, std_val = baseline
+
+        if mean_val <= 0:
             return []
-        ratio = current / avg
-        if ratio > 1.45 or ratio < 0.65:
-            direction = "high" if ratio > 1 else "low"
-            severity = "high" if ratio > 1.6 or ratio < 0.55 else "medium"
-            return [{
-                "domain": self.domain,
-                "severity": severity,
-                "message": f"Feed consumption anomaly ({direction}) detected: latest {current:.2f} vs 24h avg {avg:.2f} kg/day.",
-                "payload": {"current": current, "baseline": avg, "ratio": ratio, "direction": direction},
-            }]
-        return []
+        ratio = current / mean_val
+        if self.LOW_RATIO <= ratio <= self.HIGH_RATIO:
+            return []
+
+        direction = "high" if ratio > 1 else "low"
+        z = abs(current - mean_val) / std_val if std_val > 0 else 0
+        severity = "high" if z >= 2.5 or ratio > 1.6 or ratio < 0.55 else "medium"
+        return [{
+            "domain": self.domain,
+            "severity": severity,
+            "message": (
+                f"Feed consumption anomaly ({direction}) on growth day {growth_day}: "
+                f"latest {current:.2f} vs baseline {mean_val:.2f} kg/day (ratio {ratio:.2f})."
+            ),
+            "payload": {
+                "current": current,
+                "baseline": mean_val,
+                "ratio": ratio,
+                "direction": direction,
+                "growth_day": growth_day,
+            },
+        }]
+
+
+class TemperatureDomainDetector(BaseAnomalyDetector):
+    domain = "temperature"
+    HUMIDITY_HIGH = 75.0
+    HUMIDITY_LOW = 45.0
+
+    def detect(self) -> List[Dict]:
+        growth_day = get_house_growth_day(self.house)
+        latest = self.house.monitoring_snapshots.order_by('-timestamp').first()
+        if not latest or latest.average_temperature is None:
+            return []
+
+        current_temp = float(latest.average_temperature)
+        target = target_temperature_for_growth_day(self.house, growth_day)
+        if target is None and latest.target_temperature is not None:
+            target = float(latest.target_temperature)
+
+        alerts: List[Dict] = []
+        if target is not None:
+            delta = current_temp - target
+            if abs(delta) > 3.0:
+                direction = "above" if delta > 0 else "below"
+                severity = "high" if abs(delta) > 5.0 else "medium"
+                alerts.append({
+                    "domain": self.domain,
+                    "severity": severity,
+                    "message": (
+                        f"House temperature {current_temp:.1f}°C is {abs(delta):.1f}°C {direction} "
+                        f"target {target:.1f}°C (growth day {growth_day})."
+                    ),
+                    "parameter_name": "average_temperature",
+                    "parameter_value": current_temp,
+                    "threshold_value": target,
+                    "payload": {"delta": delta, "growth_day": growth_day},
+                })
+
+        if latest.humidity is not None:
+            hum = float(latest.humidity)
+            if hum > self.HUMIDITY_HIGH:
+                alerts.append({
+                    "domain": "humidity",
+                    "severity": "high" if hum > 85 else "medium",
+                    "message": f"Humidity high: {hum:.1f}% (growth day {growth_day}).",
+                    "parameter_name": "humidity",
+                    "parameter_value": hum,
+                    "threshold_value": self.HUMIDITY_HIGH,
+                    "payload": {"growth_day": growth_day},
+                })
+            elif hum < self.HUMIDITY_LOW:
+                alerts.append({
+                    "domain": "humidity",
+                    "severity": "medium",
+                    "message": f"Humidity low: {hum:.1f}% (growth day {growth_day}).",
+                    "parameter_name": "humidity",
+                    "parameter_value": hum,
+                    "threshold_value": self.HUMIDITY_LOW,
+                    "payload": {"growth_day": growth_day},
+                })
+        return alerts
 
 
 class HeaterDomainDetector(BaseAnomalyDetector):

@@ -20,6 +20,8 @@ from .models import (
     Sensor,
     WaterConsumptionAlert,
     WaterConsumptionForecast,
+    HouseDailySummary,
+    FlockRiskScore,
 )
 from .serializers import (
     HouseSerializer, HouseListSerializer,
@@ -29,6 +31,7 @@ from .serializers import (
     ControlSettingsSerializer, TemperatureCurveSerializer,
     HouseConfigurationSerializer, SensorSerializer,
     WaterConsumptionAlertSerializer, WaterConsumptionForecastSerializer,
+    HouseDailySummarySerializer, FlockRiskScoreSerializer,
 )
 from farms.models import Farm
 from farms.serializers import FlockSerializer
@@ -2804,3 +2807,155 @@ def farm_ios_snapshot(request, farm_id):
     }
 
     return Response(wrap_cached_response(data, meta))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_data_quality(request, farm_id):
+    """Snapshot completeness and staleness metrics per house."""
+    from .services.data_quality_service import DataQualityService
+
+    get_object_or_404(Farm, id=farm_id)
+    days = int(request.query_params.get('days', 1))
+    service = DataQualityService()
+    return Response(service.farm_metrics(farm_id, days=days))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_monitoring_trends(request, house_id):
+    """
+    Daily trend series for water, feed, and temperature.
+    Optional compare_growth_day=N overlays prior flock at same growth day.
+    """
+    house = get_object_or_404(House, id=house_id)
+    period = int(request.query_params.get('period', 14))
+    compare_gd = request.query_params.get('compare_growth_day')
+
+    end = timezone.now().date()
+    start = end - timedelta(days=period)
+    current_series = list(
+        HouseDailySummary.objects.filter(house=house, date__gte=start, date__lte=end).order_by('date')
+    )
+
+    comparison_series = []
+    if compare_gd is not None:
+        try:
+            gd = int(compare_gd)
+        except ValueError:
+            gd = None
+        if gd is not None:
+            comparison_series = list(
+                HouseDailySummary.objects.filter(house=house, growth_day=gd)
+                .order_by('-date')[:period]
+            )
+            comparison_series = sorted(comparison_series, key=lambda s: s.date)
+
+    return Response({
+        'house_id': house.id,
+        'house_number': house.house_number,
+        'period_days': period,
+        'current_series': HouseDailySummarySerializer(current_series, many=True).data,
+        'comparison_growth_day': int(compare_gd) if compare_gd is not None else None,
+        'comparison_series': HouseDailySummarySerializer(comparison_series, many=True).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_flock_risk_scores(request, house_id):
+    """Latest ML risk scores for active flocks in a house."""
+    house = get_object_or_404(House, id=house_id)
+    risk_type = request.query_params.get('risk_type', 'mortality_3d')
+    latest = []
+    seen = set()
+    for s in (
+        FlockRiskScore.objects.filter(house=house, risk_type=risk_type)
+        .select_related('flock')
+        .order_by('-scored_at')
+    ):
+        if s.flock_id not in seen:
+            seen.add(s.flock_id)
+            latest.append(s)
+    return Response({
+        'house_id': house.id,
+        'risk_scores': FlockRiskScoreSerializer(latest, many=True).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_data_quality(request, farm_id):
+    """Snapshot completeness and staleness metrics per house."""
+    from .services.data_quality_service import DataQualityService
+
+    get_object_or_404(Farm, id=farm_id)
+    days = int(request.query_params.get('days', 1))
+    service = DataQualityService()
+    return Response(service.farm_metrics(farm_id, days=days))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_monitoring_trends(request, house_id):
+    """
+    Daily trend series for water, feed, and temperature.
+    Optional compare_growth_day=N overlays prior flock at same growth day.
+    """
+    house = get_object_or_404(House, id=house_id)
+    period = int(request.query_params.get('period', 14))
+    compare_gd = request.query_params.get('compare_growth_day')
+
+    end = timezone.now().date()
+    start = end - timedelta(days=period)
+    current_series = list(
+        HouseDailySummary.objects.filter(house=house, date__gte=start, date__lte=end).order_by('date')
+    )
+
+    comparison_series = []
+    if compare_gd is not None:
+        try:
+            gd = int(compare_gd)
+        except ValueError:
+            gd = None
+        if gd is not None:
+            comparison_series = list(
+                HouseDailySummary.objects.filter(house=house, growth_day=gd)
+                .order_by('-date')[:period]
+            )
+            comparison_series = sorted(comparison_series, key=lambda s: s.date)
+
+    return Response({
+        'house_id': house.id,
+        'house_number': house.house_number,
+        'period_days': period,
+        'current_series': HouseDailySummarySerializer(current_series, many=True).data,
+        'comparison_growth_day': int(compare_gd) if compare_gd is not None else None,
+        'comparison_series': HouseDailySummarySerializer(comparison_series, many=True).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def house_flock_risk_scores(request, house_id):
+    """Latest ML risk scores for active flocks in a house."""
+    house = get_object_or_404(House, id=house_id)
+    risk_type = request.query_params.get('risk_type', 'mortality_3d')
+    scores = (
+        FlockRiskScore.objects.filter(house=house, risk_type=risk_type)
+        .select_related('flock')
+        .order_by('flock', '-scored_at')
+        .distinct('flock')
+    )
+    # SQLite may not support distinct on fields; fallback for tests
+    try:
+        data = FlockRiskScoreSerializer(scores, many=True).data
+    except Exception:
+        seen = set()
+        latest = []
+        for s in FlockRiskScore.objects.filter(house=house, risk_type=risk_type).select_related('flock').order_by('-scored_at'):
+            if s.flock_id not in seen:
+                seen.add(s.flock_id)
+                latest.append(s)
+        data = FlockRiskScoreSerializer(latest, many=True).data
+    return Response({'house_id': house.id, 'risk_scores': data})

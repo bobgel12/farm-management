@@ -63,6 +63,7 @@ import WorkerList from '../WorkerList';
 import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
 import monitoringApi from '../../services/monitoringApi';
 import { MonitoringDashboardData } from '../../types/monitoring';
+import MonitoringDataQualityPanel from '../monitoring/MonitoringDataQualityPanel';
 import IntegrationManagement from './IntegrationManagement';
 import { useProgram } from '../../contexts/ProgramContext';
 import { rotemApi } from '../../services/rotemApi';
@@ -1081,6 +1082,9 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       {/* Rotem Integration Data */}
       {farm.integration_type === 'rotem' && (
         <>
+          <Box sx={{ mb: 3 }}>
+            <MonitoringDataQualityPanel farmId={farm.id} days={1} />
+          </Box>
           {/* Real-time Sensor Data */}
           <Accordion defaultExpanded sx={{ mb: 3 }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
