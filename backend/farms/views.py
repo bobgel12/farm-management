@@ -1041,6 +1041,23 @@ class FlockViewSet(ModelViewSet):
         performance_records = flock.performance_records.all().order_by('record_date', 'flock_age_days')
         serializer = FlockPerformanceSerializer(performance_records, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def risk_scores(self, request, pk=None):
+        """Latest ML risk scores for this flock."""
+        from houses.models import FlockRiskScore
+        from houses.serializers import FlockRiskScoreSerializer
+
+        flock = self.get_object()
+        risk_type = request.query_params.get('risk_type')
+        qs = FlockRiskScore.objects.filter(flock=flock).order_by('-scored_at')
+        if risk_type:
+            qs = qs.filter(risk_type=risk_type)
+        latest_by_type = {}
+        for score in qs[:20]:
+            if score.risk_type not in latest_by_type:
+                latest_by_type[score.risk_type] = score
+        return Response(FlockRiskScoreSerializer(list(latest_by_type.values()), many=True).data)
     
     @action(detail=True, methods=['post'])
     def add_performance_record(self, request, pk=None):

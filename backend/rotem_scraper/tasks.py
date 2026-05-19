@@ -395,3 +395,50 @@ def _update_integration_health(farm, result_status: str):
         ])
     except Exception as exc:
         logger.warning("_update_integration_health failed farm=%s err=%s", getattr(farm, "id", "?"), exc)
+
+
+@shared_task
+def backfill_daily_summaries(days: int = 7, force_update: bool = True):
+    """Aggregate HouseMonitoringSnapshot → HouseDailySummary and sync RotemDailySummary."""
+    from houses.services.house_daily_summary_service import HouseDailySummaryService
+    from rotem_scraper.services.snapshot_aggregation_bridge import SnapshotAggregationBridge
+    from datetime import timedelta
+
+    summary_result = HouseDailySummaryService.backfill_recent(days=days, force_update=force_update)
+    end_date = (timezone.now() - timedelta(days=1)).date()
+    start_date = end_date - timedelta(days=days - 1)
+    bridge_updated = 0
+    current = start_date
+    while current <= end_date:
+        bridge = SnapshotAggregationBridge.sync_all_controllers(target_date=current)
+        bridge_updated += bridge.get('updated', 0)
+        current += timedelta(days=1)
+
+    logger.info(
+        "backfill_daily_summaries days=%s house_summaries=%s bridge_days_updated=%s",
+        days,
+        summary_result,
+        bridge_updated,
+    )
+    return {'house_summaries': summary_result, 'bridge_controller_updates': bridge_updated}
+
+
+@shared_task
+def build_hourly_feature_snapshots():
+    """Materialize HouseFeatureSnapshot rows for all active Rotem houses."""
+    from houses.services.feature_builder_service import FeatureBuilderService
+
+    result = FeatureBuilderService.build_all_active_houses()
+    logger.info("build_hourly_feature_snapshots: %s", result)
+    return result
+
+
+@shared_task
+def score_flock_risk_models():
+    """Score active flocks with trained mortality risk models."""
+    from farms.services.mortality_risk_service import MortalityRiskService
+
+    service = MortalityRiskService()
+    scores = service.score_active_flocks()
+    logger.info("score_flock_risk_models scored=%s", len(scores))
+    return {'scored': len(scores)}

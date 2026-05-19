@@ -301,3 +301,63 @@ export interface HouseMonitoringKpis {
     active_now: number;
   };
 }
+
+export interface HouseDailySummaryPoint {
+  id: number;
+  house: number;
+  house_number: number;
+  date: string;
+  growth_day: number | null;
+  temperature_avg: number | null;
+  humidity_avg: number | null;
+  water_consumption_avg: number | null;
+  feed_consumption_avg: number | null;
+  ventilation_avg: number | null;
+  completeness_ratio: number;
+}
+
+export interface MonitoringTrendsResponse {
+  house_id: number;
+  house_number: number;
+  period_days: number;
+  current_series: HouseDailySummaryPoint[];
+  comparison_growth_day: number | null;
+  comparison_series: HouseDailySummaryPoint[];
+}
+
+export interface HouseDataQualityMetrics {
+  house_id: number;
+  house_number: number;
+  snapshot_count: number;
+  expected_snapshots: number;
+  completeness_ratio: number;
+  completeness_percent: number;
+  meets_target: boolean;
+  last_snapshot_at: string | null;
+  last_snapshot_age_minutes: number | null;
+  is_stale: boolean;
+  connection_ok: boolean;
+}
+
+export interface FarmDataQualityResponse {
+  farm_id: number;
+  period_days: number;
+  houses: HouseDataQualityMetrics[];
+  avg_completeness_percent: number;
+  meets_target: boolean;
+  stale_house_count: number;
+}
+
+export interface FlockRiskScore {
+  id: number;
+  flock: number;
+  flock_code: string;
+  house: number;
+  house_number: number;
+  risk_type: string;
+  score: number;
+  confidence: number;
+  model_version: string;
+  flock_age_days: number | null;
+  scored_at: string;
+}

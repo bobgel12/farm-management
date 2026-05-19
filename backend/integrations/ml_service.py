@@ -159,15 +159,23 @@ class EnhancedMLAnalysisService:
                 
                 values = group['value'].values.reshape(-1, 1)
                 
-                # Train Isolation Forest
-                iso_forest = IsolationForest(
-                    contamination=0.1,
-                    random_state=42,
-                    n_estimators=100
-                )
-                
+                model_path = os.path.join(self.models_dir, 'anomaly_model.joblib')
+                iso_forest = None
+                if os.path.exists(model_path):
+                    try:
+                        iso_forest = joblib.load(model_path)
+                    except Exception:
+                        iso_forest = None
+                if iso_forest is None:
+                    iso_forest = IsolationForest(
+                        contamination=0.1,
+                        random_state=42,
+                        n_estimators=100,
+                    )
+                    iso_forest.fit(values)
+
                 try:
-                    anomaly_scores = iso_forest.fit_predict(values)
+                    anomaly_scores = iso_forest.predict(values)
                     scores = iso_forest.score_samples(values)
                     
                     # Find anomalies

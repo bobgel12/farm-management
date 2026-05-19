@@ -159,7 +159,7 @@ class House(models.Model):
 class HouseMonitoringSnapshot(models.Model):
     """Comprehensive snapshot of house monitoring data at a specific time"""
     house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='monitoring_snapshots')
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
     
     # Key metrics (extracted from JSON for easier querying)
     average_temperature = models.FloatField(null=True, blank=True)
@@ -747,3 +747,109 @@ class WaterConsumptionForecast(models.Model):
 
     def __str__(self):
         return f"Water Forecast - House {self.house.house_number} @ {self.forecast_date}"
+
+
+class HouseDailySummary(models.Model):
+    """Per-house daily rollups from monitoring snapshots for trends and ML."""
+
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='daily_summaries')
+    date = models.DateField(db_index=True)
+    growth_day = models.IntegerField(null=True, blank=True)
+
+    temperature_avg = models.FloatField(null=True, blank=True)
+    temperature_min = models.FloatField(null=True, blank=True)
+    temperature_max = models.FloatField(null=True, blank=True)
+    humidity_avg = models.FloatField(null=True, blank=True)
+    static_pressure_avg = models.FloatField(null=True, blank=True)
+    water_consumption_avg = models.FloatField(null=True, blank=True)
+    water_consumption_max = models.FloatField(null=True, blank=True)
+    feed_consumption_avg = models.FloatField(null=True, blank=True)
+    feed_consumption_max = models.FloatField(null=True, blank=True)
+    ventilation_avg = models.FloatField(null=True, blank=True)
+    heater_runtime_minutes = models.FloatField(null=True, blank=True)
+
+    snapshot_count = models.IntegerField(default=0)
+    expected_snapshots = models.IntegerField(default=0)
+    completeness_ratio = models.FloatField(default=0.0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['house', 'date']
+        ordering = ['-date', 'house']
+        indexes = [
+            models.Index(fields=['house', 'date']),
+            models.Index(fields=['house', 'growth_day']),
+        ]
+
+    def __str__(self):
+        return f"{self.house} — {self.date}"
+
+
+class HouseFeatureSnapshot(models.Model):
+    """Hourly feature vector for unsupervised/supervised ML per house."""
+
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='feature_snapshots')
+    timestamp = models.DateTimeField(db_index=True)
+    growth_day = models.IntegerField(null=True, blank=True)
+    bird_count = models.IntegerField(null=True, blank=True)
+
+    avg_temp = models.FloatField(null=True, blank=True)
+    humidity = models.FloatField(null=True, blank=True)
+    static_pressure = models.FloatField(null=True, blank=True)
+    vent_level = models.FloatField(null=True, blank=True)
+    outside_temp = models.FloatField(null=True, blank=True)
+    water_24h = models.FloatField(null=True, blank=True)
+    feed_24h = models.FloatField(null=True, blank=True)
+    water_delta_1h = models.FloatField(null=True, blank=True)
+    temp_std_6h = models.FloatField(null=True, blank=True)
+    heater_runtime_24h = models.FloatField(null=True, blank=True)
+
+    features = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['house', 'timestamp']
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['house', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.house} features @ {self.timestamp}"
+
+
+class FlockRiskScore(models.Model):
+    """Supervised ML risk scores for flock outcomes (mortality, FCR, livability)."""
+
+    RISK_TYPE_CHOICES = [
+        ('mortality_3d', 'Mortality Risk (3 days)'),
+        ('mortality_7d', 'Mortality Risk (7 days)'),
+        ('fcr_35d', 'FCR at Day 35'),
+        ('livability_harvest', 'Livability at Harvest'),
+    ]
+
+    flock = models.ForeignKey(
+        'farms.Flock',
+        on_delete=models.CASCADE,
+        related_name='risk_scores',
+    )
+    house = models.ForeignKey(House, on_delete=models.CASCADE, related_name='flock_risk_scores')
+    risk_type = models.CharField(max_length=32, choices=RISK_TYPE_CHOICES)
+    score = models.FloatField(help_text='Probability or predicted value depending on risk_type')
+    confidence = models.FloatField(default=0.5)
+    model_version = models.CharField(max_length=64, default='mortality_risk_v1')
+    top_features = models.JSONField(default=dict)
+    scored_at = models.DateTimeField(auto_now_add=True)
+    flock_age_days = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-scored_at']
+        indexes = [
+            models.Index(fields=['flock', 'risk_type', '-scored_at']),
+            models.Index(fields=['house', 'risk_type', '-scored_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.flock} — {self.risk_type}: {self.score:.3f}"

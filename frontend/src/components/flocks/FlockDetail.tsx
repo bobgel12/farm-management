@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { useFlock } from '../../contexts/FlockContext';
 import { FlockPerformance } from '../../types';
+import FlockRiskBadge from './FlockRiskBadge';
 import dayjs from 'dayjs';
 
 interface TabPanelProps {
@@ -153,6 +154,7 @@ const FlockDetail: React.FC = () => {
             <Typography variant="body2" color="text.secondary">
               {currentFlock.flock_code} • {currentFlock.house_name}
             </Typography>
+            {currentFlock.is_active && <FlockRiskBadge flockId={currentFlock.id} />}
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>

@@ -11,6 +11,8 @@ from .models import (
     Sensor,
     WaterConsumptionAlert,
     WaterConsumptionForecast,
+    HouseDailySummary,
+    FlockRiskScore,
 )
 from farms.serializers import FarmListSerializer
 from .services.monitoring_contract import normalized_snapshot_contract
@@ -312,3 +314,32 @@ class WaterConsumptionForecastSerializer(serializers.ModelSerializer):
             'source_date', 'created_at',
         ]
         read_only_fields = ['id', 'farm', 'house_number', 'farm_name', 'created_at']
+
+
+class HouseDailySummarySerializer(serializers.ModelSerializer):
+    house_number = serializers.IntegerField(source='house.house_number', read_only=True)
+
+    class Meta:
+        model = HouseDailySummary
+        fields = [
+            'id', 'house', 'house_number', 'date', 'growth_day',
+            'temperature_avg', 'temperature_min', 'temperature_max',
+            'humidity_avg', 'static_pressure_avg',
+            'water_consumption_avg', 'water_consumption_max',
+            'feed_consumption_avg', 'feed_consumption_max',
+            'ventilation_avg', 'heater_runtime_minutes',
+            'snapshot_count', 'expected_snapshots', 'completeness_ratio',
+        ]
+
+
+class FlockRiskScoreSerializer(serializers.ModelSerializer):
+    flock_code = serializers.CharField(source='flock.flock_code', read_only=True)
+    house_number = serializers.IntegerField(source='house.house_number', read_only=True)
+
+    class Meta:
+        model = FlockRiskScore
+        fields = [
+            'id', 'flock', 'flock_code', 'house', 'house_number',
+            'risk_type', 'score', 'confidence', 'model_version',
+            'top_features', 'flock_age_days', 'scored_at',
+        ]

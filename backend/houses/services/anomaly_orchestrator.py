@@ -10,15 +10,18 @@ from houses.models import House, HouseAlarm
 from .domain_anomaly_detectors import (
     FeedDomainDetector,
     HeaterDomainDetector,
+    TemperatureDomainDetector,
     VentilationDomainDetector,
     WaterDomainDetector,
 )
+from .equipment_drift_detector import EquipmentDriftDetector
 
 
 class AnomalyOrchestrator:
     DETECTOR_CLASSES = [
         WaterDomainDetector,
         FeedDomainDetector,
+        TemperatureDomainDetector,
         HeaterDomainDetector,
         VentilationDomainDetector,
     ]
@@ -28,6 +31,7 @@ class AnomalyOrchestrator:
         for detector_cls in self.DETECTOR_CLASSES:
             detector = detector_cls(house)
             anomalies.extend(detector.detect())
+        anomalies.extend(EquipmentDriftDetector(house).detect())
         return anomalies
 
     def persist_non_water_anomalies(self, house: House, anomalies: List[Dict]) -> int:
@@ -36,7 +40,13 @@ class AnomalyOrchestrator:
             domain = item.get("domain")
             if domain == "water":
                 continue
-            alarm_type = "equipment" if domain in {"heater", "ventilation"} else "consumption"
+            alarm_type = (
+                "equipment"
+                if domain in {"heater", "ventilation", "equipment"}
+                else "temperature"
+                if domain in {"temperature", "humidity"}
+                else "consumption"
+            )
             param_name = item.get("parameter_name")
             # Dedupe heater runtime spikes: one active alarm per house per 24h window
             if domain == "heater" and param_name == "heater_runtime_spike":

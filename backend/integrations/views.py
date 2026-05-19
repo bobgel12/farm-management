@@ -109,7 +109,7 @@ def get_ml_predictions(request, farm_id):
         
         # Get recent predictions (last 24 hours)
         recent_predictions = MLPrediction.objects.filter(
-            controller__farm_id=farm.rotem_farm_id,
+            controller__farm=farm,
             predicted_at__gte=timezone.now() - timedelta(hours=24)
         ).order_by('-predicted_at')
         
@@ -163,7 +163,7 @@ def get_ml_summary(request, farm_id):
         
         # Get predictions from last 24 hours
         recent_predictions = MLPrediction.objects.filter(
-            controller__farm_id=farm.rotem_farm_id,
+            controller__farm=farm,
             predicted_at__gte=timezone.now() - timedelta(hours=24)
         )
         

@@ -321,6 +321,19 @@ INTEGRATION_SETTINGS = {
 # Rotem Scraper Settings
 ROTEM_USERNAME = config('ROTEM_USERNAME', default='')
 ROTEM_PASSWORD = config('ROTEM_PASSWORD', default='')
+# Simulated sensor fallback when Rotem returns no points (dev/test only)
+ROTEM_ALLOW_SIMULATED_DATA = config(
+    'ROTEM_ALLOW_SIMULATED_DATA',
+    default=DEBUG,
+    cast=bool,
+)
+
+# Monitoring snapshot interval used for completeness metrics (seconds)
+MONITORING_SNAPSHOT_INTERVAL_SECONDS = config(
+    'MONITORING_SNAPSHOT_INTERVAL_SECONDS',
+    default=300,
+    cast=int,
+)
 
 # Celery settings
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
@@ -391,6 +404,20 @@ CELERY_BEAT_SCHEDULE = {
     'calculate-daily-flock-performance': {
         'task': 'rotem_scraper.tasks.calculate_daily_flock_performance',
         'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM (after Rotem scrape)
+        'options': {'queue': 'background'},
+    },
+    'backfill-daily-summaries': {
+        'task': 'rotem_scraper.tasks.backfill_daily_summaries',
+        'schedule': crontab(hour=2, minute=30),
+        'options': {'queue': 'background'},
+    },
+    'build-hourly-features': {
+        'task': 'rotem_scraper.tasks.build_hourly_feature_snapshots',
+        'schedule': 3600.0,
+    },
+    'score-flock-risk-models': {
+        'task': 'rotem_scraper.tasks.score_flock_risk_models',
+        'schedule': crontab(hour=3, minute=0),
         'options': {'queue': 'background'},
     },
 }

@@ -9,6 +9,9 @@ import {
   FarmWaterHistoryComparisonResponse,
   WaterConsumptionAlert,
   WaterConsumptionForecast,
+  FarmDataQualityResponse,
+  MonitoringTrendsResponse,
+  FlockRiskScore,
 } from '../types/monitoring';
 
 class MonitoringApiService {
@@ -210,6 +213,38 @@ class MonitoringApiService {
       { headers: this.getAuthHeaders() }
     );
     return response.data;
+  }
+
+  async getFarmDataQuality(farmId: number, days = 1): Promise<FarmDataQualityResponse> {
+    const response = await api.get(`/farms/${farmId}/monitoring/data-quality/`, {
+      params: { days },
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async getHouseMonitoringTrends(
+    houseId: number,
+    period = 14,
+    compareGrowthDay?: number
+  ): Promise<MonitoringTrendsResponse> {
+    const params: Record<string, number> = { period };
+    if (compareGrowthDay !== undefined) {
+      params.compare_growth_day = compareGrowthDay;
+    }
+    const response = await api.get(`/houses/${houseId}/monitoring/trends/`, {
+      params,
+      headers: this.getAuthHeaders(),
+    });
+    return response.data;
+  }
+
+  async getHouseFlockRiskScores(houseId: number, riskType = 'mortality_3d'): Promise<FlockRiskScore[]> {
+    const response = await api.get(`/houses/${houseId}/flock-risk-scores/`, {
+      params: { risk_type: riskType },
+      headers: this.getAuthHeaders(),
+    });
+    return response.data.risk_scores ?? [];
   }
 }
 

@@ -399,10 +399,18 @@ class DjangoRotemScraperService:
                             except (ValueError, TypeError):
                                 continue
         
-            # If no real data was found, create some basic simulated data as fallback
+            # Simulated fallback only when explicitly enabled (never in production by default)
             if data_points_created == 0:
-                logger.warning("No real data found, creating simulated data as fallback")
-                self._create_simulated_data_points(controller, current_time)
+                if getattr(settings, 'ROTEM_ALLOW_SIMULATED_DATA', False):
+                    logger.warning(
+                        "No real data found; ROTEM_ALLOW_SIMULATED_DATA enabled — creating simulated points"
+                    )
+                    self._create_simulated_data_points(controller, current_time)
+                else:
+                    logger.warning(
+                        "No real data found for controller %s; simulated fallback disabled",
+                        controller.controller_name,
+                    )
     
     def _get_sensor_type_and_unit(self, field_name):
         """Determine sensor type and unit based on field name"""
