@@ -7,6 +7,7 @@ MONITORING_CACHE_INTERVAL_SECONDS seconds.
 """
 
 import os
+from pathlib import Path
 import signal
 import sys
 import time
@@ -16,6 +17,11 @@ from django.core.management import call_command
 from django.db import connections
 from django.utils import timezone
 
+
+BASE_DIR = Path(__file__).resolve().parent
+for candidate in (BASE_DIR, BASE_DIR / "backend", BASE_DIR.parent, BASE_DIR.parent / "backend"):
+    if candidate.exists():
+        sys.path.insert(0, str(candidate))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "chicken_management.settings_prod")
 
@@ -31,6 +37,11 @@ def main():
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
 
+    print(
+        "monitoring_cache_worker boot "
+        f"cwd={Path.cwd()} script_dir={BASE_DIR} pythonpath={sys.path[:4]}",
+        flush=True,
+    )
     django.setup()
     interval = int(os.getenv("MONITORING_CACHE_INTERVAL_SECONDS", "600"))
 
@@ -64,4 +75,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
