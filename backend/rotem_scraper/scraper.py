@@ -596,9 +596,6 @@ class RotemScraper:
         allowed_headers = [
             "Referer",
             "X-Requested-With",
-            "userToken",
-            "farmConnectionToken",
-            "authorization",
             "userLanguage",
             "Content-Type",
             "Origin",
