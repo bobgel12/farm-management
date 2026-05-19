@@ -288,6 +288,51 @@ class HouseMonitoringCache(models.Model):
         return f"House cache {self.house_id} ({self.refresh_state})"
 
 
+class MonitoringCacheRefreshRun(models.Model):
+    """Tracks scheduled and manual monitoring cache refresh runs."""
+
+    TRIGGER_CHOICES = [
+        ("scheduled", "Scheduled"),
+        ("manual", "Manual"),
+    ]
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("success", "Success"),
+        ("partial", "Partial"),
+        ("failed", "Failed"),
+    ]
+
+    run_id = models.UUIDField(unique=True, db_index=True)
+    trigger_type = models.CharField(max_length=16, choices=TRIGGER_CHOICES)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="queued", db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    farms_processed = models.IntegerField(default=0)
+    houses_processed = models.IntegerField(default=0)
+    result_payload = models.JSONField(default=dict, blank=True)
+    error_summary = models.TextField(blank=True, default="")
+    requested_by = models.ForeignKey(
+        "auth.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="monitoring_cache_refresh_runs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["trigger_type", "-created_at"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Monitoring cache refresh {self.run_id} ({self.status})"
+
+
 class Device(models.Model):
     """Device/equipment in a house (heaters, fans, lights, etc.)"""
     DEVICE_TYPES = [

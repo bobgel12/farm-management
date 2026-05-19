@@ -1,17 +1,20 @@
 from django.core.management.base import BaseCommand
 
-from houses.services.monitoring_cache_service import upsert_monitoring_cache_for_all_farms
+from houses.services.monitoring_cache_run_service import (
+    create_scheduled_refresh_run,
+    execute_refresh_run,
+)
 
 
 class Command(BaseCommand):
     help = "Upsert cached Rotem monitoring payloads for all active integrated farms."
 
     def handle(self, *args, **options):
-        result = upsert_monitoring_cache_for_all_farms()
+        run = execute_refresh_run(create_scheduled_refresh_run())
         self.stdout.write(
             self.style.SUCCESS(
-                f"status={result.status} farms_processed={result.farms_processed} houses_processed={result.houses_processed}"
+                f"status={run.status} farms_processed={run.farms_processed} houses_processed={run.houses_processed} run_id={run.run_id}"
             )
         )
-        if result.message:
-            self.stdout.write(self.style.WARNING(result.message))
+        if run.error_summary:
+            self.stdout.write(self.style.WARNING(run.error_summary))

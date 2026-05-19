@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +10,7 @@ from django.utils import timezone
 from datetime import timedelta, datetime, date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import os
 from .models import (
     House,
     HouseMonitoringSnapshot,
@@ -49,7 +52,12 @@ from .services.monitoring_cache_service import (
     upsert_farm_monitoring_cache,
     wrap_cached_response,
 )
-from .models import FarmMonitoringCache, HouseMonitoringCache
+from .services.monitoring_cache_run_service import (
+    farm_cache_status_payload,
+    queue_manual_refresh_run,
+    serialize_refresh_run,
+)
+from .models import FarmMonitoringCache, HouseMonitoringCache, MonitoringCacheRefreshRun
 from rotem_scraper.tasks import sync_refresh_house_heater_history
 from farms.views import user_accessible_organization_ids
 from rotem_scraper.scraper import RotemScraper
@@ -59,9 +67,18 @@ logger = logging.getLogger(__name__)
 
 def _cache_mode(request):
     mode = (request.query_params.get('mode') or 'cached_then_live').lower()
-    if mode not in ('cached', 'live', 'cached_then_live'):
-        return 'cached'
+    if mode not in ('cached', 'cache_only', 'live', 'cached_then_live'):
+        return 'cached_then_live'
     return mode
+
+
+def _cache_only_meta(cache, refresh_state='missing'):
+    return build_meta(
+        fetched_at=getattr(cache, 'fetched_at', None),
+        source_timestamp=getattr(cache, 'source_timestamp', None),
+        refresh_state=getattr(cache, 'refresh_state', refresh_state),
+        stale_seconds=MAX_STALE_SECONDS,
+    )
 
 
 def _should_refresh(meta: dict):
@@ -930,7 +947,9 @@ def house_monitoring_latest(request, house_id):
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_house_cache(house, 'latest_payload', force=(mode == 'live'))
+        HouseMonitoringCache.objects.filter(house=house).first()
+        if mode == 'cache_only'
+        else _ensure_house_cache(house, 'latest_payload', force=(mode == 'live'))
         if mode != 'live'
         else HouseMonitoringCache.objects.filter(house=house).first()
     )
@@ -942,6 +961,8 @@ def house_monitoring_latest(request, house_id):
             stale_seconds=MAX_STALE_SECONDS,
         )
         return Response(wrap_cached_response(cache.latest_payload, meta))
+    if mode == 'cache_only':
+        return Response(wrap_cached_response(None, _cache_only_meta(cache)))
 
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
@@ -988,13 +1009,18 @@ def house_monitoring_history(request, house_id):
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_house_cache(house, 'history_payload', force=(mode == 'live'))
+        HouseMonitoringCache.objects.filter(house=house).first()
+        if mode == 'cache_only'
+        else _ensure_house_cache(house, 'history_payload', force=(mode == 'live'))
         if mode != 'live'
         else HouseMonitoringCache.objects.filter(house=house).first()
     )
     if mode != 'live' and cache and cache.history_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.history_payload, meta))
+    if mode == 'cache_only':
+        payload = {'count': 0, 'results': [], 'detail': 'No cached monitoring history available.'}
+        return Response(wrap_cached_response(payload, _cache_only_meta(cache)))
 
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
@@ -1126,13 +1152,18 @@ def house_monitoring_kpis(request, house_id):
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_house_cache(house, 'kpis_payload', force=(mode == 'live'))
+        HouseMonitoringCache.objects.filter(house=house).first()
+        if mode == 'cache_only'
+        else _ensure_house_cache(house, 'kpis_payload', force=(mode == 'live'))
         if mode != 'live'
         else HouseMonitoringCache.objects.filter(house=house).first()
     )
     if mode != 'live' and cache and cache.kpis_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.kpis_payload, meta))
+    if mode == 'cache_only':
+        payload = {'house_id': house.id, 'detail': 'No cached monitoring KPI data available.'}
+        return Response(wrap_cached_response(payload, _cache_only_meta(cache)))
 
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
@@ -1259,13 +1290,18 @@ def farm_houses_monitoring_all(request, farm_id):
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_farm_cache(farm, force=(mode == 'live'))
+        FarmMonitoringCache.objects.filter(farm=farm).first()
+        if mode == 'cache_only'
+        else _ensure_farm_cache(farm, force=(mode == 'live'))
         if mode != 'live'
         else FarmMonitoringCache.objects.filter(farm=farm).first()
     )
     if mode != 'live' and cache and cache.houses_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.houses_payload, meta))
+    if mode == 'cache_only':
+        payload = {'farm_id': farm.id, 'farm_name': farm.name, 'houses_count': 0, 'houses': []}
+        return Response(wrap_cached_response(payload, _cache_only_meta(cache)))
 
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
     if not houses:
@@ -1334,7 +1370,9 @@ def farm_houses_monitoring_dashboard(request, farm_id):
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_farm_cache(farm, force=(mode == 'live'))
+        FarmMonitoringCache.objects.filter(farm=farm).first()
+        if mode == 'cache_only'
+        else _ensure_farm_cache(farm, force=(mode == 'live'))
         if mode != 'live'
         else FarmMonitoringCache.objects.filter(farm=farm).first()
     )
@@ -1358,6 +1396,16 @@ def farm_houses_monitoring_dashboard(request, farm_id):
                     'connection_summary': {'connected': len(fallback_houses), 'disconnected': 0},
                 }
         return Response(wrap_cached_response(payload, meta))
+    if mode == 'cache_only':
+        dashboard_data = {
+            'farm_id': farm_id,
+            'farm_name': farm.name,
+            'total_houses': 0,
+            'houses': [],
+            'alerts_summary': {'total_active': 0, 'critical': 0, 'warning': 0, 'normal': 0},
+            'connection_summary': {'connected': 0, 'disconnected': 0},
+        }
+        return Response(wrap_cached_response(dashboard_data, _cache_only_meta(cache)))
 
     houses = list(House.objects.filter(farm=farm, is_active=True).order_by('house_number'))
     dashboard_data = {
@@ -1439,7 +1487,9 @@ def farm_houses_monitoring_snapshot(request, farm_id):
     farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_farm_cache(farm, force=(mode == 'live'))
+        FarmMonitoringCache.objects.filter(farm=farm).first()
+        if mode == 'cache_only'
+        else _ensure_farm_cache(farm, force=(mode == 'live'))
         if mode != 'live'
         else FarmMonitoringCache.objects.filter(farm=farm).first()
     )
@@ -1454,6 +1504,17 @@ def farm_houses_monitoring_snapshot(request, farm_id):
         )
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(snapshot, meta))
+    if mode == 'cache_only':
+        snapshot = {
+            'farm_id': farm.id,
+            'farm_name': farm.name,
+            'total_houses': 0,
+            'houses': [],
+            'alerts_by_house': {},
+            'alerts_summary': {'total_active': 0, 'critical': 0, 'warning': 0, 'normal': 0},
+            'connection_summary': {'connected': 0, 'disconnected': 0},
+        }
+        return Response(wrap_cached_response(snapshot, _cache_only_meta(cache)))
 
     if not houses:
         snapshot = {
@@ -1609,13 +1670,17 @@ def house_heater_history(request, house_id):
     house = _house_from_scope_or_404(request, house_id)
     mode = _cache_mode(request)
     cache = (
-        _ensure_house_cache(house, 'heater_payload', force=(mode == 'live'))
+        HouseMonitoringCache.objects.filter(house=house).first()
+        if mode == 'cache_only'
+        else _ensure_house_cache(house, 'heater_payload', force=(mode == 'live'))
         if mode != 'live'
         else HouseMonitoringCache.objects.filter(house=house).first()
     )
     if mode != 'live' and cache and cache.heater_payload:
         meta = build_meta(cache.fetched_at, cache.source_timestamp, cache.refresh_state, MAX_STALE_SECONDS)
         return Response(wrap_cached_response(cache.heater_payload, meta))
+    if mode == 'cache_only':
+        return Response(wrap_cached_response({'heater_history': {'daily': []}}, _cache_only_meta(cache)))
 
     scraper, err = _house_rotem_scraper_or_error(house)
     if err:
@@ -1721,6 +1786,32 @@ def farm_monitoring_refresh(request, farm_id):
         },
         status=status.HTTP_200_OK if result.status in ('success', 'partial') else status.HTTP_502_BAD_GATEWAY,
     )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def monitoring_cache_refresh_queue(request):
+    """Queue a non-blocking manual monitoring cache refresh for all active Rotem farms."""
+    run = queue_manual_refresh_run(request.user)
+    response_status = status.HTTP_202_ACCEPTED if run.status in ('queued', 'running') else status.HTTP_200_OK
+    return Response(serialize_refresh_run(run), status=response_status)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def monitoring_cache_refresh_run_detail(request, run_id):
+    """Return current status for a monitoring cache refresh run."""
+    run = get_object_or_404(MonitoringCacheRefreshRun, run_id=run_id)
+    return Response(serialize_refresh_run(run))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def farm_monitoring_cache_status(request, farm_id):
+    """Return current monitoring cache freshness and latest refresh runs for a farm."""
+    farm = get_object_or_404(_scoped_farms_queryset(request), id=farm_id)
+    interval = int(os.getenv("MONITORING_CACHE_INTERVAL_SECONDS", "600"))
+    return Response(farm_cache_status_payload(farm, interval_seconds=interval))
 
 
 @api_view(['GET'])
