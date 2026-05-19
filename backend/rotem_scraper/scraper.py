@@ -146,7 +146,7 @@ class RotemScraper:
                         print(f"Response text: {response.text[:200]}...")
                         return False
                 
-                print(f"✅ Login response: {result}")
+                print("✅ Login response received")
                 self.last_error_message = None
 
                 # Rotem may return HTTP 200 with logical failure in payload
@@ -176,11 +176,11 @@ class RotemScraper:
                 if isinstance(response_data, dict):
                     if 'FarmUser' in response_data and 'UserToken' in response_data['FarmUser']:
                         self.user_token = response_data['FarmUser']['UserToken']
-                        print(f"🔑 User token extracted: {self.user_token[:50]}...")
+                        print("🔑 User token extracted")
                     
                     if 'FarmConnectionInfo' in response_data and 'ConnectionToken' in response_data['FarmConnectionInfo']:
                         self.farm_connection_token = response_data['FarmConnectionInfo']['ConnectionToken']
-                        print(f"🏭 Farm connection token extracted: {self.farm_connection_token}")
+                        print("🏭 Farm connection token extracted")
                         
                     if 'FarmConnectionInfo' in response_data and 'GatewayName' in response_data['FarmConnectionInfo']:
                         self.gateway_code = response_data['FarmConnectionInfo']['GatewayName']
@@ -190,7 +190,7 @@ class RotemScraper:
                 for cookie in self.session.cookies:
                     if cookie.name == 'ASP.NET_SessionId':
                         self.session_id = cookie.value
-                        print(f"🍪 Session ID: {self.session_id}")
+                        print("🍪 Session ID extracted")
                 print(f"🌐 Effective web_server_url after login: {self.web_server_url}")
 
                 # Missing tokens usually means account has no farm access context
