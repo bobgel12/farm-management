@@ -12,7 +12,13 @@ import {
   FarmDataQualityResponse,
   MonitoringTrendsResponse,
   FlockRiskScore,
+  FarmMonitoringCacheStatus,
+  MonitoringCacheRefreshRun,
+  MonitoringCacheMeta,
+  MonitoringDataMode,
 } from '../types/monitoring';
+
+export const MONITORING_DATA_MODE_STORAGE_KEY = 'monitoringDataMode';
 
 class MonitoringApiService {
   private baseURL: string;
@@ -27,15 +33,44 @@ class MonitoringApiService {
     return token ? { Authorization: `Token ${token}` } : {};
   }
 
+  getMonitoringDataMode(): MonitoringDataMode {
+    if (typeof window === 'undefined') return 'cache_only';
+    const stored = window.sessionStorage.getItem(MONITORING_DATA_MODE_STORAGE_KEY);
+    return stored === 'cached_then_live' ? 'cached_then_live' : 'cache_only';
+  }
+
+  setMonitoringDataMode(mode: MonitoringDataMode) {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(MONITORING_DATA_MODE_STORAGE_KEY, mode);
+    }
+  }
+
+  private unwrapMonitoringResponse<T extends Record<string, any>>(payload: any): T & { meta?: MonitoringCacheMeta } {
+    const inner = payload?.success && payload?.data ? payload.data : payload;
+    if (inner?.data && typeof inner.data === 'object') {
+      return {
+        ...inner.data,
+        meta: inner.meta || payload?.meta?.freshness,
+      };
+    }
+    if (payload?.success && payload?.data && typeof payload.data === 'object') {
+      return {
+        ...payload.data,
+        meta: payload.meta?.freshness || payload.meta,
+      };
+    }
+    return inner;
+  }
+
   /**
    * Get latest monitoring snapshot for a house
    */
-  async getHouseLatestMonitoring(houseId: number): Promise<HouseMonitoringSnapshot> {
+  async getHouseLatestMonitoring(houseId: number, mode: MonitoringDataMode = this.getMonitoringDataMode()): Promise<HouseMonitoringSnapshot> {
     const response = await api.get(`/houses/${houseId}/monitoring/latest/`, {
-      params: { mode: 'cached' },
+      params: { mode },
       headers: this.getAuthHeaders()
     });
-    return response.data;
+    return this.unwrapMonitoringResponse<HouseMonitoringSnapshot>(response.data);
   }
 
   /**
@@ -46,7 +81,7 @@ class MonitoringApiService {
     startDate?: string,
     endDate?: string,
     limit: number = 100,
-    mode?: 'cached' | 'live'
+    mode?: 'cached' | 'cache_only' | 'live' | 'cached_then_live'
   ): Promise<MonitoringHistoryResponse> {
     const params: any = { limit };
     if (startDate) params.start_date = startDate;
@@ -57,7 +92,7 @@ class MonitoringApiService {
       params,
       headers: this.getAuthHeaders()
     });
-    return response.data?.data ?? response.data;
+    return this.unwrapMonitoringResponse<MonitoringHistoryResponse>(response.data);
   }
 
   /**
@@ -81,9 +116,9 @@ class MonitoringApiService {
    */
   async getHouseMonitoringKpis(
     houseId: number,
-    options?: { dodReferenceDate?: string | null; cacheBust?: string | number }
+    options?: { dodReferenceDate?: string | null; cacheBust?: string | number; mode?: MonitoringDataMode }
   ): Promise<HouseMonitoringKpis> {
-    const params: Record<string, string> = { mode: 'cached' };
+    const params: Record<string, string> = { mode: options?.mode || this.getMonitoringDataMode() };
     if (options?.dodReferenceDate) {
       params.dod_reference_date = options.dodReferenceDate;
     }
@@ -94,29 +129,50 @@ class MonitoringApiService {
       headers: this.getAuthHeaders(),
       params,
     });
-    return response.data;
+    return this.unwrapMonitoringResponse<HouseMonitoringKpis>(response.data);
   }
 
   /**
    * Get latest monitoring data for all houses in a farm
    */
-  async getFarmHousesMonitoring(farmId: number): Promise<FarmHousesMonitoringResponse> {
+  async getFarmHousesMonitoring(farmId: number, mode: MonitoringDataMode = this.getMonitoringDataMode()): Promise<FarmHousesMonitoringResponse> {
     const response = await api.get(`/farms/${farmId}/houses/monitoring/all/`, {
-      params: { mode: 'cached' },
+      params: { mode },
       headers: this.getAuthHeaders()
     });
-    return response.data;
+    return this.unwrapMonitoringResponse<FarmHousesMonitoringResponse>(response.data);
   }
 
   /**
    * Get dashboard data with alerts and summaries for all houses
    */
-  async getFarmMonitoringDashboard(farmId: number): Promise<MonitoringDashboardData> {
+  async getFarmMonitoringDashboard(farmId: number, mode: MonitoringDataMode = this.getMonitoringDataMode()): Promise<MonitoringDashboardData> {
     const response = await api.get(`/farms/${farmId}/houses/monitoring/dashboard/`, {
-      params: { mode: 'cached' },
+      params: { mode },
       headers: this.getAuthHeaders()
     });
-    return response.data;
+    return this.unwrapMonitoringResponse<MonitoringDashboardData>(response.data);
+  }
+
+  async getFarmMonitoringCacheStatus(farmId: number): Promise<FarmMonitoringCacheStatus> {
+    const response = await api.get(`/farms/${farmId}/houses/monitoring/cache-status/`, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data?.data ?? response.data;
+  }
+
+  async queueMonitoringCacheRefresh(): Promise<MonitoringCacheRefreshRun> {
+    const response = await api.post(`/farms/monitoring/cache-refresh/`, {}, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data?.data ?? response.data;
+  }
+
+  async getMonitoringCacheRefreshRun(runId: string): Promise<MonitoringCacheRefreshRun> {
+    const response = await api.get(`/farms/monitoring/cache-refresh/${runId}/`, {
+      headers: this.getAuthHeaders(),
+    });
+    return response.data?.data ?? response.data;
   }
 
   async getFarmWaterHistoryComparison(
@@ -187,9 +243,10 @@ class MonitoringApiService {
    */
   async getHouseHeaterHistory(
     houseId: number,
-    cacheBust?: string | number
+    cacheBust?: string | number,
+    mode: MonitoringDataMode = this.getMonitoringDataMode()
   ): Promise<{ heater_history: Record<string, unknown> }> {
-    const params: Record<string, string> = { mode: 'cached' };
+    const params: Record<string, string> = { mode };
     if (cacheBust != null) {
       params._ = String(cacheBust);
     }
@@ -197,7 +254,7 @@ class MonitoringApiService {
       headers: this.getAuthHeaders(),
       params,
     });
-    return response.data;
+    return this.unwrapMonitoringResponse<{ heater_history: Record<string, unknown> }>(response.data);
   }
 
   /**

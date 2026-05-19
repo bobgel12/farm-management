@@ -1,5 +1,62 @@
 // Monitoring data types for house monitoring snapshots
 
+export type MonitoringDataMode = 'cache_only' | 'cached_then_live';
+
+export interface MonitoringCacheMeta {
+  fetched_at?: string | null;
+  source_timestamp?: string | null;
+  age_seconds?: number | null;
+  is_stale?: boolean;
+  refresh_state?: string;
+  can_refresh_now?: boolean;
+  [key: string]: unknown;
+}
+
+export interface MonitoringCacheRefreshRun {
+  run_id: string;
+  trigger_type: 'scheduled' | 'manual';
+  status: 'queued' | 'running' | 'success' | 'partial' | 'failed';
+  started_at: string | null;
+  completed_at: string | null;
+  farms_processed: number;
+  houses_processed: number;
+  result_payload: {
+    farm_count?: number;
+    max_workers?: number;
+    farms?: Array<{
+      farm_id: number;
+      farm_name?: string;
+      status: string;
+      message?: string;
+      houses_processed?: number;
+      cache_fetched_at?: string | null;
+      cache_source_timestamp?: string | null;
+    }>;
+  };
+  error_summary: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface FarmMonitoringCacheStatus {
+  farm_id: number;
+  farm_name: string;
+  cache: {
+    exists: boolean;
+    fetched_at: string | null;
+    source_timestamp: string | null;
+    age_seconds: number | null;
+    is_stale: boolean;
+    refresh_state: string;
+    last_error: string;
+  };
+  worker_interval_seconds: number;
+  latest_runs: {
+    scheduled: MonitoringCacheRefreshRun | null;
+    manual: MonitoringCacheRefreshRun | null;
+  };
+}
+
 export interface HouseMonitoringSnapshot {
   id: number;
   house: number;
@@ -53,6 +110,7 @@ export interface HouseMonitoringSnapshot {
     connectivity: Record<string, number | string | null>;
     digital_outputs: Record<string, any>;
   };
+  meta?: MonitoringCacheMeta;
 }
 
 export interface TemperatureSensorData {
@@ -190,6 +248,7 @@ export interface FarmHousesMonitoringResponse {
     status: 'no_data';
     message: string;
   })[];
+  meta?: MonitoringCacheMeta;
 }
 
 export interface MonitoringDashboardData {
@@ -213,6 +272,7 @@ export interface MonitoringDashboardData {
     connected: number;
     disconnected: number;
   };
+  meta?: MonitoringCacheMeta;
 }
 
 export interface DayOverDayDelta {

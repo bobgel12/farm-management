@@ -29,6 +29,9 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   Settings,
@@ -62,7 +65,12 @@ import EmailManager from '../EmailManager';
 import WorkerList from '../WorkerList';
 import FarmHousesMonitoring from '../houses/FarmHousesMonitoring';
 import monitoringApi from '../../services/monitoringApi';
-import { MonitoringDashboardData } from '../../types/monitoring';
+import {
+  FarmMonitoringCacheStatus,
+  MonitoringCacheRefreshRun,
+  MonitoringDashboardData,
+  MonitoringDataMode,
+} from '../../types/monitoring';
 import MonitoringDataQualityPanel from '../monitoring/MonitoringDataQualityPanel';
 import IntegrationManagement from './IntegrationManagement';
 import { useProgram } from '../../contexts/ProgramContext';
@@ -229,7 +237,12 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [mlPredictions, setMlPredictions] = useState<MLPrediction[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [monitoringDashboard, setMonitoringDashboard] = useState<MonitoringDashboard | null>(null);
+  const [monitoringCacheStatus, setMonitoringCacheStatus] = useState<FarmMonitoringCacheStatus | null>(null);
+  const [monitoringDataMode, setMonitoringDataMode] = useState<MonitoringDataMode>(() => monitoringApi.getMonitoringDataMode());
+  const [monitoringRefreshRun, setMonitoringRefreshRun] = useState<MonitoringCacheRefreshRun | null>(null);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+  const [queueingMonitoringRefresh, setQueueingMonitoringRefresh] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
   
   // Water anomaly detection state
@@ -271,14 +284,38 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       fetchMlPredictions();
       fetchMonitoringDashboard();
     }
-  }, [farm?.id, farm?.integration_type]);
+  }, [farm?.id, farm?.integration_type, monitoringDataMode]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!monitoringRefreshRun || !['queued', 'running'].includes(monitoringRefreshRun.status)) return undefined;
+    const interval = setInterval(async () => {
+      try {
+        const run = await monitoringApi.getMonitoringCacheRefreshRun(monitoringRefreshRun.run_id);
+        setMonitoringRefreshRun(run);
+        if (!['queued', 'running'].includes(run.status)) {
+          fetchMonitoringDashboard();
+        }
+      } catch (error) {
+        console.error('Error polling monitoring refresh run:', error);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [monitoringRefreshRun?.run_id, monitoringRefreshRun?.status]);
 
   const fetchMonitoringDashboard = async () => {
     if (!farm) return;
     
     setLoadingMonitoring(true);
     try {
-      const data = await monitoringApi.getFarmMonitoringDashboard(farm.id);
+      const [data, status] = await Promise.all([
+        monitoringApi.getFarmMonitoringDashboard(farm.id, monitoringDataMode),
+        monitoringApi.getFarmMonitoringCacheStatus(farm.id),
+      ]);
       // Transform MonitoringDashboardData to MonitoringDashboard format
       const transformedData: MonitoringDashboard = {
         total_houses: data.total_houses,
@@ -299,10 +336,49 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
         })),
       };
       setMonitoringDashboard(transformedData);
+      setMonitoringCacheStatus(status);
+      setMonitoringRefreshRun(status.latest_runs.manual?.status === 'queued' || status.latest_runs.manual?.status === 'running'
+        ? status.latest_runs.manual
+        : null);
     } catch (error) {
       console.error('Error fetching monitoring dashboard:', error);
     } finally {
       setLoadingMonitoring(false);
+    }
+  };
+
+  const formatMonitoringDateTime = (value?: string | null) => {
+    if (!value) return 'Never';
+    return new Date(value).toLocaleString();
+  };
+
+  const formatMonitoringAge = (value?: string | null) => {
+    if (!value) return 'Unknown';
+    const seconds = Math.max(0, Math.floor((clockNow - new Date(value).getTime()) / 1000));
+    if (seconds < 60) return `${seconds} sec ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hr ago`;
+    return `${Math.floor(hours / 24)} days ago`;
+  };
+
+  const handleMonitoringDataModeChange = (_event: React.MouseEvent<HTMLElement>, value: MonitoringDataMode | null) => {
+    if (!value) return;
+    monitoringApi.setMonitoringDataMode(value);
+    setMonitoringDataMode(value);
+  };
+
+  const handleQueueMonitoringRefresh = async () => {
+    setQueueingMonitoringRefresh(true);
+    try {
+      const run = await monitoringApi.queueMonitoringCacheRefresh();
+      setMonitoringRefreshRun(run);
+    } catch (error) {
+      console.error('Error queueing monitoring refresh:', error);
+      setError('Failed to queue monitoring cache refresh');
+    } finally {
+      setQueueingMonitoringRefresh(false);
     }
   };
 
@@ -1320,7 +1396,29 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                 <Typography variant="h6">
                   Monitoring Dashboard
                 </Typography>
-                <Box display="flex" gap={1}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={monitoringDataMode}
+                    onChange={handleMonitoringDataModeChange}
+                  >
+                    <ToggleButton value="cache_only">Job cache</ToggleButton>
+                    <ToggleButton value="cached_then_live">Current</ToggleButton>
+                  </ToggleButtonGroup>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={
+                      queueingMonitoringRefresh || monitoringRefreshRun?.status === 'queued' || monitoringRefreshRun?.status === 'running'
+                        ? <CircularProgress size={16} color="inherit" />
+                        : <Refresh />
+                    }
+                    onClick={handleQueueMonitoringRefresh}
+                    disabled={queueingMonitoringRefresh || monitoringRefreshRun?.status === 'queued' || monitoringRefreshRun?.status === 'running'}
+                  >
+                    Run now
+                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1338,8 +1436,43 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                   >
                     View All Houses
                   </Button>
-                </Box>
+                </Stack>
               </Box>
+
+              {monitoringCacheStatus && (
+                <Alert
+                  severity={monitoringCacheStatus.cache.is_stale ? 'warning' : 'success'}
+                  sx={{ mb: 2 }}
+                  action={
+                    <Chip
+                      size="small"
+                      color={monitoringCacheStatus.cache.is_stale ? 'warning' : 'success'}
+                      label={monitoringCacheStatus.cache.refresh_state}
+                    />
+                  }
+                >
+                  Last fetched: {formatMonitoringDateTime(monitoringCacheStatus.cache.fetched_at)} · Data age: {formatMonitoringAge(monitoringCacheStatus.cache.fetched_at)}
+                  {monitoringCacheStatus.latest_runs.scheduled && (
+                    <> · Last scheduled run: {monitoringCacheStatus.latest_runs.scheduled.status}</>
+                  )}
+                  {monitoringCacheStatus.latest_runs.manual && (
+                    <> · Last manual run: {monitoringCacheStatus.latest_runs.manual.status}</>
+                  )}
+                </Alert>
+              )}
+
+              {monitoringRefreshRun && (
+                <Alert
+                  severity={monitoringRefreshRun.status === 'failed' ? 'error' : monitoringRefreshRun.status === 'partial' ? 'warning' : 'info'}
+                  sx={{ mb: 2 }}
+                >
+                  Manual refresh {monitoringRefreshRun.status}
+                  {monitoringRefreshRun.farms_processed || monitoringRefreshRun.houses_processed
+                    ? ` · farms ${monitoringRefreshRun.farms_processed} · houses ${monitoringRefreshRun.houses_processed}`
+                    : ''}
+                  {monitoringRefreshRun.error_summary ? ` · ${monitoringRefreshRun.error_summary}` : ''}
+                </Alert>
+              )}
 
               {loadingMonitoring ? (
                 <Box display="flex" justifyContent="center" p={3}>

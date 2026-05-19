@@ -13,7 +13,6 @@ import sys
 import time
 
 import django
-from django.core.management import call_command
 from django.db import connections
 from django.utils import timezone
 
@@ -43,13 +42,35 @@ def main():
         flush=True,
     )
     django.setup()
+    from houses.services.monitoring_cache_run_service import (
+        claim_next_queued_manual_run,
+        create_scheduled_refresh_run,
+        execute_refresh_run,
+    )
+
     interval = int(os.getenv("MONITORING_CACHE_INTERVAL_SECONDS", "600"))
+    manual_poll_seconds = max(1, int(os.getenv("MONITORING_CACHE_MANUAL_POLL_SECONDS", "5")))
+
+    def process_queued_manual_runs():
+        while running:
+            manual_run = claim_next_queued_manual_run()
+            if not manual_run:
+                return
+            print(
+                f"monitoring_cache_worker manual_run_start run_id={manual_run.run_id}",
+                flush=True,
+            )
+            execute_refresh_run(manual_run)
+            print(
+                f"monitoring_cache_worker manual_run_finish run_id={manual_run.run_id} status={manual_run.status}",
+                flush=True,
+            )
 
     while running:
         started = timezone.now()
         print(f"monitoring_cache_worker tick_start={started.isoformat()}", flush=True)
         try:
-            call_command("upsert_monitoring_cache")
+            execute_refresh_run(create_scheduled_refresh_run())
         except Exception as exc:
             print(f"monitoring_cache_worker status=error error={exc}", flush=True)
         finally:
@@ -63,10 +84,14 @@ def main():
         )
 
         sleep_for = max(interval - elapsed, 1)
-        for _ in range(sleep_for):
+        slept = 0
+        while slept < sleep_for:
             if not running:
                 break
-            time.sleep(1)
+            process_queued_manual_runs()
+            chunk = min(manual_poll_seconds, sleep_for - slept)
+            time.sleep(chunk)
+            slept += chunk
 
     print("monitoring_cache_worker status=stopping", flush=True)
     connections.close_all()
