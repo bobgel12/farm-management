@@ -1,9 +1,13 @@
 # Chicken House Management System
 # Makefile for local development and deployment
 
-.PHONY: help install dev build up down restart logs clean test seed email-test deploy-railway railway-env railway-up railway-dev railway-link logs-email
+.PHONY: help install dev frontend-prod-docker frontend-prod-host frontend-prod-logs frontend-prod-down local-up local-logs local-down local-reset build up down restart logs clean test seed email-test deploy-railway railway-env railway-up railway-dev railway-link logs-email
 
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo docker-compose; else echo "docker compose"; fi)
+LOCAL_BACKEND_ENV := $(shell if [ -f .env.local-backend ]; then echo .env.local-backend; else echo env.local-backend.example; fi)
+FRONTEND_PROD_ENV := $(shell if [ -f .env.frontend-prod ]; then echo .env.frontend-prod; else echo env.frontend-prod.example; fi)
+LOCAL_COMPOSE := $(DOCKER_COMPOSE) --env-file $(LOCAL_BACKEND_ENV) -f docker-compose.yml
+FRONTEND_PROD_COMPOSE := $(DOCKER_COMPOSE) -p farm-management-frontend-prod --env-file $(FRONTEND_PROD_ENV) -f docker-compose.frontend-prod.yml
 
 # Default target
 help: ## Show this help message
@@ -21,13 +25,44 @@ install: ## Install dependencies and setup project
 	@./setup.sh
 	@echo "✅ Setup complete!"
 
-dev: ## Start development environment
-	@echo "🔧 Starting development environment..."
-	$(DOCKER_COMPOSE) up -d
-	@echo "✅ Development environment started!"
+dev: local-up ## Alias for the full local stack
+
+frontend-prod-docker: ## Start the local frontend in Docker against the production backend
+	@echo "🌐 Starting local frontend against production backend..."
+	@echo "   Env: $(FRONTEND_PROD_ENV)"
+	$(FRONTEND_PROD_COMPOSE) up -d --build
+	@echo "✅ Frontend started!"
+	@echo "📱 Frontend: http://localhost:3002"
+
+frontend-prod-host: ## Start the host npm frontend against the production backend
+	@echo "🌐 Starting host frontend against production backend..."
+	@echo "   Env: $(FRONTEND_PROD_ENV)"
+	@set -a; . ./$(FRONTEND_PROD_ENV); set +a; export PORT=$${FRONTEND_HOST_PORT:-3002}; cd frontend && npm start
+
+frontend-prod-logs: ## Show frontend logs for the production-backend mode
+	$(FRONTEND_PROD_COMPOSE) logs -f frontend
+
+frontend-prod-down: ## Stop the Dockerized frontend production-backend mode
+	$(FRONTEND_PROD_COMPOSE) down
+
+local-up: ## Start the full local stack with production-style backend settings
+	@echo "🔧 Starting full local stack..."
+	@echo "   Env: $(LOCAL_BACKEND_ENV)"
+	$(LOCAL_COMPOSE) up -d --build
+	@echo "✅ Full local stack started!"
 	@echo "📱 Frontend: http://localhost:3002"
 	@echo "🔧 Backend: http://localhost:8002"
 	@echo "📊 Admin: http://localhost:8002/admin (admin/admin123)"
+
+local-logs: ## Show logs for the full local stack
+	$(LOCAL_COMPOSE) logs -f
+
+local-down: ## Stop the full local stack
+	$(LOCAL_COMPOSE) down
+
+local-reset: ## Reset the full local stack and its volumes
+	$(LOCAL_COMPOSE) down -v
+	$(LOCAL_COMPOSE) up -d --build
 
 # Railway Commands
 railway-link: ## Link project to Railway (if not already linked)
@@ -100,53 +135,46 @@ with open('.env.railway', 'w') as f: \
 		exit 1; \
 	fi
 
-railway-up: railway-env up ## Fetch Railway env vars and start all services
-	@echo "✅ Services started with Railway environment variables!"
+railway-up: railway-env ## Fetch Railway env vars for deployment workflows
+	@echo "ℹ️ Railway env vars were refreshed in .env."
+	@echo "ℹ️ Local development now uses explicit local env files; see make local-up or make frontend-prod-docker."
 
-railway-dev: railway-env dev ## Fetch Railway env vars and start development environment
-	@echo "✅ Development environment started with Railway environment variables!"
+railway-dev: railway-env ## Fetch Railway env vars for deployment workflows
+	@echo "ℹ️ Local development now uses explicit local env files; see make local-up or make frontend-prod-docker."
 
 # Docker Commands
-build: ## Build Docker images
+build: ## Build Docker images for the full local stack
 	@echo "🔨 Building Docker images..."
-	$(DOCKER_COMPOSE) build
+	$(LOCAL_COMPOSE) build
 
-up: ## Start all services
-	@echo "🚀 Starting all services..."
-	@if [ ! -f .env ]; then \
-		echo "⚠️  .env file not found. Using default environment variables."; \
-		echo "   Run 'make railway-env' to fetch from Railway, or create .env manually."; \
-	fi
-	$(DOCKER_COMPOSE) up -d
+up: local-up ## Alias for the full local stack
 
-down: ## Stop all services
-	@echo "🛑 Stopping all services..."
-	$(DOCKER_COMPOSE) down
+down: local-down ## Alias for stopping the full local stack
 
 restart: ## Restart all services
 	@echo "🔄 Restarting all services..."
-	$(DOCKER_COMPOSE) restart
+	$(LOCAL_COMPOSE) restart
 
 logs: ## Show logs for all services
 	@echo "📋 Showing logs..."
-	$(DOCKER_COMPOSE) logs -f
+	$(LOCAL_COMPOSE) logs -f
 
 logs-backend: ## Show backend logs only
 	@echo "📋 Showing backend logs..."
-	$(DOCKER_COMPOSE) logs -f backend
+	$(LOCAL_COMPOSE) logs -f backend
 
 logs-frontend: ## Show frontend logs only
 	@echo "📋 Showing frontend logs..."
-	$(DOCKER_COMPOSE) logs -f frontend
+	$(LOCAL_COMPOSE) logs -f frontend
 
 logs-email: ## Show email-related logs only
 	@echo "📧 Showing email logs..."
-	$(DOCKER_COMPOSE) logs -f backend | grep -i -E "(email|smtp|mail|send.*email|test.*email|email.*test|email.*service|email.*error|email.*fail)"
+	$(LOCAL_COMPOSE) logs -f backend | grep -i -E "(email|smtp|mail|send.*email|test.*email|email.*test|email.*service|email.*error|email.*fail)"
 
 # Database Commands
 migrate: ## Run database migrations
 	@echo "🗄️ Running database migrations..."
-	$(DOCKER_COMPOSE) exec backend python manage.py migrate
+	$(LOCAL_COMPOSE) exec backend python manage.py migrate
 	@echo "✅ Migrations applied successfully!"
 
 migrate-all: ## Run migrations for all apps including new features
@@ -155,23 +183,23 @@ migrate-all: ## Run migrations for all apps including new features
 	@echo "   - Farms (flock management)"
 	@echo "   - Reporting"
 	@echo "   - Analytics"
-	$(DOCKER_COMPOSE) exec backend python manage.py migrate organizations farms reporting analytics
+	$(LOCAL_COMPOSE) exec backend python manage.py migrate organizations farms reporting analytics
 	@echo "✅ All migrations applied successfully!"
 
 migrate-create: ## Create new migration
 	@echo "📝 Creating new migration..."
 	@read -p "Enter migration name: " name; \
-	$(DOCKER_COMPOSE) exec backend python manage.py makemigrations $$name
+	$(LOCAL_COMPOSE) exec backend python manage.py makemigrations $$name
 
 # Data Management
 seed: ## Seed database with sample data
 	@echo "🌱 Seeding database with sample data..."
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_data --clear
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_data --clear
 	@echo "✅ Database seeded!"
 
 seed-variety: ## Seed database with variety of data
 	@echo "🌱 Seeding database with variety of data..."
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_data --clear --variety
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_data --clear --variety
 	@echo "✅ Database seeded with variety!"
 
 seed-custom: ## Seed database with custom parameters
@@ -179,14 +207,14 @@ seed-custom: ## Seed database with custom parameters
 	@read -p "Number of farms (default 3): " farms; \
 	read -p "Houses per farm (default 5): " houses; \
 	read -p "Workers per farm (default 3): " workers; \
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_data --clear --farms $${farms:-3} --houses-per-farm $${houses:-5} --workers-per-farm $${workers:-3}
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_data --clear --farms $${farms:-3} --houses-per-farm $${houses:-5} --workers-per-farm $${workers:-3}
 	@echo "✅ Database seeded with custom data!"
 
 # Email Commands
 email-test: ## Send test email
 	@echo "📧 Sending test email..."
 	@read -p "Enter test email address: " email; \
-	curl -X POST 'http://localhost:8000/api/tasks/send-test-email/' \
+	curl -X POST 'http://localhost:8002/api/tasks/send-test-email/' \
 		-H 'Accept: application/json' \
 		-H 'Authorization: Token 7a2656cc6d71b6ebdee0acba4f99f4d77c142511' \
 		-H 'Content-Type: application/json' \
@@ -194,56 +222,56 @@ email-test: ## Send test email
 
 email-daily: ## Send daily task emails
 	@echo "📧 Sending daily task emails..."
-	$(DOCKER_COMPOSE) exec backend python manage.py send_daily_tasks
+	$(LOCAL_COMPOSE) exec backend python manage.py send_daily_tasks
 
 # Rotem Scraper Commands
 rotem-test: ## Test Rotem scraper
 	@echo "🔍 Testing Rotem scraper..."
-	$(DOCKER_COMPOSE) exec backend python manage.py test_scraper
+	$(LOCAL_COMPOSE) exec backend python manage.py test_scraper
 
 rotem-setup: ## Setup Rotem credentials
 	@echo "⚙️ Setting up Rotem credentials..."
-	@if [ ! -f .env ]; then \
-		echo "📋 Creating .env file from template..."; \
-		cp env.example .env; \
-		echo "✅ .env file created!"; \
-		echo "📝 Please edit .env file and add your Rotem credentials:"; \
+	@if [ ! -f .env.local-backend ]; then \
+		echo "📋 Creating .env.local-backend file from local template..."; \
+		cp env.local-backend.example .env.local-backend; \
+		echo "✅ .env.local-backend file created!"; \
+		echo "📝 Please edit .env.local-backend and add your Rotem credentials:"; \
 		echo "   ROTEM_USERNAME=your-rotem-username"; \
 		echo "   ROTEM_PASSWORD=your-rotem-password"; \
 	else \
-		echo "✅ .env file already exists"; \
+		echo "✅ .env.local-backend file already exists"; \
 		echo "📝 Current Rotem settings:"; \
-		grep ROTEM .env || echo "   No Rotem credentials found in .env"; \
+		grep ROTEM .env.local-backend || echo "   No Rotem credentials found in .env.local-backend"; \
 	fi
 
 rotem-logs: ## Show Rotem scraper logs
 	@echo "📋 Showing Rotem scraper logs..."
-	$(DOCKER_COMPOSE) logs -f backend | grep -i rotem
+	$(LOCAL_COMPOSE) logs -f backend | grep -i rotem
 
 rotem-seed: ## Seed Rotem test data for Playwright tests
 	@echo "🌱 Seeding Rotem test data..."
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_rotem_data --days=7
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_rotem_data --days=7
 	@echo "✅ Rotem test data seeded!"
 
 rotem-seed-clear: ## Clear and re-seed Rotem test data
 	@echo "🧹 Clearing and re-seeding Rotem test data..."
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_rotem_data --clear --days=7
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_rotem_data --clear --days=7
 	@echo "✅ Rotem test data re-seeded!"
 
 issues-seed: ## Seed issues and mortality test data
 	@echo "🌱 Seeding issues and mortality test data..."
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_issues_data --days=30
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_issues_data --days=30
 	@echo "✅ Issues and mortality test data seeded!"
 
 issues-seed-clear: ## Clear and re-seed issues and mortality test data
 	@echo "🧹 Clearing and re-seeding issues and mortality test data..."
-	$(DOCKER_COMPOSE) exec backend python manage.py seed_issues_data --clear --days=30
+	$(LOCAL_COMPOSE) exec backend python manage.py seed_issues_data --clear --days=30
 	@echo "✅ Issues and mortality test data re-seeded!"
 
 # Testing Commands
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	$(DOCKER_COMPOSE) exec backend python manage.py test
+	$(LOCAL_COMPOSE) exec backend python manage.py test
 
 test-email-config: ## Test email configuration
 	@echo "📧 Testing email configuration..."
@@ -292,13 +320,13 @@ test-e2e-setup: ## Setup Playwright and seed test data
 # Cleanup Commands
 clean: ## Clean up Docker containers and volumes
 	@echo "🧹 Cleaning up..."
-	$(DOCKER_COMPOSE) down -v
+	$(LOCAL_COMPOSE) down -v
 	docker system prune -f
 	@echo "✅ Cleanup complete!"
 
 clean-all: ## Clean up everything including images
 	@echo "🧹 Deep cleaning..."
-	$(DOCKER_COMPOSE) down -v --rmi all
+	$(LOCAL_COMPOSE) down -v --rmi all
 	docker system prune -af
 	@echo "✅ Deep cleanup complete!"
 
@@ -339,16 +367,16 @@ deploy-railway: ## Deploy to Railway
 # Utility Commands
 shell-backend: ## Open backend shell
 	@echo "🐚 Opening backend shell..."
-	$(DOCKER_COMPOSE) exec backend bash
+	$(LOCAL_COMPOSE) exec backend bash
 
 shell-db: ## Open database shell
 	@echo "🐚 Opening database shell..."
-	$(DOCKER_COMPOSE) exec db psql -U postgres -d chicken_management
+	$(LOCAL_COMPOSE) exec db psql -U postgres -d chicken_management
 
 status: ## Show service status
 	@echo "📊 Service Status:"
 	@echo "=================="
-	@$(DOCKER_COMPOSE) ps
+	@$(LOCAL_COMPOSE) ps
 
 # Quick Commands
 quick-start: install up migrate seed ## Quick start: install, start, migrate, and seed
@@ -364,7 +392,9 @@ quick-reset: down clean up migrate seed ## Quick reset: clean, restart, and seed
 help-dev: ## Show development help
 	@echo "Development Commands:"
 	@echo "====================="
-	@echo "  make dev          - Start development environment"
+	@echo "  make local-up             - Start full local stack"
+	@echo "  make frontend-prod-docker - Start Docker frontend against production backend"
+	@echo "  make frontend-prod-host   - Start host frontend against production backend"
 	@echo "  make logs         - Show all logs"
 	@echo "  make logs-backend - Show backend logs only"
 	@echo "  make shell-backend - Open backend shell"

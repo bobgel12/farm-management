@@ -61,9 +61,10 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId, 
         houseId,
         startDate,
         endDate,
-        200
+        200,
+        highlightMetric ? 'live' : undefined
       );
-      setHistory(data.results);
+      setHistory(Array.isArray(data?.results) ? data.results : []);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch historical data');
     } finally {
@@ -89,25 +90,39 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId, 
     );
   }
 
-  if (history.length === 0) {
+  if (!Array.isArray(history) || history.length === 0) {
     return (
       <Alert severity="info">No historical data available for the selected period</Alert>
     );
   }
 
+  const metricRows = highlightMetric
+    ? history.filter((snapshot) => snapshot[highlightMetric === 'water' ? 'water_consumption' : 'feed_consumption'] != null)
+    : history;
+  const dailyMetricRows = highlightMetric
+    ? metricRows.filter((snapshot) => {
+        const sourceTimestamp = (snapshot as any).source_timestamp;
+        return typeof sourceTimestamp === 'string' && sourceTimestamp.includes('T00:00:00');
+      })
+    : metricRows;
+  const displayHistory = dailyMetricRows.length > 0 ? dailyMetricRows : metricRows;
+
   // Prepare chart data
-  const chartData = history.map((snapshot) => ({
-    time: dayjs(snapshot.timestamp).format('HH:mm'),
-    date: dayjs(snapshot.timestamp).format('MM/DD HH:mm'),
-    temperature: snapshot.average_temperature,
-    targetTemp: snapshot.target_temperature,
-    outsideTemp: snapshot.outside_temperature,
-    humidity: snapshot.humidity,
-    pressure: snapshot.static_pressure,
-    ventilation: snapshot.ventilation_level,
-    water: snapshot.water_consumption,
-    feed: snapshot.feed_consumption,
-  }));
+  const chartData = displayHistory.map((snapshot) => {
+    const chartTimestamp = (snapshot as any).source_timestamp || snapshot.timestamp;
+    return {
+      time: dayjs(chartTimestamp).format(highlightMetric ? 'MM/DD' : 'HH:mm'),
+      date: dayjs(chartTimestamp).format('MM/DD HH:mm'),
+      temperature: snapshot.average_temperature,
+      targetTemp: snapshot.target_temperature,
+      outsideTemp: snapshot.outside_temperature,
+      humidity: snapshot.humidity,
+      pressure: snapshot.static_pressure,
+      ventilation: snapshot.ventilation_level,
+      water: snapshot.water_consumption,
+      feed: snapshot.feed_consumption,
+    };
+  });
 
   const emphasisSx = highlightMetric
     ? { border: 2, borderColor: 'primary.main', borderRadius: 1 }
@@ -276,4 +291,3 @@ const HouseMonitoringCharts: React.FC<HouseMonitoringChartsProps> = ({ houseId, 
 };
 
 export default HouseMonitoringCharts;
-

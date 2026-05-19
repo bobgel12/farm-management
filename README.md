@@ -33,14 +33,32 @@ make quick-start
 - Docker & Docker Compose
 - Make (optional, for convenience commands)
 
+### Local Development Modes
+
+Choose one mode first:
+
+```bash
+# Frontend local + production backend
+make frontend-prod-docker
+# or
+make frontend-prod-host
+
+# Frontend local + backend local
+make local-up
+```
+
+The full local stack uses `env.local-backend.example` by default and runs the backend with the production-style settings path plus a local PostgreSQL database. The frontend-against-production mode uses `env.frontend-prod.example` by default. Optional machine-specific overrides can live in `.env.local-backend` and `.env.frontend-prod`.
+
 ### Available Commands
 
 ```bash
-# Development
-make dev          # Start development environment
-make logs         # Show logs
-make restart      # Restart services
-make down         # Stop services
+# Development modes
+make frontend-prod-docker # Start Docker frontend against production backend
+make frontend-prod-host   # Start host frontend against production backend
+make local-up             # Start full local stack
+make local-logs           # Show full local stack logs
+make local-down           # Stop full local stack
+make local-reset          # Reset full local stack
 
 # Database
 make migrate      # Run migrations
@@ -60,14 +78,14 @@ make help         # Show all commands
 ### Manual Setup (without Make)
 
 ```bash
-# Start services
-docker-compose up -d
+# Full local stack
+docker-compose --env-file env.local-backend.example -f docker-compose.yml up -d
 
 # Run migrations
-docker-compose exec backend python manage.py migrate
+docker-compose --env-file env.local-backend.example -f docker-compose.yml exec backend python manage.py migrate
 
 # Seed database
-docker-compose exec backend python manage.py seed_data --clear
+docker-compose --env-file env.local-backend.example -f docker-compose.yml exec backend python manage.py seed_data --clear
 
 # Send test email
 curl -X POST 'http://localhost:8000/api/tasks/send-test-email/' \
@@ -79,8 +97,9 @@ curl -X POST 'http://localhost:8000/api/tasks/send-test-email/' \
 ## 📧 Email Setup
 
 ### Local Development
-1. Create `.env` file with your Gmail credentials:
+1. Copy the full-local template if you need real email credentials:
 ```bash
+cp env.local-backend.example .env.local-backend
 EMAIL_HOST_USER=your-email@gmail.com
 EMAIL_HOST_PASSWORD=your-app-password
 ```
@@ -117,7 +136,7 @@ make deploy-railway
 
 - **Backend**: Django REST Framework + PostgreSQL
 - **Frontend**: React + TypeScript + Material-UI
-- **Database**: PostgreSQL (production) / SQLite (development)
+- **Database**: PostgreSQL in production and in the supported local full-stack mode
 - **Email**: Gmail SMTP
 - **Deployment**: Railway + Docker
 
@@ -206,7 +225,7 @@ make prod-up
 1. **Port already in use**
    ```bash
    make clean
-   make dev
+   make local-up
    ```
 
 2. **Email not working**
@@ -216,8 +235,8 @@ make prod-up
 
 3. **Database issues**
    ```bash
-   make down
-   make up
+   make local-down
+   make local-up
    make migrate
    ```
 

@@ -42,17 +42,19 @@ class MonitoringApiService {
     houseId: number,
     startDate?: string,
     endDate?: string,
-    limit: number = 100
+    limit: number = 100,
+    mode?: 'cached' | 'live'
   ): Promise<MonitoringHistoryResponse> {
     const params: any = { limit };
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
+    if (mode) params.mode = mode;
 
     const response = await api.get(`/houses/${houseId}/monitoring/history/`, {
       params,
       headers: this.getAuthHeaders()
     });
-    return response.data;
+    return response.data?.data ?? response.data;
   }
 
   /**

@@ -1043,7 +1043,13 @@ def house_monitoring_history(request, house_id):
         if ts is None:
             ts = timezone.now()
 
-        water = _safe_float(row.get('HistoryRecord_DailyWater') or row.get('DailyWater') or row.get('Water'))
+        water = _safe_float(
+            row.get('HistoryRecord_TotalDrink')
+            or row.get('HistoryRecord_TotalWater')
+            or row.get('HistoryRecord_DailyWater')
+            or row.get('DailyWater')
+            or row.get('Water')
+        )
         feed = _safe_float(
             row.get('HistoryRecord_FeederTotal')
             or row.get('HistoryRecord_DailyFeed')
@@ -1152,7 +1158,13 @@ def house_monitoring_kpis(request, house_id):
             day_key = day.isoformat()
         else:
             day_key = str(gday)
-        w = _safe_float(row.get('HistoryRecord_DailyWater') or row.get('DailyWater') or row.get('Water'))
+        w = _safe_float(
+            row.get('HistoryRecord_TotalDrink')
+            or row.get('HistoryRecord_TotalWater')
+            or row.get('HistoryRecord_DailyWater')
+            or row.get('DailyWater')
+            or row.get('Water')
+        )
         f = _safe_float(
             row.get('HistoryRecord_FeederTotal')
             or row.get('HistoryRecord_DailyFeed')
