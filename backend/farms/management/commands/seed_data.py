@@ -58,11 +58,16 @@ class Command(BaseCommand):
             Program.objects.all().delete()
             User.objects.filter(is_superuser=False).delete()
             
-            # Reset auto-increment sequences
+            # Reset auto-increment sequences (SQLite only; PostgreSQL sequences reset on TRUNCATE if needed)
             from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('farms_farm', 'farms_worker', 'farms_program', 'farms_programtask', 'houses_house', 'tasks_task', 'tasks_recurringtask', 'tasks_emailtask')")
-            self.stdout.write('Reset auto-increment sequences')
+            if connection.vendor == 'sqlite':
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM sqlite_sequence WHERE name IN ("
+                        "'farms_farm', 'farms_worker', 'farms_program', 'farms_programtask', "
+                        "'houses_house', 'tasks_task', 'tasks_recurringtask', 'tasks_emailtask')"
+                    )
+                self.stdout.write('Reset auto-increment sequences')
 
         # Create sample programs first
         programs = self.create_programs()

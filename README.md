@@ -4,19 +4,29 @@ A full-stack application for managing chicken farms, houses, and daily tasks wit
 
 ## 🚀 Quick Start
 
-```bash
-# Clone and setup
-git clone <repository-url>
-cd chicken_house_management
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Colima on macOS) and [Make](https://www.gnu.org/software/make/).
 
-# Quick start (install, start, migrate, seed)
+```bash
+git clone <repository-url>
+cd farm-management
+
+# One command: verify Docker, start stack, migrate, seed sample data
 make quick-start
 ```
 
+First run builds images and may take a few minutes. Later runs are much faster if images are cached.
+
 **Access the application:**
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **Admin Panel**: http://localhost:8000/admin (admin/admin123)
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3002 |
+| Backend API | http://localhost:8002/api |
+| Admin | http://localhost:8002/admin |
+
+**Default login:** `admin` / `admin123`
+
+> **Important:** Always use `make` targets (or pass `--env-file env.local-backend.example` to Docker Compose). Running plain `docker-compose up` skips required environment variables and the backend will not start.
 
 ## 📋 Features
 
@@ -29,69 +39,82 @@ make quick-start
 
 ## 🛠️ Development
 
-### Prerequisites
-- Docker & Docker Compose
-- Make (optional, for convenience commands)
-
-### Local Development Modes
-
-Choose one mode first:
+### Daily workflow
 
 ```bash
+# Start (if not already running)
+make local-up
+
+# Stop when finished
+make local-down
+
+# Follow logs
+make local-logs
+
+# Full reset (containers + volumes, then migrate + seed)
+make quick-reset
+```
+
+### Local ports (default)
+
+| Service | Host port | Notes |
+|---------|-----------|--------|
+| Frontend | 3002 | React dev server |
+| Backend | 8002 | Django / Gunicorn |
+| PostgreSQL | 5433 | Local DB only |
+| Redis | 6380 | Celery broker |
+
+Override ports or secrets by copying the template:
+
+```bash
+cp env.local-backend.example .env.local-backend
+# edit .env.local-backend — Make picks it up automatically
+```
+
+The full local stack uses `env.local-backend.example` by default (PostgreSQL, production-style Django settings). For frontend-only against a remote backend, use `env.frontend-prod.example` and `make frontend-prod-docker` or `make frontend-prod-host`.
+
+### Development modes
+
+```bash
+# Full local stack (recommended)
+make quick-start          # First time or fresh data
+make local-up             # Start only
+make local-down           # Stop
+
 # Frontend local + production backend
 make frontend-prod-docker
-# or
 make frontend-prod-host
-
-# Frontend local + backend local
-make local-up
 ```
 
-The full local stack uses `env.local-backend.example` by default and runs the backend with the production-style settings path plus a local PostgreSQL database. The frontend-against-production mode uses `env.frontend-prod.example` by default. Optional machine-specific overrides can live in `.env.local-backend` and `.env.frontend-prod`.
-
-### Available Commands
+### Common commands
 
 ```bash
-# Development modes
-make frontend-prod-docker # Start Docker frontend against production backend
-make frontend-prod-host   # Start host frontend against production backend
-make local-up             # Start full local stack
-make local-logs           # Show full local stack logs
-make local-down           # Stop full local stack
-make local-reset          # Reset full local stack
-
-# Database
-make migrate      # Run migrations
-make seed         # Seed with sample data
-make seed-variety # Seed with variety of data
-
-# Email
-make email-test   # Send test email
-make email-daily  # Send daily emails
-
-# Utilities
-make clean        # Clean up containers
-make status       # Show service status
-make help         # Show all commands
+make help           # All targets
+make status         # Container status
+make migrate        # Apply migrations
+make seed           # Sample farms/houses/tasks (--clear)
+make seed-variety   # Seed with more date/status variety
+make email-test     # Send test email
+make clean          # Remove containers
 ```
 
-### Manual Setup (without Make)
+### Manual setup (without Make)
+
+Always pass the env file:
 
 ```bash
-# Full local stack
-docker-compose --env-file env.local-backend.example -f docker-compose.yml up -d
+docker compose --env-file env.local-backend.example -f docker-compose.yml up -d --build
+docker compose --env-file env.local-backend.example -f docker-compose.yml exec backend python manage.py migrate
+docker compose --env-file env.local-backend.example -f docker-compose.yml exec backend python manage.py seed_data --clear
+```
 
-# Run migrations
-docker-compose --env-file env.local-backend.example -f docker-compose.yml exec backend python manage.py migrate
+Test email (replace `YOUR_TOKEN` after logging in via the API):
 
-# Seed database
-docker-compose --env-file env.local-backend.example -f docker-compose.yml exec backend python manage.py seed_data --clear
-
-# Send test email
-curl -X POST 'http://localhost:8000/api/tasks/send-test-email/' \
+```bash
+curl -X POST 'http://localhost:8002/api/tasks/send-test-email/' \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Token YOUR_TOKEN' \
-  -d '{"farm_id":1,"test_email":"your-email@gmail.com"}'
+  -d '{"farm_id":1,"test_email":"your-email@example.com"}'
 ```
 
 ## 📧 Email Setup
@@ -100,8 +123,7 @@ curl -X POST 'http://localhost:8000/api/tasks/send-test-email/' \
 1. Copy the full-local template if you need real email credentials:
 ```bash
 cp env.local-backend.example .env.local-backend
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
+# Edit .env.local-backend and set EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
 ```
 
 2. Test email configuration:
@@ -143,7 +165,7 @@ make deploy-railway
 ## 📁 Project Structure
 
 ```
-chicken_house_management/
+farm-management/
 ├── backend/                 # Django API
 │   ├── farms/              # Farm and worker management
 │   ├── houses/             # House management
@@ -222,29 +244,39 @@ make prod-up
 
 ### Common Issues
 
-1. **Port already in use**
+1. **Backend exits immediately / empty env warnings**
+   - Cause: `docker compose up` without `--env-file`.
+   - Fix: `make local-down && make quick-start` (or `make local-up`).
+
+2. **Port already in use** (3002, 8002, 5433, 6380)
    ```bash
+   make local-down
    make clean
    make local-up
    ```
+   Or change ports in `.env.local-backend` (copy from `env.local-backend.example`).
 
-2. **Email not working**
-   - Check Gmail App Password
-   - Verify environment variables
-   - Test with `make email-test`
+3. **`make seed` fails on PostgreSQL**
+   - Fixed in current `seed_data` (SQLite-only sequence reset). If you still see errors, run `make quick-reset`.
 
-3. **Database issues**
+4. **Email not working locally**
+   - Local stack uses safe empty email password by default.
+   - Copy `env.local-backend.example` → `.env.local-backend` and set credentials, then `make email-test`.
+
+5. **Database issues**
    ```bash
    make local-down
    make local-up
+   make wait-backend
    make migrate
    ```
 
 ### Getting Help
 
-- Check logs: `make logs`
-- Test email: `make email-test`
-- Reset everything: `make quick-reset`
+- Logs: `make local-logs` or `make logs`
+- Status: `make status`
+- Full reset: `make quick-reset`
+- All commands: `make help`
 
 ## 📄 License
 

@@ -19,11 +19,18 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Development Setup
-install: ## Install dependencies and setup project
-	@echo "🚀 Setting up Chicken House Management System..."
-	@chmod +x setup.sh
-	@./setup.sh
-	@echo "✅ Setup complete!"
+install: ## Verify Docker and Compose are available
+	@command -v docker >/dev/null 2>&1 || (echo "❌ Docker is required. Install Docker Desktop or Colima." && exit 1)
+	@$(DOCKER_COMPOSE) version >/dev/null 2>&1 || (echo "❌ Docker Compose is required." && exit 1)
+	@echo "✅ Prerequisites OK (Docker + Compose)"
+
+wait-backend: ## Wait until the local backend health check passes
+	@echo "⏳ Waiting for backend (http://localhost:8002/api/health/)..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do \
+		curl -sf http://localhost:8002/api/health/ >/dev/null 2>&1 && echo "✅ Backend is ready" && exit 0; \
+		sleep 2; \
+	done; \
+	echo "❌ Backend did not become healthy. Run: make local-logs"; exit 1
 
 dev: local-up ## Alias for the full local stack
 
@@ -379,27 +386,33 @@ status: ## Show service status
 	@$(LOCAL_COMPOSE) ps
 
 # Quick Commands
-quick-start: install up migrate seed ## Quick start: install, start, migrate, and seed
+quick-start: install local-up wait-backend migrate seed ## Quick start: verify Docker, start stack, migrate, seed
 	@echo "🎉 Quick start complete!"
 	@echo "📱 Frontend: http://localhost:3002"
 	@echo "🔧 Backend: http://localhost:8002"
 	@echo "📊 Admin: http://localhost:8002/admin (admin/admin123)"
 
-quick-reset: down clean up migrate seed ## Quick reset: clean, restart, and seed
+quick-reset: local-down clean local-up wait-backend migrate seed ## Quick reset: clean, restart, migrate, and seed
 	@echo "🔄 Quick reset complete!"
 
 # Help for specific commands
 help-dev: ## Show development help
 	@echo "Development Commands:"
 	@echo "====================="
+	@echo "  make quick-start          - Start stack, migrate, seed (first-time setup)"
+	@echo "  make quick-reset          - Reset volumes, restart, migrate, seed"
 	@echo "  make local-up             - Start full local stack"
+	@echo "  make local-down           - Stop full local stack"
 	@echo "  make frontend-prod-docker - Start Docker frontend against production backend"
 	@echo "  make frontend-prod-host   - Start host frontend against production backend"
-	@echo "  make logs         - Show all logs"
-	@echo "  make logs-backend - Show backend logs only"
-	@echo "  make shell-backend - Open backend shell"
-	@echo "  make migrate      - Run database migrations"
-	@echo "  make seed         - Seed database with sample data"
+	@echo "  make wait-backend         - Wait for http://localhost:8002/api/health/"
+	@echo "  make logs                 - Show all logs"
+	@echo "  make logs-backend         - Show backend logs only"
+	@echo "  make shell-backend        - Open backend shell"
+	@echo "  make migrate              - Run database migrations"
+	@echo "  make seed                 - Seed database with sample data"
+	@echo ""
+	@echo "  Frontend: http://localhost:3002  Backend: http://localhost:8002"
 
 help-email: ## Show email help
 	@echo "Email Commands:"
