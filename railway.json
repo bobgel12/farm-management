@@ -2,39 +2,5 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "Dockerfile.railway"
-  },
-  "deploy": {
-    "startCommand": "python simple_startup.py web",
-    "healthcheckPath": "/api/health/simple/",
-    "healthcheckTimeout": 300,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  },
-  "cron": {
-    "daily-tasks": {
-      "schedule": "0 21 * * *",
-      "command": "cd /app && python manage.py send_daily_tasks"
-    },
-    "daily-rotem-scrape": {
-      "schedule": "0 2 * * *",
-      "command": "cd /app && python manage.py collect_rotem_data_daily"
-    },
-    "rotem-monitoring-cache-upsert": {
-      "schedule": "*/10 * * * *",
-      "command": "cd /app && python manage.py upsert_monitoring_cache"
-    }
-  },
-  "services": {
-    "postgres": {
-      "type": "postgresql"
-    }
-  },
-  "env": {
-    "EMAIL_HOST": "smtp.gmail.com",
-    "EMAIL_PORT": "587",
-    "EMAIL_USE_TLS": "True",
-    "DEFAULT_FROM_EMAIL": "noreply@chickenmanagement.com",
-    "EMAIL_HOST_USER": "",
-    "EMAIL_HOST_PASSWORD": ""
   }
 }

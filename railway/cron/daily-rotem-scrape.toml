@@ -1,0 +1,9 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway"
+
+[deploy]
+startCommand = "DJANGO_SETTINGS_MODULE=chicken_management.settings_prod python manage.py collect_rotem_data_daily"
+cronSchedule = "0 2 * * *"
+restartPolicyType = "NEVER"
+healthcheckPath = null

@@ -1,0 +1,9 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway"
+
+[deploy]
+startCommand = "DJANGO_SETTINGS_MODULE=chicken_management.settings_prod python manage.py upsert_monitoring_cache"
+cronSchedule = "*/10 * * * *"
+restartPolicyType = "NEVER"
+healthcheckPath = null

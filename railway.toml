@@ -1,27 +1,3 @@
 [build]
-builder = "nixpacks"
-
-[deploy]
-startCommand = "python simple_startup.py web"
-healthcheckPath = "/api/health/"
-healthcheckTimeout = 100
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
-
-[cron.daily-tasks]
-schedule = "0 21 * * *"
-command = "python manage.py send_daily_tasks"
-
-[services.postgres]
-type = "postgresql"
-
-# Environment variables for email configuration
-# Note: EMAIL_HOST_USER and EMAIL_HOST_PASSWORD must be set in Railway dashboard
-[env]
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = "587"
-EMAIL_USE_TLS = "True"
-DEFAULT_FROM_EMAIL = "noreply@chickenmanagement.com"
-# Required: Set these in Railway dashboard
-# EMAIL_HOST_USER = "your-email@gmail.com"
-# EMAIL_HOST_PASSWORD = "your-app-password"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway"

@@ -1,0 +1,9 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway"
+
+[deploy]
+startCommand = "DJANGO_SETTINGS_MODULE=chicken_management.settings_prod python manage.py send_daily_tasks"
+cronSchedule = "0 1 * * *"
+restartPolicyType = "NEVER"
+healthcheckPath = null
