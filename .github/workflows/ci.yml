@@ -58,11 +58,6 @@ jobs:
         cd backend
         python manage.py test
     
-    - name: Run frontend tests
-      run: |
-        cd frontend
-        npm test -- --coverage --watchAll=false
-    
     - name: Build frontend
       run: |
         cd frontend

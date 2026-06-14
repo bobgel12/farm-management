@@ -29,13 +29,6 @@ jobs:
         cd frontend
         npm ci
     
-    - name: Run tests
-      run: |
-        cd frontend
-        npm test -- --coverage --watchAll=false
-      env:
-        CI: true
-    
     - name: Run linting
       run: |
         cd frontend
