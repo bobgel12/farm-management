@@ -439,3 +439,7 @@ if CLOUDINARY_CLOUD_NAME:
         api_secret=CLOUDINARY_API_SECRET,
         secure=True
     )
+
+# n8n / Cron integration
+CRON_SECRET = config('CRON_SECRET', default='')
+N8N_BASE_URL = config('N8N_BASE_URL', default='')

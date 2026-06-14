@@ -45,7 +45,10 @@ import {
   VisibilityOff,
   History,
   HealthAndSafety,
+  PlayArrow,
 } from '@mui/icons-material';
+import { useOrganization } from '../../contexts/OrganizationContext';
+import FarmAutomationsPanel from './FarmAutomationsPanel';
 
 interface IntegrationManagementProps {
   open: boolean;
@@ -94,6 +97,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   onTestConnection,
   onSyncData,
 }) => {
+  const { currentOrganization } = useOrganization();
   const [activeTab, setActiveTab] = useState(0);
   const [integrationType, setIntegrationType] = useState(farm.integration_type);
   const [rotemCredentials, setRotemCredentials] = useState({
@@ -262,6 +266,7 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
     { label: 'Configuration', icon: <Settings /> },
     { label: 'Health & Status', icon: <HealthAndSafety /> },
     { label: 'Activity Logs', icon: <History /> },
+    { label: 'Automations', icon: <PlayArrow /> },
   ];
 
   return (
@@ -576,6 +581,23 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
+          </Box>
+        )}
+
+        {/* Automations Tab */}
+        {activeTab === 3 && (
+          <Box>
+            {currentOrganization ? (
+              <FarmAutomationsPanel
+                organizationId={currentOrganization.id}
+                farmId={farm.id}
+                showTestButton
+              />
+            ) : (
+              <Alert severity="info">
+                Select an organization to view and trigger automation workflows.
+              </Alert>
             )}
           </Box>
         )}
