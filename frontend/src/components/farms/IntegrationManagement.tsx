@@ -116,20 +116,25 @@ const IntegrationManagement: React.FC<IntegrationManagementProps> = ({
   const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setIntegrationType(farm.integration_type);
-      setRotemCredentials({
-        username: farm.rotem_username || '',
-        password: farm.rotem_password || '',
-      });
-      setConnectionStatus('idle');
-      setConnectionError('');
-      
-      if (farm.has_system_integration) {
-        fetchIntegrationData();
-      }
+    if (!open) return;
+
+    setIntegrationType(farm.integration_type);
+    setRotemCredentials({
+      username: farm.rotem_username || '',
+      password: farm.rotem_password || '',
+    });
+    setConnectionStatus('idle');
+    setConnectionError('');
+
+    if (farm.has_system_integration) {
+      fetchIntegrationData();
     }
-  }, [open, farm]);
+    // Only re-initialize when the dialog opens or the selected farm changes.
+    // Do not depend on the whole `farm` object — parents often pass a new object
+    // reference on every render (e.g. dashboard clock tick), which was resetting
+    // the user's in-progress Rotem selection back to "none".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, farm.id]);
 
   const fetchIntegrationData = async () => {
     setLoadingHealth(true);
