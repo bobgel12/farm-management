@@ -73,6 +73,8 @@ import {
 } from '../../types/monitoring';
 import MonitoringDataQualityPanel from '../monitoring/MonitoringDataQualityPanel';
 import IntegrationManagement from './IntegrationManagement';
+import FarmAutomationsPanel from './FarmAutomationsPanel';
+import { useOrganization } from '../../contexts/OrganizationContext';
 import { useProgram } from '../../contexts/ProgramContext';
 import { rotemApi } from '../../services/rotemApi';
 import { lastHouseStorageKey } from '../../utils/houseDetailUrl';
@@ -221,6 +223,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const { farmId } = useParams<{ farmId: string }>();
   const navigate = useNavigate();
   const { programs, fetchPrograms } = useProgram();
+  const { currentOrganization } = useOrganization();
   const [farm, setFarm] = useState<Farm | null>(propFarm || null);
   const [loading, setLoading] = useState(!propFarm);
   const [error, setError] = useState<string | null>(null);
@@ -1005,6 +1008,13 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                 >
                   {detectingWaterAnomalies ? 'Detecting...' : 'Check Water Anomalies'}
                 </Button>
+              )}
+              {currentOrganization && farm && (
+                <FarmAutomationsPanel
+                  organizationId={currentOrganization.id}
+                  farmId={farm.id}
+                  compact
+                />
               )}
             <Button
               variant="outlined"

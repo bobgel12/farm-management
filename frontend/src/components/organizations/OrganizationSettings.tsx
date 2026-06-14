@@ -44,10 +44,12 @@ import {
   Cancel as CancelIcon,
   Mail as MailIcon,
   Schedule as ScheduleIcon,
+  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { useOrganization } from '../../contexts/OrganizationContext';
 import { Organization, OrganizationUser, OrganizationInvite } from '../../types';
 import MemberEditDialog from './MemberEditDialog';
+import OrganizationAutomationsSettings from './OrganizationAutomationsSettings';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -278,6 +280,7 @@ const OrganizationSettings: React.FC = () => {
             <Tab label="Details" icon={<BusinessIcon />} iconPosition="start" />
             <Tab label="Members" icon={<PeopleIcon />} iconPosition="start" />
             <Tab label="Settings" icon={<SettingsIcon />} iconPosition="start" />
+            <Tab label="Automations" icon={<PlayArrowIcon />} iconPosition="start" />
           </Tabs>
         </Box>
 
@@ -558,6 +561,14 @@ const OrganizationSettings: React.FC = () => {
                 </Card>
               </Grid>
             </Grid>
+          </TabPanel>
+
+          {/* Automations Tab */}
+          <TabPanel value={activeTab} index={3}>
+            <OrganizationAutomationsSettings
+              organizationId={currentOrganization.id}
+              isAdmin={isAdmin || isOwner}
+            />
           </TabPanel>
         </CardContent>
       </Card>

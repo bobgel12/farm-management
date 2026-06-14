@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import IntegrationLog, IntegrationError, IntegrationHealth
+from .models import IntegrationLog, IntegrationError, IntegrationHealth, AutomationWorkflow
 
 
 @admin.register(IntegrationLog)
@@ -77,3 +77,12 @@ class IntegrationHealthAdmin(admin.ModelAdmin):
             'fields': ('updated_at',)
         }),
     )
+
+
+@admin.register(AutomationWorkflow)
+class AutomationWorkflowAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'organization', 'farm', 'is_active', 'updated_at']
+    list_filter = ['is_active', 'organization']
+    search_fields = ['name', 'slug', 'organization__name', 'farm__name']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['organization', 'name']

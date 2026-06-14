@@ -3,6 +3,53 @@ from django.utils import timezone
 from farms.models import Farm
 
 
+class AutomationWorkflow(models.Model):
+    """Registry of n8n webhook workflows scoped to an organization."""
+
+    slug = models.SlugField(max_length=100, help_text="Machine ID, e.g. send_report")
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    webhook_url = models.URLField(max_length=500, help_text="n8n production webhook URL")
+    webhook_secret = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional secret sent as X-Webhook-Secret header",
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='automation_workflows',
+    )
+    farm = models.ForeignKey(
+        Farm,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='automation_workflows',
+        help_text="Optional farm-specific workflow override",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'slug', 'farm'],
+                name='unique_automation_workflow_per_org_slug_farm',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['organization', 'is_active']),
+            models.Index(fields=['slug']),
+        ]
+
+    def __str__(self):
+        scope = self.farm.name if self.farm_id else 'org-wide'
+        return f"{self.name} ({self.slug}) - {scope}"
+
+
 class IntegrationLog(models.Model):
     """Log integration activities and status"""
     farm = models.ForeignKey(Farm, on_delete=models.CASCADE, related_name='integration_logs')
