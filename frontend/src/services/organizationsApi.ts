@@ -15,7 +15,7 @@ export const organizationsApi = {
    * Get all organizations for the current user
    */
   async getMyOrganizations(): Promise<OrganizationMembership[]> {
-    const response = await api.get('/organizations/my-organizations/');
+    const response = await api.get('/organizations/my_organizations/');
     return response.data;
   },
 
