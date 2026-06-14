@@ -73,6 +73,9 @@ def main():
     if mode != "web":
         raise ValueError(f"Unsupported STARTUP_MODE: {mode}")
 
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("DATABASE_URL"):
+        run_migrations()
+
     start_gunicorn()
 
 

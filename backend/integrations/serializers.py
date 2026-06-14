@@ -4,8 +4,8 @@ from .models import AutomationWorkflow
 
 
 class AutomationWorkflowListSerializer(serializers.ModelSerializer):
-    farm_id = serializers.IntegerField(source='farm.id', read_only=True, allow_null=True)
-    farm_name = serializers.CharField(source='farm.name', read_only=True, allow_null=True)
+    farm_id = serializers.SerializerMethodField()
+    farm_name = serializers.SerializerMethodField()
 
     class Meta:
         model = AutomationWorkflow
@@ -22,6 +22,12 @@ class AutomationWorkflowListSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = fields
+
+    def get_farm_id(self, obj):
+        return obj.farm_id
+
+    def get_farm_name(self, obj):
+        return obj.farm.name if obj.farm_id else None
 
 
 class AutomationWorkflowAdminSerializer(serializers.ModelSerializer):
