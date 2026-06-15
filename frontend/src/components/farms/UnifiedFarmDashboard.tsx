@@ -74,9 +74,12 @@ import {
 import MonitoringDataQualityPanel from '../monitoring/MonitoringDataQualityPanel';
 import IntegrationManagement from './IntegrationManagement';
 import FarmAutomationsPanel from './FarmAutomationsPanel';
+import MoveFarmToOrganizationDialog from './MoveFarmToOrganizationDialog';
 import { useOrganization } from '../../contexts/OrganizationContext';
+import { useFarm } from '../../contexts/FarmContext';
 import { useProgram } from '../../contexts/ProgramContext';
 import { rotemApi } from '../../services/rotemApi';
+import { organizationsApi } from '../../services/organizationsApi';
 import { lastHouseStorageKey } from '../../utils/houseDetailUrl';
 // Removed logger import - using console instead
 
@@ -223,7 +226,8 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const { farmId } = useParams<{ farmId: string }>();
   const navigate = useNavigate();
   const { programs, fetchPrograms } = useProgram();
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, isOwner, isAdmin, setCurrentOrganization, fetchMyOrganizations } = useOrganization();
+  const { fetchFarms } = useFarm();
   const [farm, setFarm] = useState<Farm | null>(propFarm || null);
   const [loading, setLoading] = useState(!propFarm);
   const [error, setError] = useState<string | null>(null);
@@ -247,6 +251,7 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
   const [queueingMonitoringRefresh, setQueueingMonitoringRefresh] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   
   // Water anomaly detection state
   const [detectingWaterAnomalies, setDetectingWaterAnomalies] = useState(false);
@@ -811,6 +816,16 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
                     Generate Houses & Tasks
                   </Button>
                 </>
+              )}
+              {(isOwner || isAdmin) && (
+                <Button
+                  variant="outlined"
+                  startIcon={<CompareArrows />}
+                  onClick={() => setMoveDialogOpen(true)}
+                  size="small"
+                >
+                  Move to organization
+                </Button>
               )}
               <Button
                 variant="outlined"
@@ -1799,6 +1814,40 @@ const UnifiedFarmDashboard: React.FC<UnifiedFarmDashboardProps> = ({
       )}
 
       {/* Integration Management Dialog */}
+      {farm && (
+        <MoveFarmToOrganizationDialog
+          open={moveDialogOpen}
+          farmId={farm.id}
+          farmName={farm.name}
+          sourceOrganizationId={currentOrganization?.id}
+          onClose={() => setMoveDialogOpen(false)}
+          onSuccess={async (targetOrganizationId) => {
+            const sourceOrgId = currentOrganization?.id;
+            const memberships = await organizationsApi.getMyOrganizations();
+            await fetchMyOrganizations();
+            await fetchFarms();
+
+            if (sourceOrgId && sourceOrgId !== targetOrganizationId) {
+              const targetMembership = memberships.find(
+                (membership) => membership.organization.id === targetOrganizationId
+              );
+              if (targetMembership) {
+                setCurrentOrganization(targetMembership.organization);
+              } else {
+                navigate('/farms');
+                return;
+              }
+            }
+
+            if (onRefresh) {
+              onRefresh();
+            } else {
+              await fetchFarmData();
+            }
+          }}
+        />
+      )}
+
       {farm && (
         <IntegrationManagement
           farm={{
