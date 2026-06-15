@@ -35,7 +35,7 @@ class FarmSerializer(serializers.ModelSerializer):
             'rotem_gateway_name', 'rotem_gateway_alias',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organization', 'created_at', 'updated_at']
         extra_kwargs = {
             'rotem_password': {'write_only': True}
         }
@@ -62,6 +62,15 @@ class FarmSerializer(serializers.ModelSerializer):
         ]
 
 
+class FarmCreateSerializer(FarmSerializer):
+    class Meta(FarmSerializer.Meta):
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FarmTransferSerializer(serializers.Serializer):
+    target_organization_id = serializers.UUIDField()
+
+
 class FarmListSerializer(serializers.ModelSerializer):
     total_houses = serializers.ReadOnlyField()
     active_houses = serializers.ReadOnlyField()
@@ -76,6 +85,7 @@ class FarmListSerializer(serializers.ModelSerializer):
             'integration_type', 'integration_status', 'last_sync',
             'is_integrated', 'integration_display_name', 'rotem_farm_id'
         ]
+        read_only_fields = ['id', 'organization']
 
 
 class ProgramTaskSerializer(serializers.ModelSerializer):
@@ -157,7 +167,7 @@ class FarmWithProgramSerializer(serializers.ModelSerializer):
             'is_active', 'total_houses', 'active_houses', 'workers',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organization', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         program_id = validated_data.pop('program_id', None)

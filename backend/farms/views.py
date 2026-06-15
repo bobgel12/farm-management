@@ -11,7 +11,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import Farm, Worker, Program, ProgramTask, ProgramChangeLog, Breed, Flock, FlockPerformance, FlockComparison, MortalityRecord
 from .serializers import (
-    FarmSerializer, FarmListSerializer, WorkerSerializer,
+    FarmSerializer, FarmCreateSerializer, FarmListSerializer, FarmTransferSerializer, WorkerSerializer,
     ProgramSerializer, ProgramListSerializer, ProgramTaskSerializer,
     FarmWithProgramSerializer, BreedSerializer, BreedListSerializer,
     FlockSerializer, FlockListSerializer, FlockPerformanceSerializer,
@@ -19,9 +19,12 @@ from .serializers import (
     MortalitySummarySerializer
 )
 from .program_change_service import ProgramChangeService
+from .transfer_service import FarmTransferService, FarmTransferError
 from integrations.rotem import RotemIntegration
 from integrations.models import IntegrationLog, IntegrationError
 from analytics.services import ensure_farm_dashboard
+from organizations.models import Organization
+from organizations.permissions import user_is_org_admin, user_can_access_organization
 
 
 def user_accessible_organization_ids(request):
@@ -70,6 +73,11 @@ class FarmViewSet(ModelViewSet):
         
         return queryset.order_by('name')
 
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return FarmCreateSerializer
+        return FarmSerializer
+
     def perform_create(self, serializer):
         farm = serializer.save()
         if self.request.user.is_authenticated:
@@ -105,6 +113,53 @@ class FarmViewSet(ModelViewSet):
         
         return response
     
+    @action(detail=True, methods=['post'])
+    def transfer(self, request, pk=None):
+        """Transfer farm to another organization (requires admin on both orgs)."""
+        farm = self.get_object()
+        serializer = FarmTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        target_organization_id = serializer.validated_data['target_organization_id']
+
+        if farm.organization_id is None:
+            return Response(
+                {'error': 'Farm has no source organization'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not user_is_org_admin(request.user, farm.organization_id):
+            return Response(
+                {'error': 'You must be an administrator of the source organization'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not user_is_org_admin(request.user, target_organization_id):
+            return Response(
+                {'error': 'You must be an administrator of the target organization'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not user_can_access_organization(request.user, target_organization_id):
+            return Response(
+                {'error': 'Target organization not found or not accessible'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        target_org = get_object_or_404(Organization, id=target_organization_id, is_active=True)
+
+        try:
+            result = FarmTransferService.transfer(farm, target_org, request.user)
+            return Response({
+                'status': 'success',
+                'message': f'Farm transferred to {target_org.name}',
+                **result,
+            })
+        except FarmTransferError as exc:
+            status_code = status.HTTP_400_BAD_REQUEST
+            if exc.code == 'farm_limit_reached':
+                status_code = status.HTTP_400_BAD_REQUEST
+            return Response({'error': exc.message, 'code': exc.code}, status=status_code)
+
     @action(detail=True, methods=['post'])
     def configure_integration(self, request, pk=None):
         """Configure system integration for a farm"""
